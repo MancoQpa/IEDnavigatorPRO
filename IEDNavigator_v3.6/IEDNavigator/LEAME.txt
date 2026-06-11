@@ -1,0 +1,24 @@
+﻿IED Navigator v3.6
+========================
+Herramienta educativa para exploracion de IEDs IEC 61850.
+
+REQUISITOS:
+- Windows 10/11
+- Java 11 o superior (https://adoptium.net)
+- Npcap (https://npcap.com) para GOOSE y captura de red
+
+EJECUTAR:
+  Doble clic en IEDNavigator.bat
+  (solicita permisos de administrador para puerto 102 y GOOSE)
+
+NOVEDADES v3.6:
+- Fix definitivo de reportes URCB/BRCB:
+  Usa association.enableReporting() en lugar de setRcbValues() para
+  activar correctamente urcb.enable() en el servidor. Esto puebla
+  chgRcbs en los BDAs del DataSet y hace que los reports lleguen
+  al cliente.
+- dataRef=false en CID de prueba (evita desalineamiento de indices
+  en processReport() que mataba el ClientReceiver)
+- extractNodeValue() recursivo en ReportsPanel para manejar
+  FcDataObject (no solo BasicDataAttribute)
+- Limpieza de logs de debug en servidor y cliente

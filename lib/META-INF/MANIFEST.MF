@@ -1,0 +1,35 @@
+Manifest-Version: 1.0
+Automatic-Module-Name: com.beanit.iec61850bean
+Bnd-LastModified: 1593527688624
+Bundle-ManifestVersion: 2
+Bundle-Name: IEC61850bean
+Bundle-SymbolicName: com.beanit.iec61850bean
+Bundle-Version: 1.9.0
+Created-By: 1.8.0_242 (AdoptOpenJDK)
+Export-Package: com.beanit.iec61850bean;uses:="javax.net";version="1.9
+ .0",com.beanit.iec61850bean.app;version="1.9.0",com.beanit.iec61850be
+ an.clientgui;uses:="com.beanit.iec61850bean,javax.swing,javax.swing.e
+ vent,javax.swing.tree";version="1.9.0",com.beanit.iec61850bean.client
+ gui.databind;uses:="com.beanit.iec61850bean,com.beanit.iec61850bean.c
+ lientgui,javax.swing,javax.swing.text";version="1.9.0",com.beanit.iec
+ 61850bean.clientgui.util;version="1.9.0",com.beanit.josistack;uses:="
+ com.beanit.jositransport,javax.net";version="1.9.0",com.beanit.jositr
+ ansport;uses:="javax.net";version="1.9.0"
+Import-Package: com.beanit.asn1bean.ber;version="[1.12,2)",com.beanit.
+ asn1bean.ber.types;version="[1.12,2)",com.beanit.asn1bean.ber.types.s
+ tring;version="[1.12,2)",javax.net,com.beanit.iec61850bean.clientgui;
+ resolution:=optional,com.beanit.iec61850bean.clientgui.databind;resol
+ ution:=optional,com.beanit.iec61850bean.clientgui.util;resolution:=op
+ tional,javax.swing;resolution:=optional,javax.swing.border;resolution
+ :=optional,javax.swing.event;resolution:=optional,javax.swing.text;re
+ solution:=optional,javax.swing.tree;resolution:=optional,javax.xml.pa
+ rsers;resolution:=optional,org.slf4j;resolution:=optional;version="[1
+ .7,2)",org.w3c.dom;resolution:=optional
+Private-Package: com.beanit.iec61850bean.internal,com.beanit.iec61850b
+ ean.internal.cli,com.beanit.iec61850bean.internal.mms.asn1,com.beanit
+ .iec61850bean.internal.scl,com.beanit.iec61850bean.internal.util,com.
+ beanit.josistack.internal.acse.asn1,com.beanit.josistack.internal.pre
+ sentation.asn1
+Require-Capability: osgi.ee;filter:="(&(osgi.ee=JavaSE)(version=1.8))"
+Tool: Bnd-5.1.1.202006162103
+
