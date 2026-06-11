@@ -343,7 +343,11 @@ public class IEDNavigatorApp extends JFrame {
         // Log
         logArea = new JTextArea(8, 30);
         logArea.setEditable(false);
-        logArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        logArea.setFont(new Font("Consolas", Font.PLAIN, 12));
+        // Estilo consola: fondo levemente diferenciado (solo cosmético)
+        logArea.setBackground(new Color(0xF7F9FB));
+        logArea.setForeground(new Color(0x37474F));
+        logArea.setMargin(new Insets(4, 8, 4, 8));
         JScrollPane logScroll = new JScrollPane(logArea);
         logScroll.setBorder(BorderFactory.createTitledBorder("Log"));
         leftPanel.add(logScroll, BorderLayout.CENTER);
@@ -2688,10 +2692,84 @@ public class IEDNavigatorApp extends JFrame {
     // Fase 4: SettingGroupsPanel, DatasetPanel, DataModelPanel extraidos a archivos propios.
 
     // ─── SECTION: ENTRY POINT ─────────────────────────────────────────────────────────
+
+    /**
+     * Pulido visual (solo "maquillaje"): propiedades de FlatLaf aplicadas antes de
+     * construir la GUI. No altera layout, pestañas, iconos ni funcionalidad.
+     * Para revertir cualquier ajuste basta con comentar la línea correspondiente.
+     */
+    private static void applyUiPolish() {
+        // ── 1. Estilo global ──────────────────────────────────────────────
+        // Esquinas redondeadas
+        UIManager.put("Button.arc", 10);
+        UIManager.put("Component.arc", 10);
+        UIManager.put("TextComponent.arc", 10);
+        UIManager.put("ProgressBar.arc", 10);
+        UIManager.put("CheckBox.arc", 6);
+        UIManager.put("Popup.dropShadowPainted", true);
+
+        // Color de acento (azul eléctrico) — foco, selección, subrayados
+        Color accent = new Color(0x1976D2);
+        UIManager.put("Component.accentColor", accent);
+        UIManager.put("Component.focusColor", new Color(0x1976D2));
+        UIManager.put("Component.focusWidth", 1);
+        UIManager.put("Component.innerFocusWidth", 1);
+
+        // Pestañas: subrayado de color en la activa, separadores sutiles
+        UIManager.put("TabbedPane.tabSelectionHeight", 3);
+        UIManager.put("TabbedPane.selectedBackground", Color.WHITE);
+        UIManager.put("TabbedPane.underlineColor", accent);
+        UIManager.put("TabbedPane.inactiveUnderlineColor", new Color(0x90CAF9));
+        UIManager.put("TabbedPane.hoverColor", new Color(0xE3F2FD));
+        UIManager.put("TabbedPane.showTabSeparators", true);
+        UIManager.put("TabbedPane.tabSeparatorsFullHeight", false);
+
+        // Scrollbars finas con hover
+        UIManager.put("ScrollBar.width", 12);
+        UIManager.put("ScrollBar.thumbArc", 999);
+        UIManager.put("ScrollBar.thumbInsets", new Insets(2, 2, 2, 2));
+        UIManager.put("ScrollBar.track", new Color(0xFAFAFA));
+        UIManager.put("ScrollBar.hoverThumbWithTrack", true);
+
+        // ── 2. Tablas y árbol ─────────────────────────────────────────────
+        UIManager.put("Table.alternateRowColor", new Color(0xF5F8FC));
+        UIManager.put("Table.rowHeight", 22);
+        UIManager.put("Table.showHorizontalLines", false);
+        UIManager.put("Table.showVerticalLines", false);
+        UIManager.put("Table.intercellSpacing", new Dimension(0, 0));
+        UIManager.put("Table.selectionInactiveBackground", new Color(0xE3F2FD));
+        UIManager.put("Table.selectionInactiveForeground", Color.BLACK);
+        UIManager.put("TableHeader.height", 26);
+        UIManager.put("TableHeader.showTrailingVerticalLine", true);
+        UIManager.put("TableHeader.separatorColor", new Color(0xDDDDDD));
+        UIManager.put("TableHeader.font", new Font("Segoe UI", Font.BOLD, 12));
+
+        UIManager.put("Tree.rowHeight", 22);
+        UIManager.put("Tree.selectionArc", 8);
+        UIManager.put("Tree.wideSelection", true);
+        UIManager.put("Tree.paintLines", false);
+        UIManager.put("List.selectionArc", 8);
+
+        // ── 3. Detalles de pulido ─────────────────────────────────────────
+        // Fuente base con buen rendering en Windows
+        UIManager.put("defaultFont", new Font("Segoe UI", Font.PLAIN, 13));
+        // TitledBorders más sutiles
+        UIManager.put("TitledBorder.titleColor", new Color(0x546E7A));
+        // Toolbars con algo de aire
+        UIManager.put("ToolBar.spacingBorder", new Insets(4, 6, 4, 6));
+        UIManager.put("Button.margin", new Insets(4, 12, 4, 12));
+        // Separadores y bordes suaves
+        UIManager.put("Component.borderColor", new Color(0xD6D9DE));
+        UIManager.put("Separator.foreground", new Color(0xE0E0E0));
+        // Tooltips legibles
+        UIManager.put("ToolTip.background", new Color(0xFFFDE7));
+    }
+
     public static void main(String[] args) {
         // Look and Feel
         try {
             UIManager.setLookAndFeel("com.formdev.flatlaf.FlatLightLaf");
+            applyUiPolish();
         } catch (Exception e) {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
