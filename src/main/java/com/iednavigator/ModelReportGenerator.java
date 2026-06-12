@@ -16,7 +16,7 @@ import java.util.*;
  * Secciones: resumen, nameplate, inventario LD/LN, DataSets, RCBs
  * y opcionalmente los valores actuales de todos los atributos hoja.
  */
-class ModelReportGenerator {
+public class ModelReportGenerator {
 
     /**
      * @param outFile       archivo .html de salida
@@ -25,7 +25,7 @@ class ModelReportGenerator {
      * @param nameplate     [manufacturer, type, desc, configVersion] o null
      * @param includeValues incluir sección con valores actuales (puede ser extensa)
      */
-    static void generate(File outFile, ServerModel model, String sourceDesc,
+    public static void generate(File outFile, ServerModel model, String sourceDesc,
                          String[] nameplate, boolean includeValues) throws Exception {
 
         // ─── Recolección de datos ───

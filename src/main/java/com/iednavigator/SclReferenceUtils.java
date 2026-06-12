@@ -10,7 +10,7 @@ import java.util.List;
  * Nota: buildModelRefFromFCDA() también existe en GoosePanel — esta versión
  * acepta loadedIedName como parámetro explícito para ser independiente de estado de instancia.
  */
-class SclReferenceUtils {
+public class SclReferenceUtils {
 
     private SclReferenceUtils() {}
 
@@ -19,7 +19,7 @@ class SclReferenceUtils {
      * FCDA format:  "ldInst/prefixLNClassInst.doName.daName [FC]"
      * Model ref:    "IEDNameldInst/prefixLNClassInst.doName.daName"
      */
-    static String buildModelRefFromFCDA(String member, String loadedIedName) {
+    public static String buildModelRefFromFCDA(String member, String loadedIedName) {
         int bracket = member.lastIndexOf('[');
         String clean = bracket > 0 ? member.substring(0, bracket).trim() : member.trim();
         if (clean.isEmpty()) return null;
@@ -39,7 +39,7 @@ class SclReferenceUtils {
      * Extrae el Functional Constraint de un string FCDA con sufijo "[FC]".
      * Retorna Fc.ST si no se puede parsear.
      */
-    static Fc extractFcFromMember(String member) {
+    public static Fc extractFcFromMember(String member) {
         int open  = member.lastIndexOf('[');
         int close = member.lastIndexOf(']');
         if (open >= 0 && close > open) {
@@ -53,7 +53,7 @@ class SclReferenceUtils {
     /**
      * Convierte el valor de un BasicDataAttribute al tipo esperado por el GOOSE publisher.
      */
-    static Object convertBdaToPublisherValue(BasicDataAttribute bda, GoosePublisher.DataValue.Type targetType) {
+    public static Object convertBdaToPublisherValue(BasicDataAttribute bda, GoosePublisher.DataValue.Type targetType) {
         String val = bda.getValueString();
         if (val == null) return null;
 
@@ -84,7 +84,7 @@ class SclReferenceUtils {
     /**
      * Encuentra el SclDataSet asociado a un GoCB en la lista de DataSets.
      */
-    static SclDataSet findDataSetForGoCB(SclGoCB gcb, List<SclDataSet> sclDataSets) {
+    public static SclDataSet findDataSetForGoCB(SclGoCB gcb, List<SclDataSet> sclDataSets) {
         for (SclDataSet ds : sclDataSets) {
             if (ds.name != null && ds.name.equals(gcb.datSet)
                     && (ds.ldInst == null || ds.ldInst.equals(gcb.ldInst))) {

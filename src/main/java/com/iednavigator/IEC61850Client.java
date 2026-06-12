@@ -1555,11 +1555,16 @@ public class IEC61850Client implements ClientEventListener {
         setOperCtlVal(operNode, ctlValStr);
         fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck);
 
+        // iec61850bean: select()/operate() esperan el DO de control (padre de Oper);
+        // internamente hacen getChild("SBO") / getChild("Oper").
+        FcModelNode controlDo = (operNode.getParent() instanceof FcModelNode)
+            ? (FcModelNode) operNode.getParent() : operNode;
+
         try {
             if (ctlModel == 2 || ctlModel == 4) {
                 // SBO: enviar SELECT primero
                 System.out.println("[SBO] SELECT → " + operNode.getReference());
-                boolean selected = association.select(operNode);
+                boolean selected = association.select(controlDo);
                 if (!selected) {
                     String lastErr = readLastApplError(operNode);
                     System.out.println("[SBO] SELECT rechazado. LastApplError: " + lastErr);
@@ -1569,7 +1574,7 @@ public class IEC61850Client implements ClientEventListener {
                 System.out.println("[SBO] SELECT aceptado. Enviando OPERATE...");
             }
 
-            association.operate(operNode);
+            association.operate(controlDo);
             System.out.println("[OK] OPERATE ejecutado: " + operNode.getReference()
                 + " = " + ctlValStr + (testFlag ? " [TEST MODE]" : ""));
             return ControlResult.ok(ctlModel, ctlModelName);

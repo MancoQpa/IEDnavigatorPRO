@@ -21,27 +21,27 @@ import java.util.*;
  *   Communication  — IP del ConnectedAP y parámetros GSE (MAC, APPID, VLAN, tiempos)
  *   Valores        — valores instanciados DAI/Val (ajustes)
  */
-class SclCompare {
+public class SclCompare {
 
-    static class Difference {
-        final String category;
-        final String element;
-        final String valueA;   // null = no existe en A
-        final String valueB;   // null = no existe en B
+    public static class Difference {
+        public final String category;
+        public final String element;
+        public final String valueA;   // null = no existe en A
+        public final String valueB;   // null = no existe en B
         Difference(String category, String element, String valueA, String valueB) {
             this.category = category;
             this.element = element;
             this.valueA = valueA;
             this.valueB = valueB;
         }
-        String status() {
+        public String status() {
             if (valueA == null) return "Solo en B";
             if (valueB == null) return "Solo en A";
             return "Diferente";
         }
     }
 
-    static final String[] CATEGORIES =
+    public static final String[] CATEGORIES =
         {"IED", "LN", "DataSet", "GoCB", "Report", "Communication", "Valores"};
 
     /** Compara dos archivos SCL y devuelve la lista de diferencias. */
@@ -54,7 +54,7 @@ class SclCompare {
      * sustituyen por alias posicionales (IED#1, IED#2...) para poder comparar
      * configuraciones idénticas donde solo cambió el nombre del IED.
      */
-    static List<Difference> compare(File fileA, File fileB, boolean ignoreIedName) throws Exception {
+    public static List<Difference> compare(File fileA, File fileB, boolean ignoreIedName) throws Exception {
         Map<String, String> snapA = snapshot(fileA, ignoreIedName);
         Map<String, String> snapB = snapshot(fileB, ignoreIedName);
 

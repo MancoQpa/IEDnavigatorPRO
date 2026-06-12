@@ -10,10 +10,10 @@ import java.util.List;
  *
  * Almacena información de un DataSet parseado desde un archivo SCL.
  */
-class SclDataSet {
-    String ldInst;
-    String lnClass;
-    String name;
-    String desc;
-    List<String> members = new ArrayList<>();
+public class SclDataSet {
+    public String ldInst;
+    public String lnClass;
+    public String name;
+    public String desc;
+    public List<String> members = new ArrayList<>();
 }

@@ -16,6 +16,9 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <app.mainClass>com.iednavigator.IEDNavigatorApp</app.mainClass>
+        <jna.version>5.14.0</jna.version>
+        <slf4j.version>2.0.9</slf4j.version>
     </properties>
 
     <dependencies>
@@ -31,6 +34,60 @@
             <groupId>com.formdev</groupId>
             <artifactId>flatlaf</artifactId>
             <version>3.2</version>
+        </dependency>
+
+        <!-- Network capture (GOOSE/SV Layer 2) -->
+        <dependency>
+            <groupId>org.pcap4j</groupId>
+            <artifactId>pcap4j-core</artifactId>
+            <version>1.8.2</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>net.java.dev.jna</groupId>
+                    <artifactId>jna</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.pcap4j</groupId>
+            <artifactId>pcap4j-packetfactory-static</artifactId>
+            <version>1.8.2</version>
+        </dependency>
+
+        <!-- Native access to iec61850.dll (fixed at 5.14.0) -->
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna</artifactId>
+            <version>${jna.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna-platform</artifactId>
+            <version>${jna.version}</version>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <!-- Bridge HTTP/WS server -->
+        <dependency>
+            <groupId>io.javalin</groupId>
+            <artifactId>javalin</artifactId>
+            <version>5.6.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.15.3</version>
         </dependency>
     </dependencies>
 
@@ -53,7 +110,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.iednavigator.IEDNavigatorApp</mainClass>
+                            <mainClass>${app.mainClass}</mainClass>
                             <addClasspath>true</addClasspath>
                             <classpathPrefix>lib/</classpathPrefix>
                         </manifest>
@@ -87,7 +144,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.iednavigator.IEDNavigatorApp</mainClass>
+                            <mainClass>${app.mainClass}</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
@@ -106,4 +163,29 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Headless bridge build: mvn clean package -Pbridge -->
+        <profile>
+            <id>bridge</id>
+            <properties>
+                <app.mainClass>com.iednavigator.bridge.BridgeMain</app.mainClass>
+            </properties>
+            <build>
+                <finalName>ied-navigator-bridge</finalName>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <!-- Legacy package, not needed by the bridge -->
+                                <exclude>com/iedexplorer/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

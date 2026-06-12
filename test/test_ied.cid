@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SCL xmlns="http://www.iec.ch/61850/2003/SCL" version="2007" revision="B">
+  <Header id="TestIED" version="1" revision="1" toolID="IEDNavigator"/>
+  <Communication>
+    <SubNetwork name="SN1" type="8-MMS">
+      <ConnectedAP iedName="TESTIED" apName="AP1">
+        <Address>
+          <P type="IP">127.0.0.1</P>
+          <P type="IP-SUBNET">255.255.255.0</P>
+          <P type="IP-GATEWAY">127.0.0.1</P>
+          <P type="OSI-AP-Title">1,3,9999,33</P>
+          <P type="OSI-AE-Qualifier">33</P>
+          <P type="OSI-PSEL">00000001</P>
+          <P type="OSI-SSEL">0001</P>
+          <P type="OSI-TSEL">0001</P>
+        </Address>
+        <GSE ldInst="LD0" cbName="gcb1">
+          <Address>
+            <P type="MAC-Address">01-0C-CD-01-00-01</P>
+            <P type="APPID">1001</P>
+            <P type="VLAN-ID">005</P>
+            <P type="VLAN-PRIORITY">4</P>
+          </Address>
+          <MinTime unit="s" multiplier="m">10</MinTime>
+          <MaxTime unit="s" multiplier="m">2000</MaxTime>
+        </GSE>
+      </ConnectedAP>
+    </SubNetwork>
+  </Communication>
+  <IED name="TESTIED" type="TestDevice" manufacturer="IEDNavigator" configVersion="1.0">
+    <AccessPoint name="AP1">
+      <Server>
+        <Authentication/>
+        <LDevice inst="LD0">
+          <LN0 lnClass="LLN0" inst="" lnType="LLN0_T">
+            <DataSet name="dsMain" desc="Main dataset">
+              <FCDA ldInst="LD0" lnClass="GGIO" lnInst="1" doName="Ind1" fc="ST"/>
+              <FCDA ldInst="LD0" lnClass="GGIO" lnInst="1" doName="AnIn1" fc="MX"/>
+            </DataSet>
+            <ReportControl name="urcb1" datSet="dsMain" rptID="rptMain" confRev="1" buffered="false" intgPd="0">
+              <TrgOps dchg="true" qchg="true" period="false"/>
+              <OptFields seqNum="true" timeStamp="true" dataSet="true" reasonCode="true"/>
+              <RptEnabled max="5"/>
+            </ReportControl>
+            <SettingControl numOfSGs="2" actSG="1"/>
+            <DataSet name="dsGoose" desc="GOOSE dataset">
+              <FCDA ldInst="LD0" lnClass="GGIO" lnInst="1" doName="Ind1" daName="stVal" fc="ST"/>
+              <FCDA ldInst="LD0" lnClass="GGIO" lnInst="1" doName="AnIn1" daName="mag.f" fc="MX"/>
+            </DataSet>
+            <GSEControl name="gcb1" appID="goId1" datSet="dsGoose" confRev="1" type="GOOSE"/>
+          </LN0>
+          <LN lnClass="LPHD" inst="1" lnType="LPHD_T"/>
+          <LN lnClass="GGIO" inst="1" lnType="GGIO_T">
+            <DOI name="SPCSO1">
+              <DAI name="ctlModel">
+                <Val>sbo-with-normal-security</Val>
+              </DAI>
+            </DOI>
+          </LN>
+        </LDevice>
+      </Server>
+    </AccessPoint>
+  </IED>
+  <DataTypeTemplates>
+    <LNodeType id="LLN0_T" lnClass="LLN0">
+      <DO name="Mod" type="ENC_T"/>
+      <DO name="Beh" type="ENS_T"/>
+      <DO name="Health" type="ENS_T"/>
+      <DO name="NamPlt" type="LPL_T"/>
+    </LNodeType>
+    <LNodeType id="LPHD_T" lnClass="LPHD">
+      <DO name="PhyNam" type="DPL_T"/>
+      <DO name="PhyHealth" type="ENS_T"/>
+      <DO name="Proxy" type="SPS_T"/>
+    </LNodeType>
+    <LNodeType id="GGIO_T" lnClass="GGIO">
+      <DO name="Mod" type="ENC_T"/>
+      <DO name="Beh" type="ENS_T"/>
+      <DO name="Health" type="ENS_T"/>
+      <DO name="NamPlt" type="LPL_T"/>
+      <DO name="Ind1" type="SPS_T"/>
+      <DO name="AnIn1" type="MV_T"/>
+      <DO name="SPCSO1" type="SPC_T"/>
+    </LNodeType>
+    <DOType id="ENC_T" cdc="ENC">
+      <DA name="stVal" fc="ST" dchg="true" bType="Enum" type="ModKind"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+      <DA name="ctlModel" fc="CF" bType="Enum" type="CtlModelKind"/>
+    </DOType>
+    <DOType id="ENS_T" cdc="ENS">
+      <DA name="stVal" fc="ST" dchg="true" bType="Enum" type="ModKind"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+    </DOType>
+    <DOType id="LPL_T" cdc="LPL">
+      <DA name="vendor" fc="DC" bType="VisString255"/>
+      <DA name="swRev" fc="DC" bType="VisString255"/>
+      <DA name="d" fc="DC" bType="VisString255"/>
+      <DA name="configRev" fc="DC" bType="VisString255"/>
+    </DOType>
+    <DOType id="DPL_T" cdc="DPL">
+      <DA name="vendor" fc="DC" bType="VisString255"/>
+      <DA name="model" fc="DC" bType="VisString255"/>
+      <DA name="serNum" fc="DC" bType="VisString255"/>
+    </DOType>
+    <DOType id="SPS_T" cdc="SPS">
+      <DA name="stVal" fc="ST" dchg="true" bType="BOOLEAN"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+    </DOType>
+    <DOType id="MV_T" cdc="MV">
+      <DA name="mag" fc="MX" dchg="true" bType="Struct" type="AnalogueValue_T"/>
+      <DA name="q" fc="MX" qchg="true" bType="Quality"/>
+      <DA name="t" fc="MX" bType="Timestamp"/>
+    </DOType>
+    <DOType id="SPC_T" cdc="SPC">
+      <DA name="stVal" fc="ST" dchg="true" bType="BOOLEAN"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+      <DA name="ctlModel" fc="CF" bType="Enum" type="CtlModelKind"/>
+      <DA name="SBO" fc="CO" bType="ObjRef"/>
+      <DA name="Oper" fc="CO" bType="Struct" type="SPCOperate_T"/>
+      <DA name="Cancel" fc="CO" bType="Struct" type="SPCCancel_T"/>
+    </DOType>
+    <DAType id="AnalogueValue_T">
+      <BDA name="f" bType="FLOAT32"/>
+    </DAType>
+    <DAType id="SPCOperate_T">
+      <BDA name="ctlVal" bType="BOOLEAN"/>
+      <BDA name="origin" bType="Struct" type="Originator_T"/>
+      <BDA name="ctlNum" bType="INT8U"/>
+      <BDA name="T" bType="Timestamp"/>
+      <BDA name="Test" bType="BOOLEAN"/>
+      <BDA name="Check" bType="Check"/>
+    </DAType>
+    <DAType id="SPCCancel_T">
+      <BDA name="ctlVal" bType="BOOLEAN"/>
+      <BDA name="origin" bType="Struct" type="Originator_T"/>
+      <BDA name="ctlNum" bType="INT8U"/>
+      <BDA name="T" bType="Timestamp"/>
+      <BDA name="Test" bType="BOOLEAN"/>
+    </DAType>
+    <DAType id="Originator_T">
+      <BDA name="orCat" bType="Enum" type="OrCatKind"/>
+      <BDA name="orIdent" bType="Octet64"/>
+    </DAType>
+    <EnumType id="ModKind">
+      <EnumVal ord="1">on</EnumVal>
+      <EnumVal ord="2">blocked</EnumVal>
+      <EnumVal ord="3">test</EnumVal>
+      <EnumVal ord="4">test/blocked</EnumVal>
+      <EnumVal ord="5">off</EnumVal>
+    </EnumType>
+    <EnumType id="CtlModelKind">
+      <EnumVal ord="0">status-only</EnumVal>
+      <EnumVal ord="1">direct-with-normal-security</EnumVal>
+      <EnumVal ord="2">sbo-with-normal-security</EnumVal>
+      <EnumVal ord="3">direct-with-enhanced-security</EnumVal>
+      <EnumVal ord="4">sbo-with-enhanced-security</EnumVal>
+    </EnumType>
+    <EnumType id="OrCatKind">
+      <EnumVal ord="0">not-supported</EnumVal>
+      <EnumVal ord="1">bay-control</EnumVal>
+      <EnumVal ord="2">station-control</EnumVal>
+      <EnumVal ord="3">remote-control</EnumVal>
+      <EnumVal ord="4">automatic-bay</EnumVal>
+      <EnumVal ord="5">automatic-station</EnumVal>
+      <EnumVal ord="6">automatic-remote</EnumVal>
+      <EnumVal ord="7">maintenance</EnumVal>
+      <EnumVal ord="8">process</EnumVal>
+    </EnumType>
+  </DataTypeTemplates>
+</SCL>

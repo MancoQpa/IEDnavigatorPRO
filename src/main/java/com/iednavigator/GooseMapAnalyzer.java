@@ -14,37 +14,37 @@ import java.util.*;
  *  - ExtRef con serviceType="GOOSE" o con srcCBName (IEC 61850-6 Ed.2)
  *  - LGOS: DOI GoCBRef / DAI setSrcRef (supervisión de suscripción Ed.2)
  */
-class GooseMapAnalyzer {
+public class GooseMapAnalyzer {
 
-    static class Publisher {
-        String iedName, ldInst, cbName, datSet, appId;
-        String mac = "", appidHex = "";
-        List<String> members = new ArrayList<>();
-        int subscriberCount = 0;
+    public static class Publisher {
+        public String iedName, ldInst, cbName, datSet, appId;
+        public String mac = "", appidHex = "";
+        public List<String> members = new ArrayList<>();
+        public int subscriberCount = 0;
         String key() { return iedName + "|" + ldInst + "|" + cbName; }
-        String ref() { return iedName + " " + ldInst + "/" + cbName; }
+        public String ref() { return iedName + " " + ldInst + "/" + cbName; }
     }
 
-    static class Subscription {
-        String pubIed = "", pubLd = "", pubCb = "";   // publicador (puede quedar vacío si no resuelto)
-        String subscriberIed;                          // IED que recibe
-        String dataRef = "";                           // dato publicado referenciado (ExtRef)
-        String target = "";                            // intAddr o LN LGOS destino
-        String via;                                    // "ExtRef" | "LGOS"
-        boolean resolved = false;                      // publicador encontrado en el archivo
-        String pubRef() {
+    public static class Subscription {
+        public String pubIed = "", pubLd = "", pubCb = "";   // publicador (puede quedar vacío si no resuelto)
+        public String subscriberIed;                          // IED que recibe
+        public String dataRef = "";                           // dato publicado referenciado (ExtRef)
+        public String target = "";                            // intAddr o LN LGOS destino
+        public String via;                                    // "ExtRef" | "LGOS"
+        public boolean resolved = false;                      // publicador encontrado en el archivo
+        public String pubRef() {
             if (pubIed.isEmpty()) return "(no resuelto)";
             return pubIed + " " + pubLd + "/" + pubCb;
         }
     }
 
-    static class Result {
-        List<Publisher> publishers = new ArrayList<>();
-        List<Subscription> subscriptions = new ArrayList<>();
-        List<String> iedNames = new ArrayList<>();
+    public static class Result {
+        public List<Publisher> publishers = new ArrayList<>();
+        public List<Subscription> subscriptions = new ArrayList<>();
+        public List<String> iedNames = new ArrayList<>();
     }
 
-    static Result analyze(File sclFile) throws Exception {
+    public static Result analyze(File sclFile) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(false);
         Document doc = factory.newDocumentBuilder().parse(sclFile);

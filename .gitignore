@@ -1,0 +1,6 @@
+# Build
+target/
+classes/
+*.class
+*.log
+temp_installer*/

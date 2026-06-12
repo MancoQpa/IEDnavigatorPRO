@@ -14,14 +14,14 @@ import java.util.function.Consumer;
  *   parseSclDataTypeTemplates, parseGoCBsFromScl (×2),
  *   parseDataSetsFromIED, parseReportsFromIED.
  */
-class SclFileProcessor {
+public class SclFileProcessor {
 
     /** Agrupa todos los resultados de un parsing SCL. */
-    static class SclParsingResult {
-        String iedName = "";
-        String[] iedNameplate = {"", "", "", ""}; // manufacturer, type, desc, configVersion
-        List<SclGoCB>    goCBs     = new ArrayList<>();
-        List<SclDataSet> dataSets  = new ArrayList<>();
+    public static class SclParsingResult {
+        public String iedName = "";
+        public String[] iedNameplate = {"", "", "", ""}; // manufacturer, type, desc, configVersion
+        public List<SclGoCB>    goCBs     = new ArrayList<>();
+        public List<SclDataSet> dataSets  = new ArrayList<>();
         List<SclReport>  reports   = new ArrayList<>();
         Map<String, LinkedHashMap<Integer, String>> enumTypes  = new HashMap<>();
         Map<String, String>              daEnumType      = new HashMap<>();
@@ -37,7 +37,7 @@ class SclFileProcessor {
      * Parsea el primer IED del archivo SCL (sin filtro de índice).
      * Equivalente al original parseGoCBsFromScl(File sclFile) de IEDNavigatorApp.
      */
-    static SclParsingResult parseFirstIED(File sclFile, Consumer<String> log) {
+    public static SclParsingResult parseFirstIED(File sclFile, Consumer<String> log) {
         SclParsingResult result = new SclParsingResult();
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -149,7 +149,7 @@ class SclFileProcessor {
      * Parsea un IED específico por índice en un SCL multi-IED.
      * Equivalente al original parseGoCBsFromScl(File sclFile, int iedIndex) de IEDNavigatorApp.
      */
-    static SclParsingResult parseIEDByIndex(File sclFile, int iedIndex, Consumer<String> log) {
+    public static SclParsingResult parseIEDByIndex(File sclFile, int iedIndex, Consumer<String> log) {
         SclParsingResult result = new SclParsingResult();
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();

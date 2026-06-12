@@ -11,7 +11,7 @@ import java.util.Map;
  * Cubre: Nodos Lógicos (7-4), CDC (7-3), FC (7-2), DOs y DAs comunes.
  * Uso: Iec61850Dictionary.showInfoDialog(parent, nodeName)
  */
-class Iec61850Dictionary {
+public class Iec61850Dictionary {
 
     // ─────────────────────────────────────────────────────────────────────────
     //  Tipos de entrada
@@ -1154,6 +1154,27 @@ class Iec61850Dictionary {
             if (e != null && e.type == EntryType.LOGICAL_NODE) return suffix;
         }
         return null;
+    }
+
+    /**
+     * Acceso sin Swing para el bridge: descripción del token como mapa serializable.
+     * Retorna null si el token no está en el diccionario (ni por inferencia).
+     */
+    public static Map<String, String> describe(String name) {
+        Entry e = lookup(name);
+        if (e == null) return null;
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("token", name == null ? "" : name.trim());
+        m.put("kind", e.type.badge);
+        m.put("kindLabel", e.type.label);
+        m.put("nameEs", e.fullNameES);
+        m.put("nameEn", e.fullNameEN);
+        m.put("description", e.description);
+        m.put("standard", e.standard);
+        if (e.example != null) m.put("example", e.example);
+        String inferred = inferLnClass(name);
+        if (inferred != null) m.put("lnClass", inferred);
+        return m;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
