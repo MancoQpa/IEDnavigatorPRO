@@ -859,14 +859,16 @@ public class IEDNavigatorApp extends JFrame {
         JToolBar toolbar = new JToolBar();
         toolbar.setFloatable(false);
         toolbar.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 1, 0, Color.GRAY),
-            BorderFactory.createEmptyBorder(5, 10, 5, 10)
+            BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0xE0E4E8)),
+            BorderFactory.createEmptyBorder(6, 12, 6, 12)
         ));
+        toolbar.setBackground(Color.WHITE);
 
-        // Logo / Titulo
-        JLabel lblTitle = new JLabel("  IED Navigator  ");
-        lblTitle.setFont(new Font("Arial", Font.BOLD, 14));
-        lblTitle.setForeground(new Color(0, 80, 160));
+        // Logo / Titulo (bicolor, estilo marca comercial)
+        JLabel lblTitle = new JLabel("<html>&nbsp;<span style='color:#37474F;'>IED</span>"
+            + "<span style='color:#1976D2;'>Navigator</span>"
+            + "&nbsp;<span style='color:#90A4AE;font-size:9px;'>PRO</span>&nbsp;</html>");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
         toolbar.add(lblTitle);
         toolbar.addSeparator(new Dimension(20, 0));
 
@@ -897,7 +899,8 @@ public class IEDNavigatorApp extends JFrame {
 
         // Info version
         JLabel lblVersion = new JLabel("v1.0 | IEC 61850  ");
-        lblVersion.setForeground(Color.GRAY);
+        lblVersion.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        lblVersion.setForeground(new Color(0x90A4AE));
         toolbar.add(lblVersion);
 
         return toolbar;
@@ -906,10 +909,10 @@ public class IEDNavigatorApp extends JFrame {
     private JPanel createStatusBar() {
         JPanel statusBar = new JPanel(new BorderLayout());
         statusBar.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(1, 0, 0, 0, Color.GRAY),
-            BorderFactory.createEmptyBorder(3, 10, 3, 10)
+            BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0xE0E4E8)),
+            BorderFactory.createEmptyBorder(4, 12, 4, 12)
         ));
-        statusBar.setBackground(new Color(240, 240, 240));
+        statusBar.setBackground(new Color(0xF7F9FB));
 
         JLabel lblReady = new JLabel("Listo");
         statusBar.add(lblReady, BorderLayout.WEST);
@@ -2763,6 +2766,59 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("Separator.foreground", new Color(0xE0E0E0));
         // Tooltips legibles
         UIManager.put("ToolTip.background", new Color(0xFFFDE7));
+
+        // ── 4. Maquillaje extra (segunda ronda) ───────────────────────────
+        // Menú superior: ítem activo con subrayado azul en vez de bloque gris
+        UIManager.put("MenuBar.underlineSelectionColor", accent);
+        UIManager.put("MenuBar.underlineSelectionBackground", new Color(0xE3F2FD));
+        UIManager.put("MenuBar.underlineSelectionHeight", 3);
+        UIManager.put("MenuItem.selectionType", "underline");
+        UIManager.put("MenuItem.underlineSelectionColor", accent);
+        UIManager.put("MenuItem.selectionArc", 6);
+        UIManager.put("PopupMenu.borderCornerRadius", 8);
+
+        // Botones: hover celeste y borde que se "enciende" al pasar el mouse
+        UIManager.put("Button.hoverBackground", new Color(0xE3F2FD));
+        UIManager.put("Button.hoverBorderColor", accent);
+        UIManager.put("Button.pressedBackground", new Color(0xBBDEFB));
+        UIManager.put("Button.default.boldText", true);
+        UIManager.put("Button.borderColor", new Color(0xB9C4CE));
+
+        // Pestaña activa: texto en azul + negrita para reforzar el subrayado
+        UIManager.put("TabbedPane.selectedForeground", accent);
+        UIManager.put("TabbedPane.font", new Font("Segoe UI", Font.PLAIN, 13));
+        UIManager.put("TabbedPane.tabHeight", 30);
+
+        // Selección de tabla/árbol en azul suave con texto negro (no invierte color)
+        UIManager.put("Table.selectionBackground", new Color(0xCFE5F7));
+        UIManager.put("Table.selectionForeground", Color.BLACK);
+        UIManager.put("Tree.selectionBackground", new Color(0xCFE5F7));
+        UIManager.put("Tree.selectionForeground", Color.BLACK);
+        UIManager.put("List.selectionBackground", new Color(0xCFE5F7));
+        UIManager.put("List.selectionForeground", Color.BLACK);
+
+        // Campos de texto: borde gris que pasa a azul con foco, placeholder gris
+        UIManager.put("TextField.placeholderForeground", new Color(0x9E9E9E));
+        UIManager.put("ComboBox.buttonStyle", "mac"); // flecha sin caja separada
+        UIManager.put("Spinner.buttonStyle", "mac");
+
+        // Divisores de paneles más finos y con "agarre" sutil
+        UIManager.put("SplitPane.dividerSize", 7);
+        UIManager.put("SplitPaneDivider.gripDotCount", 3);
+        UIManager.put("SplitPaneDivider.gripColor", new Color(0xB0BEC5));
+
+        // TitledBorder con fuente más chica y semibold (look de sección)
+        UIManager.put("TitledBorder.font", new Font("Segoe UI", Font.BOLD, 12));
+
+        // ── 5. Barra de título moderna (decoraciones FlatLaf, estilo VS Code) ──
+        // Menú embebido en la barra de título + fondo unificado con la ventana
+        UIManager.put("TitlePane.unifiedBackground", true);
+        UIManager.put("TitlePane.menuBarEmbedded", true);
+        UIManager.put("TitlePane.titleMargins", new Insets(4, 8, 4, 8));
+        UIManager.put("TitlePane.font", new Font("Segoe UI", Font.BOLD, 13));
+        UIManager.put("TitlePane.foreground", new Color(0x37474F));
+        // Para revertir a la barra de título clásica de Windows: comentar las
+        // dos líneas setDefaultLookAndFeelDecorated(true) en main().
     }
 
     public static void main(String[] args) {
@@ -2770,6 +2826,9 @@ public class IEDNavigatorApp extends JFrame {
         try {
             UIManager.setLookAndFeel("com.formdev.flatlaf.FlatLightLaf");
             applyUiPolish();
+            // Decoraciones de ventana FlatLaf (barra de título moderna integrada)
+            JFrame.setDefaultLookAndFeelDecorated(true);
+            JDialog.setDefaultLookAndFeelDecorated(true);
         } catch (Exception e) {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
