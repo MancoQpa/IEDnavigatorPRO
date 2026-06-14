@@ -8,6 +8,15 @@ import { useUiStore } from '../stores/ui';
 const thCls = 'px-2 py-1 font-medium text-left text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-surface-raised';
 const tdCls = 'px-2 py-1 text-xs truncate max-w-0';
 
+/**
+ * Convierte el ref completo de iec61850bean (ej. "LTVHA_ESPBOLn1/LLN0$DS1")
+ * al formato legible del Mapa GOOSE (ej. "Ln1/DS1"), igual que la GUI Swing.
+ */
+function shortDsRef(fullRef: string, iedName: string): string {
+  const s = iedName && fullRef.startsWith(iedName) ? fullRef.slice(iedName.length) : fullRef;
+  return s.replace('/LLN0$', '/');
+}
+
 /** Extrae el sufijo del atributo hoja (último componente del ref) */
 function attrSuffix(memberRef: string, bdaRef: string): string {
   return bdaRef.startsWith(memberRef + '.') ? bdaRef.slice(memberRef.length + 1) : bdaRef;
@@ -32,6 +41,7 @@ function memberValue(memberRef: string, values: DataSetValue[]): string {
 /** DataSets del IED — réplica del layout doble tabla del Swing DatasetPanel.java */
 export default function DatasetPanel() {
   const connected = useConnectionStore((s) => s.client.connected);
+  const iedName = useConnectionStore((s) => s.client.iedName ?? '');
   const setTreeSearch = useUiStore((s) => s.setTreeSearch);
 
   const [datasets, setDatasets] = useState<DataSetInfo[]>([]);
@@ -163,7 +173,7 @@ export default function DatasetPanel() {
                       }`}
                     >
                       <td className={`${tdCls} font-mono text-[11px]`} title={ds.ref}>
-                        {ds.ref}
+                        {shortDsRef(ds.ref, iedName)}
                       </td>
                       <td className={`${tdCls} w-16 text-center`}>{ds.members.length}</td>
                       <td className={`${tdCls} w-14 text-center`}>
