@@ -12,10 +12,10 @@ import ProtectionSettingsPanel from '../panels/ProtectionSettingsPanel';
 import ReportsPanel from '../panels/ReportsPanel';
 import SclComparePanel from '../panels/SclComparePanel';
 import SettingGroupsPanel from '../panels/SettingGroupsPanel';
-import SvPanel from '../panels/SvPanel';
 import { useUiStore } from '../stores/ui';
 
 // Pestañas en el mismo orden que la GUI clásica
+// SV (SMV) desactivado — funcionalidad no operativa
 const TABS = [
   { id: 'monitor', title: 'Monitor', el: <MonitorPanel /> },
   { id: 'reports', title: 'Reports', el: <ReportsPanel /> },
@@ -26,7 +26,6 @@ const TABS = [
   { id: 'dataModel', title: 'Data Model', el: <DataModelPanel /> },
   { id: 'sclCompare', title: 'Comparar SCL', el: <SclComparePanel /> },
   { id: 'gooseMap', title: 'Mapa GOOSE', el: <GooseMapPanel /> },
-  { id: 'sv', title: 'SV (SMV)', el: <SvPanel /> },
   { id: 'device', title: 'Dispositivo', el: <DevicePanel /> },
 ] as const;
 

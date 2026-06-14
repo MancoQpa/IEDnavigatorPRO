@@ -4,6 +4,8 @@ import type { GooseMessageEvent, GooseState, NetInterfaces } from '../api/types'
 import { log } from './log';
 
 const MAX_MESSAGES = 300;
+/** Buffer interval: flush queued GOOSE messages to the store every N ms */
+const MSG_FLUSH_MS = 150;
 
 interface GooseStoreState {
   net: NetInterfaces | null;
@@ -23,6 +25,35 @@ interface GooseStoreState {
   udpStop: () => Promise<void>;
   addMessage: (msg: GooseMessageEvent) => void;
   clearMessages: () => void;
+}
+
+/* ── Message buffering: collect WS messages and flush in batch ── */
+let msgBuffer: GooseMessageEvent[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushMessages() {
+  flushTimer = null;
+  if (msgBuffer.length === 0) return;
+  const batch = msgBuffer;
+  msgBuffer = [];
+  const store = useGooseStore.getState();
+  // Update gocb stNum/sqNum badges from the batch (use last message per gocb)
+  let state = store.state;
+  let stateChanged = false;
+  for (const msg of batch) {
+    if (msg.source === 'local' && msg.gocbRef && msg.stNum !== undefined) {
+      const updatedGocbs = state.gocbs.map((g) =>
+        `${g.ldInst}/LLN0$GO$${g.cbName}` === msg.gocbRef
+          ? { ...g, stNum: msg.stNum, sqNum: msg.sqNum }
+          : g,
+      );
+      state = { ...state, gocbs: updatedGocbs };
+      stateChanged = true;
+    }
+  }
+  const messages = [...batch.reverse(), ...store.messages];
+  if (messages.length > MAX_MESSAGES) messages.length = MAX_MESSAGES;
+  useGooseStore.setState(stateChanged ? { state, messages } : { messages });
 }
 
 const EMPTY: GooseState = { subscribing: false, gocbs: [] };
@@ -148,19 +179,11 @@ export const useGooseStore = create<GooseStoreState>((set, get) => ({
   },
 
   addMessage: (msg) => {
-    // Update stNum/sqNum badge for the matching local GoCB
-    if (msg.source === 'local' && msg.gocbRef && msg.stNum !== undefined) {
-      const state = get().state;
-      const updatedGocbs = state.gocbs.map((g) =>
-        `${g.ldInst}/LLN0$GO$${g.cbName}` === msg.gocbRef
-          ? { ...g, stNum: msg.stNum, sqNum: msg.sqNum }
-          : g,
-      );
-      set({ state: { ...state, gocbs: updatedGocbs } });
+    // Buffer messages and flush in batch every MSG_FLUSH_MS to avoid per-message re-renders
+    msgBuffer.push(msg);
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushMessages, MSG_FLUSH_MS);
     }
-    const messages = [msg, ...get().messages];
-    if (messages.length > MAX_MESSAGES) messages.length = MAX_MESSAGES;
-    set({ messages });
   },
 
   clearMessages: () => set({ messages: [] }),

@@ -191,14 +191,40 @@ public final class ServicesApi {
     }
 
     /** GET /client/datasets — lista de DataSets del modelo con sus miembros.
-     *  Fuente preferida: SCL (igual que GooseMap/GOOSE — siempre completa).
-     *  Fallback: modelo MMS del cliente (puede ser incompleto para SCDs con múltiples AccessPoints). */
+     *  Fuente preferida: modelo MMS (ServerModel de iec61850bean — siempre completo
+     *  cuando se usa mergedModels con todos los AccessPoints).
+     *  Fallback: SCL XML directo (para casos donde el modelo MMS esté vacío). */
     public void listDataSets(Context ctx) {
         IEC61850Client client = sessions.requireClient();
         List<Map<String, Object>> out = new ArrayList<>();
 
-        // ── Fuente 1: SCL (autoritativa) ──────────────────────────────────────
+        // ── Fuente 1: modelo MMS (autoritativa, igual que el Swing original) ──
         IEC61850Server srv = sessions.getServer();
+        ServerModel model = requireModel(client);
+        ServerModel srvModel = (srv != null) ? srv.getServerModel() : null;
+        Iterable<DataSet> source = (srvModel != null && !srvModel.getDataSets().isEmpty())
+                ? srvModel.getDataSets() : model.getDataSets();
+        for (DataSet ds : source) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("ref", ds.getReferenceStr());
+            m.put("deletable", ds.isDeletable());
+            List<Map<String, Object>> members = new ArrayList<>();
+            for (FcModelNode member : ds.getMembers()) {
+                Map<String, Object> mm = new LinkedHashMap<>();
+                mm.put("ref", member.getReference().toString());
+                mm.put("fc", member.getFc() != null ? member.getFc().toString() : "");
+                members.add(mm);
+            }
+            m.put("members", members);
+            out.add(m);
+        }
+
+        if (!out.isEmpty()) {
+            ctx.json(Map.of("datasets", out));
+            return;
+        }
+
+        // ── Fuente 2: SCL XML directo (fallback) ─────────────────────────────
         if (srv != null && srv.getSclPath() != null) {
             File sclFile = new File(srv.getSclPath());
             if (sclFile.exists()) {
@@ -231,34 +257,10 @@ public final class ServicesApi {
                         m.put("members", members);
                         out.add(m);
                     }
-                    if (!out.isEmpty()) {
-                        ctx.json(Map.of("datasets", out));
-                        return;
-                    }
                 } catch (Exception e) {
-                    System.err.println("[WARN] SCL dataset listing failed, fallback to model: " + e.getMessage());
+                    System.err.println("[WARN] SCL dataset listing failed: " + e.getMessage());
                 }
             }
-        }
-
-        // ── Fuente 2: modelo MMS (fallback) ───────────────────────────────────
-        ServerModel model = requireModel(client);
-        ServerModel srvModel = (srv != null) ? srv.getServerModel() : null;
-        Iterable<DataSet> source = (srvModel != null && !srvModel.getDataSets().isEmpty())
-                ? srvModel.getDataSets() : model.getDataSets();
-        for (DataSet ds : source) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("ref", ds.getReferenceStr());
-            m.put("deletable", ds.isDeletable());
-            List<Map<String, Object>> members = new ArrayList<>();
-            for (FcModelNode member : ds.getMembers()) {
-                Map<String, Object> mm = new LinkedHashMap<>();
-                mm.put("ref", member.getReference().toString());
-                mm.put("fc", member.getFc() != null ? member.getFc().toString() : "");
-                members.add(mm);
-            }
-            m.put("members", members);
-            out.add(m);
         }
         ctx.json(Map.of("datasets", out));
     }

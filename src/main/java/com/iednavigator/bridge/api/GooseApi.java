@@ -173,6 +173,9 @@ public final class GooseApi {
             stopPublisher(idx);
             SclGoCB gcb = goCBs.get(idx);
             GoosePublisher pub = GooseModelSync.configurePublisher(gcb, idx, dataSets);
+            // En loopback (simulación) usar heartbeat rápido para UI responsiva;
+            // en red real, respetar el timing del SCL (maxTime).
+            if (loopback) pub.setHeartbeatInterval(500);
             pub.setLogListener(msg -> eventBus.emit("goose.log",
                     Map.of("message", "[GoCB#" + idx + "] " + msg)));
             pub.setPublishListener(pm -> emitPublishedMessage(idx, gcb, pm));
@@ -431,15 +434,7 @@ public final class GooseApi {
     }
 
     private void emitPublishedMessage(int idx, SclGoCB gcb, GoosePublisher.PublishedMessage pm) {
-        // Para mensajes locales (publicados por nosotros) siempre emitir — igual que el original
-        // Swing que muestra todos los mensajes publicados sin filtro. Solo suprimir si sqNum > 0
-        // para la ráfaga rápida de retransmisiones (sqNum 1-4 del mismo stNum).
-        if (pm.sqNum > 0) {
-            long[] prev = lastEmit.get("local|" + pm.gocbRef);
-            if (prev != null && prev[1] == pm.stNum
-                    && System.currentTimeMillis() - prev[0] < COALESCE_MS) return;
-        }
-        lastEmit.put("local|" + pm.gocbRef, new long[]{ System.currentTimeMillis(), pm.stNum });
+        // Emitir TODOS los mensajes locales sin filtro — igual que la GUI Swing original.
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("source", "local");
         p.put("gcbIndex", idx);

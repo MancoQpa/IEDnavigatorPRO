@@ -2,14 +2,20 @@ import { useState } from 'react';
 import { getApi } from '../api/client';
 import { pickSclFile } from '../api/pickFile';
 import type { GooseMapResult } from '../api/types';
+import { useConnectionStore } from '../stores/connection';
 import { log } from '../stores/log';
+import { useModelStore } from '../stores/model';
 import { useServerStore } from '../stores/server';
 import { useUiStore } from '../stores/ui';
 
 /** Mapa de suscripciones GOOSE de un SCD: publicadores vs. ExtRef/LGOS. */
 export default function GooseMapPanel() {
   const serverScl = useServerStore((s) => s.sclPath);
-  const setTreeSearch = useUiStore((s) => s.setTreeSearch);
+  const setTreeNavigateRef = useUiStore((s) => s.setTreeNavigateRef);
+  const clientIedName = useConnectionStore((s) => s.client.iedName);
+  const modelIedName = useModelStore((s) => s.model?.iedName);
+  const serverIedName = useServerStore((s) => s.ieds[s.iedIndex]);
+  const loadedIed = clientIedName || modelIedName || serverIedName || '';
   const [path, setPath] = useState(serverScl);
   const [result, setResult] = useState<GooseMapResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -99,13 +105,21 @@ export default function GooseMapPanel() {
                       <td className="px-2 py-1 font-mono text-[11px] dark:text-gray-300">
                         {p.ldInst}/{p.cbName}
                       </td>
-                      <td
-                        className="cursor-pointer px-2 py-1 font-mono text-[11px] text-accent hover:underline dark:text-accent-hover"
-                        title="Clic para navegar en el árbol del modelo"
-                        onClick={() => setTreeSearch(p.datSet.includes('/') ? p.datSet.split('/')[0] : p.datSet)}
-                      >
-                        {p.datSet}
-                      </td>
+                      {(() => {
+                        const navigable = !!loadedIed && p.iedName === loadedIed;
+                        return (
+                          <td
+                            className={`px-2 py-1 font-mono text-[11px] ${navigable ? 'cursor-pointer text-accent hover:underline dark:text-accent-hover' : 'text-gray-500'}`}
+                            title={navigable ? 'Clic para navegar en el árbol del modelo' : undefined}
+                            onClick={navigable ? () => {
+                              const firstMember = p.members[0];
+                              setTreeNavigateRef(firstMember ? loadedIed + firstMember : loadedIed + p.ldInst + '/LLN0');
+                            } : undefined}
+                          >
+                            {p.datSet}
+                          </td>
+                        );
+                      })()}
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-500">{p.appId}</td>
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-500">{p.mac || '—'}</td>
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-500">{p.appidHex || '—'}</td>
@@ -160,13 +174,20 @@ export default function GooseMapPanel() {
                           {s.subscriberIed}
                         </td>
                         <td className="px-2 py-1 font-mono text-[11px] dark:text-gray-300">{s.pubRef}</td>
-                        <td
-                          className="cursor-pointer px-2 py-1 font-mono text-[11px] text-accent hover:underline dark:text-accent-hover"
-                          title="Clic para navegar en el árbol del modelo"
-                          onClick={() => setTreeSearch(s.dataRef)}
-                        >
-                          {s.dataRef}
-                        </td>
+                        {(() => {
+                          // dataRef es dato del publicador (sin prefijo IED)
+                          // Navegable si el publicador es el IED cargado
+                          const pubIsLoaded = !!loadedIed && s.pubIed === loadedIed;
+                          return (
+                            <td
+                              className={`px-2 py-1 font-mono text-[11px] ${pubIsLoaded ? 'cursor-pointer text-accent hover:underline dark:text-accent-hover' : 'text-gray-500'}`}
+                              title={pubIsLoaded ? 'Clic para navegar en el árbol del modelo' : undefined}
+                              onClick={pubIsLoaded ? () => setTreeNavigateRef(loadedIed + s.dataRef) : undefined}
+                            >
+                              {s.dataRef}
+                            </td>
+                          );
+                        })()}
                         <td className="px-2 py-1 font-mono text-[11px] text-gray-500">{s.target || '—'}</td>
                         <td className="px-2 py-1 text-gray-500">{s.via}</td>
                         <td className="px-2 py-1">

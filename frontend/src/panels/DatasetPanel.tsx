@@ -6,7 +6,7 @@ import { log } from '../stores/log';
 import { useUiStore } from '../stores/ui';
 
 const thCls = 'px-2 py-1 font-medium text-left text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-surface-raised';
-const tdCls = 'px-2 py-1 text-xs truncate max-w-0';
+const tdCls = 'px-2 py-0.5 text-[11px] truncate max-w-0';
 
 /**
  * Convierte el ref completo de iec61850bean (ej. "LTVHA_ESPBOLn1/LLN0$DS1")
@@ -42,7 +42,7 @@ function memberValue(memberRef: string, values: DataSetValue[]): string {
 export default function DatasetPanel() {
   const connected = useConnectionStore((s) => s.client.connected);
   const iedName = useConnectionStore((s) => s.client.iedName ?? '');
-  const setTreeSearch = useUiStore((s) => s.setTreeSearch);
+  const setTreeNavigateRef = useUiStore((s) => s.setTreeNavigateRef);
 
   const [datasets, setDatasets] = useState<DataSetInfo[]>([]);
   const [selected, setSelected] = useState<string>('');
@@ -166,7 +166,7 @@ export default function DatasetPanel() {
                     <tr
                       key={ds.ref}
                       onClick={() => setSelected(ds.ref)}
-                      className={`cursor-pointer border-t border-gray-100 text-xs dark:border-surface-border/50 ${
+                      className={`cursor-pointer border-t border-gray-100 text-[11px] dark:border-surface-border/50 ${
                         active
                           ? 'bg-accent text-white dark:bg-accent'
                           : 'hover:bg-blue-50/50 dark:hover:bg-accent/10'
@@ -215,7 +215,7 @@ export default function DatasetPanel() {
                   return (
                     <tr
                       key={m.ref + m.fc}
-                      onClick={() => setTreeSearch(m.ref)}
+                      onClick={() => setTreeNavigateRef(m.ref)}
                       className="cursor-pointer border-t border-gray-100 hover:bg-blue-50/50 dark:border-surface-border/50 dark:hover:bg-accent/10"
                       title="Clic para navegar en el árbol del modelo"
                     >
@@ -236,12 +236,13 @@ export default function DatasetPanel() {
                         </span>
                       </td>
                       <td
-                        className={`w-28 px-2 py-0.5 text-[11px] font-medium ${
-                          val ? 'text-accent dark:text-accent-hover' : 'text-gray-300 dark:text-gray-600'
-                        }`}
+                        className="w-28 px-2 py-0.5 text-[11px] font-bold"
+                        style={{ color: val ? (valueColor(val) ?? undefined) : undefined }}
                         title={val || '—'}
                       >
-                        {val || '—'}
+                        <span className={val ? '' : 'text-gray-300 dark:text-gray-600 font-normal'}>
+                          {val || '—'}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -260,3 +261,16 @@ const FC_COLORS: Record<string, string> = {
   CF: 'rgb(230,81,0)', SP: 'rgb(74,20,140)', SG: 'rgb(27,94,32)',
   SE: 'rgb(0,96,100)', DC: 'rgb(33,33,33)', BL: 'rgb(120,80,180)',
 };
+
+/* Colores semánticos idénticos a ModelTreePanel (ModelTreeCellRenderer) */
+const ACTIVE_VALUES = ['on', 'ok', 'closed', 'true', 'good'];
+const INACTIVE_VALUES = ['off', 'alarm', 'open', 'false'];
+const WARNING_VALUES = ['intermediate', 'bad', 'warning', 'test', 'bad-state', 'invalid'];
+
+function valueColor(value: string): string | undefined {
+  const v = value.trim().toLowerCase();
+  if (ACTIVE_VALUES.includes(v)) return 'rgb(0,150,0)';
+  if (INACTIVE_VALUES.includes(v)) return 'rgb(200,0,0)';
+  if (WARNING_VALUES.some((w) => v === w || v.includes(w))) return 'rgb(255,140,0)';
+  return undefined;
+}

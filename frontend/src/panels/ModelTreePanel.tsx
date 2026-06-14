@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getApi } from '../api/client';
 import type { ModelNodeDto } from '../api/types';
 import ContextMenu, { type MenuItem } from '../components/ContextMenu';
@@ -30,20 +30,31 @@ function valueColor(value: string | undefined): string | undefined {
   return undefined;
 }
 
+/** Devuelve true si nodeRef es un ancestro del targetRef en el árbol IEC 61850. */
+function isAncestorOf(nodeRef: string, targetRef: string): boolean {
+  if (!targetRef || !nodeRef) return false;
+  if (!targetRef.startsWith(nodeRef)) return false;
+  const next = targetRef[nodeRef.length];
+  return next === '/' || next === '.' || next === undefined;
+}
+
 function TreeNode({
   node,
   depth,
   onMenu,
   serverSource,
   isServerMode,
+  navigateRef,
 }: {
   node: ModelNodeDto;
   depth: number;
   onMenu: (e: React.MouseEvent, node: ModelNodeDto) => void;
   serverSource: boolean;
   isServerMode: boolean;
+  navigateRef: string;
 }) {
   const [open, setOpen] = useState(depth < 1);
+  const elRef = useRef<HTMLDivElement>(null);
   const liveValue = useModelStore((s) => s.values.get(node.ref));
   const connected = useConnectionStore((s) => s.client.connected);
   const openDialog = useDialogStore((s) => s.open);
@@ -51,6 +62,21 @@ function TreeNode({
     node.fc ? s.items.some((it) => it.ref === node.ref) : false,
   );
   const hasChildren = !!node.children?.length;
+
+  // Expand ancestor nodes and scroll to target
+  useEffect(() => {
+    if (!navigateRef) return;
+    if (isAncestorOf(node.ref, navigateRef) && hasChildren) {
+      setOpen(true);
+    }
+    if (node.ref === navigateRef) {
+      // Small delay so the tree has time to expand ancestors
+      const t = setTimeout(() => {
+        elRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 80);
+      return () => clearTimeout(t);
+    }
+  }, [navigateRef, node.ref, hasChildren]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -67,10 +93,13 @@ function TreeNode({
   const vColor = valueColor(value);
   const nameColor = inWatchlist ? 'rgb(0,100,200)' : node.fc === 'BL' ? 'rgb(120,80,180)' : undefined;
 
+  const isTarget = navigateRef === node.ref;
+
   return (
     <div>
       <div
-        className="flex cursor-pointer items-center gap-1 rounded px-1 py-[1px] text-[12px] hover:bg-gray-100 dark:hover:bg-surface-raised"
+        ref={elRef}
+        className={`flex cursor-pointer items-center gap-1 rounded px-1 py-[1px] text-[12px] hover:bg-gray-100 dark:hover:bg-surface-raised ${isTarget ? 'ring-2 ring-accent bg-accent/10 dark:bg-accent/20' : ''}`}
         style={{ paddingLeft: depth * 14 + 4 }}
         onClick={() => hasChildren && setOpen(!open)}
         onDoubleClick={handleDoubleClick}
@@ -116,7 +145,7 @@ function TreeNode({
       </div>
       {open &&
         node.children?.map((c) => (
-          <TreeNode key={c.ref + (c.fc ?? '')} node={c} depth={depth + 1} onMenu={onMenu} serverSource={serverSource} isServerMode={isServerMode} />
+          <TreeNode key={c.ref + (c.fc ?? '')} node={c} depth={depth + 1} onMenu={onMenu} serverSource={serverSource} isServerMode={isServerMode} navigateRef={navigateRef} />
         ))}
     </div>
   );
@@ -130,7 +159,10 @@ export default function ModelTreePanel() {
   const mode = useUiStore((s) => s.mode);
   const treeSearch = useUiStore((s) => s.treeSearch);
   const setTreeSearch = useUiStore((s) => s.setTreeSearch);
+  const treeNavigateRef = useUiStore((s) => s.treeNavigateRef);
+  const setTreeNavigateRef = useUiStore((s) => s.setTreeNavigateRef);
   const [filter, setFilter] = useState('');
+  const [navigateRef, setNavigateRef] = useState('');
 
   // Sync external treeSearch (from Dataset navigation) into local filter
   useEffect(() => {
@@ -139,6 +171,15 @@ export default function ModelTreePanel() {
       setTreeSearch(''); // consume it
     }
   }, [treeSearch, setTreeSearch]);
+
+  // Navigate: expand path + scroll without filtering
+  useEffect(() => {
+    if (treeNavigateRef) {
+      setFilter(''); // clear any active filter so full tree is visible
+      setNavigateRef(treeNavigateRef);
+      setTreeNavigateRef(''); // consume it
+    }
+  }, [treeNavigateRef, setTreeNavigateRef]);
   const [menu, setMenu] = useState<{ x: number; y: number; node: ModelNodeDto } | null>(null);
 
   // Como en la GUI original: en modo servidor el árbol se puebla desde el
@@ -311,7 +352,7 @@ export default function ModelTreePanel() {
           {serverSource && <span className="ml-1 font-normal text-gray-400">(modelo del simulador)</span>}
         </div>
         {filterTree(model.logicalDevices).map((ld) => (
-          <TreeNode key={ld.ref} node={ld} depth={0} onMenu={openMenu} serverSource={serverSource} isServerMode={mode === 'servidor'} />
+          <TreeNode key={ld.ref} node={ld} depth={0} onMenu={openMenu} serverSource={serverSource} isServerMode={mode === 'servidor'} navigateRef={navigateRef} />
         ))}
       </div>
       {menu && (

@@ -37,16 +37,18 @@ export default function ContextMenu({
   }, [onClose]);
 
   // Evitar que el menú se salga de la ventana
+  const menuH = Math.min(items.length * 28 + 16, window.innerHeight - 32);
   const style: React.CSSProperties = {
-    left: Math.min(x, window.innerWidth - 230),
-    top: Math.min(y, window.innerHeight - items.length * 28 - 16),
+    left: Math.min(x, window.innerWidth - 340),
+    top: Math.min(y, window.innerHeight - menuH),
+    maxHeight: window.innerHeight - 32,
   };
 
   return (
     <div
       ref={ref}
       style={style}
-      className="fixed z-50 min-w-[210px] rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-surface-border dark:bg-surface-raised"
+      className="fixed z-50 min-w-[210px] max-w-[400px] overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-surface-border dark:bg-surface-raised"
     >
       {items.map((item, i) =>
         item.separator ? (

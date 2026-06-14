@@ -1,21 +1,72 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { pickSclFile } from '../api/pickFile';
-import type { GoCBInfo } from '../api/types';
+import type { GoCBInfo, GooseDataValue, GooseMessageEvent } from '../api/types';
+import ContextMenu, { type MenuItem } from '../components/ContextMenu';
 import Modal from '../components/Modal';
 import { useConnectionStore } from '../stores/connection';
 import { useGooseStore } from '../stores/goose';
 import { useServerStore } from '../stores/server';
 
 type EditTarget = { gcbIndex: number; dataIndex: number; name: string; type: string; current: string | null };
+type CtxMenu = { x: number; y: number; gcb: GoCBInfo };
+
+/* Colores semánticos para valores GOOSE (iguales a ModelTreePanel) */
+const ACTIVE = ['on', 'ok', 'closed', 'true', 'good'];
+const INACTIVE = ['off', 'alarm', 'open', 'false'];
+const WARNING = ['intermediate', 'bad', 'warning', 'test', 'bad-state', 'invalid'];
+function valColor(v: string | null): string | undefined {
+  if (!v) return undefined;
+  const l = v.trim().toLowerCase();
+  if (ACTIVE.includes(l)) return 'rgb(0,150,0)';
+  if (INACTIVE.includes(l)) return 'rgb(200,0,0)';
+  if (WARNING.some((w) => l === w || l.includes(w))) return 'rgb(255,140,0)';
+  return undefined;
+}
+
+/** Construye ítems de menú contextual para un GoCB: un grupo por cada DataValue. */
+function buildGoCBMenuItems(
+  gcb: GoCBInfo,
+  onQuickSet: (gcbIdx: number, dvIdx: number, val: string) => void,
+  onEdit: (t: EditTarget) => void,
+): MenuItem[] {
+  const items: MenuItem[] = [];
+  for (const dv of gcb.dataValues) {
+    if (items.length) items.push({ label: '', separator: true, onClick: () => {} });
+    const t = (dv.type ?? '').toUpperCase();
+    const hdr = `[${dv.index}] ${dv.name}  =  ${dv.value ?? '—'}`;
+    // Header (no-op, solo informativo)
+    items.push({ label: `📋 ${hdr}`, onClick: () => {} });
+
+    if (t.includes('BOOLEAN')) {
+      items.push({ label: '    Establecer TRUE', onClick: () => onQuickSet(gcb.index, dv.index, 'true') });
+      items.push({ label: '    Establecer FALSE', onClick: () => onQuickSet(gcb.index, dv.index, 'false') });
+    } else if (t.includes('DBPOS') || t.includes('DOUBLE')) {
+      items.push({ label: '    Establecer ON (cerrado)', onClick: () => onQuickSet(gcb.index, dv.index, 'on') });
+      items.push({ label: '    Establecer OFF (abierto)', onClick: () => onQuickSet(gcb.index, dv.index, 'off') });
+      items.push({ label: '    Establecer INTERMEDIATE', onClick: () => onQuickSet(gcb.index, dv.index, 'intermediate') });
+      items.push({ label: '    Establecer BAD_STATE', onClick: () => onQuickSet(gcb.index, dv.index, 'bad-state') });
+    } else if (t.includes('QUALITY') || t.includes('BITSTRING')) {
+      items.push({ label: '    Establecer GOOD (0x0000)', onClick: () => onQuickSet(gcb.index, dv.index, '0000') });
+      items.push({ label: '    Establecer INVALID (0x0004)', onClick: () => onQuickSet(gcb.index, dv.index, '0004') });
+    }
+    items.push({
+      label: '    Editar valor…',
+      onClick: () => onEdit({ gcbIndex: gcb.index, dataIndex: dv.index, name: dv.name, type: dv.type, current: dv.value }),
+    });
+  }
+  return items;
+}
 
 function GoCBRow({
   gcb,
   iface,
   onEditValue,
+  onContextMenu,
 }: {
   gcb: GoCBInfo;
   iface: string;
   onEditValue: (t: EditTarget) => void;
+  onContextMenu: (e: React.MouseEvent, gcb: GoCBInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
   const store = useGooseStore;
@@ -23,7 +74,10 @@ function GoCBRow({
 
   return (
     <>
-      <tr className="border-b border-gray-100 text-xs hover:bg-gray-50 dark:border-surface-border dark:hover:bg-surface-raised">
+      <tr
+        className="border-b border-gray-100 text-xs hover:bg-gray-50 dark:border-surface-border dark:hover:bg-surface-raised"
+        onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, gcb); }}
+      >
         <td className="cursor-pointer px-2 py-1 text-gray-400" onClick={() => setOpen(!open)}>
           {open ? '▾' : '▸'}
         </td>
@@ -73,7 +127,8 @@ function GoCBRow({
             <td className="px-2 py-0.5 text-gray-400">{dv.type}</td>
             <td
               colSpan={2}
-              className={`px-2 py-0.5 font-mono font-medium text-accent dark:text-accent-hover ${gcb.publishing ? 'cursor-pointer hover:underline' : ''}`}
+              className={`px-2 py-0.5 font-mono font-bold ${gcb.publishing ? 'cursor-pointer hover:underline' : ''}`}
+              style={{ color: valColor(dv.value) }}
               onDoubleClick={() =>
                 gcb.publishing &&
                 onEditValue({
@@ -95,6 +150,44 @@ function GoCBRow({
   );
 }
 
+/* Fast time format — avoid toLocaleTimeString() per row */
+function fmtTime(ts?: number): string {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const s = d.getSeconds();
+  const ms = d.getMilliseconds();
+  return `${h < 10 ? '0' : ''}${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}.${ms < 100 ? (ms < 10 ? '00' : '0') : ''}${ms}`;
+}
+
+const SOURCE_CLS: Record<string, string> = {
+  local: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400',
+  udp: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400',
+  network: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400',
+};
+const SOURCE_LBL: Record<string, string> = { local: 'LOCAL', udp: 'UDP', network: 'RED' };
+
+const MsgRow = memo(function MsgRow({ m }: { m: GooseMessageEvent }) {
+  return (
+    <tr className="border-b border-gray-100 hover:bg-gray-50 dark:border-surface-border dark:hover:bg-surface-raised">
+      <td className="px-2 py-0.5 font-mono text-gray-500 dark:text-gray-400">{fmtTime(m.ts)}</td>
+      <td className="px-2 py-0.5">
+        <span className={`rounded px-1 text-[10px] font-medium ${SOURCE_CLS[m.source] ?? SOURCE_CLS.network}`}>
+          {SOURCE_LBL[m.source] ?? 'RED'}
+        </span>
+      </td>
+      <td className="px-2 py-0.5 font-mono dark:text-gray-300">{m.gocbRef}</td>
+      <td className="px-2 py-0.5 dark:text-gray-300">{m.goId}</td>
+      <td className="px-2 py-0.5 font-mono dark:text-gray-300">{m.stNum}</td>
+      <td className="px-2 py-0.5 font-mono dark:text-gray-300">{m.sqNum}</td>
+      <td className="px-2 py-0.5 font-mono text-gray-500 dark:text-gray-400">
+        {m.entries.map((e) => e.value ?? '?').join(', ')}
+      </td>
+    </tr>
+  );
+});
+
 /** GOOSE: publicación de GoCBs del SCL y captura de mensajes de la red. */
 export default function GoosePanel() {
   const bridgeReady = useConnectionStore((s) => s.bridgeReady);
@@ -113,6 +206,7 @@ export default function GoosePanel() {
   const [udpIp, setUdpIp] = useState('');
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [editVal, setEditVal] = useState('');
+  const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
 
   const openEdit = (t: EditTarget) => {
     setEditTarget(t);
@@ -123,6 +217,15 @@ export default function GoosePanel() {
     if (!editTarget) return;
     void store.getState().setValue(editTarget.gcbIndex, editTarget.dataIndex, editVal);
     setEditTarget(null);
+  };
+
+  const quickSet = (gcbIdx: number, dvIdx: number, val: string) => {
+    void store.getState().setValue(gcbIdx, dvIdx, val);
+  };
+
+  const handleCtxMenu = (e: React.MouseEvent, gcb: GoCBInfo) => {
+    if (!gcb.publishing) return; // solo si está publicando
+    setCtxMenu({ x: e.clientX, y: e.clientY, gcb });
   };
 
   useEffect(() => {
@@ -301,7 +404,7 @@ export default function GoosePanel() {
             </thead>
             <tbody>
               {state.gocbs.map((g) => (
-                <GoCBRow key={g.index} gcb={g} iface={iface} onEditValue={openEdit} />
+                <GoCBRow key={g.index} gcb={g} iface={iface} onEditValue={openEdit} onContextMenu={handleCtxMenu} />
               ))}
             </tbody>
           </table>
@@ -334,38 +437,21 @@ export default function GoosePanel() {
           </thead>
           <tbody>
             {messages.map((m, i) => (
-              <tr
-                key={i}
-                className="border-b border-gray-100 hover:bg-gray-50 dark:border-surface-border dark:hover:bg-surface-raised"
-              >
-                <td className="px-2 py-0.5 font-mono text-gray-500 dark:text-gray-400">
-                  {m.ts ? new Date(m.ts).toLocaleTimeString() : '—'}
-                </td>
-                <td className="px-2 py-0.5">
-                  <span
-                    className={`rounded px-1 text-[10px] font-medium ${
-                      m.source === 'local'
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'
-                        : m.source === 'udp'
-                          ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400'
-                          : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400'
-                    }`}
-                  >
-                    {m.source === 'local' ? 'LOCAL' : m.source === 'udp' ? 'UDP' : 'RED'}
-                  </span>
-                </td>
-                <td className="px-2 py-0.5 font-mono dark:text-gray-300">{m.gocbRef}</td>
-                <td className="px-2 py-0.5 dark:text-gray-300">{m.goId}</td>
-                <td className="px-2 py-0.5 font-mono dark:text-gray-300">{m.stNum}</td>
-                <td className="px-2 py-0.5 font-mono dark:text-gray-300">{m.sqNum}</td>
-                <td className="px-2 py-0.5 font-mono text-gray-500 dark:text-gray-400">
-                  {m.entries.map((e) => e.value ?? '?').join(', ')}
-                </td>
-              </tr>
+              <MsgRow key={i} m={m} />
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* ── Menú contextual GoCB ── */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={buildGoCBMenuItems(ctxMenu.gcb, quickSet, openEdit)}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
 
       {/* ── Diálogo edición valor GOOSE ── */}
       {editTarget && (
