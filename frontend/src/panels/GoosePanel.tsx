@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react';
+import { pickSclFile } from '../api/pickFile';
 import type { GoCBInfo } from '../api/types';
+import Modal from '../components/Modal';
 import { useConnectionStore } from '../stores/connection';
 import { useGooseStore } from '../stores/goose';
 import { useServerStore } from '../stores/server';
 
-function GoCBRow({ gcb, iface }: { gcb: GoCBInfo; iface: string }) {
+type EditTarget = { gcbIndex: number; dataIndex: number; name: string; type: string; current: string | null };
+
+function GoCBRow({
+  gcb,
+  iface,
+  onEditValue,
+}: {
+  gcb: GoCBInfo;
+  iface: string;
+  onEditValue: (t: EditTarget) => void;
+}) {
   const [open, setOpen] = useState(false);
   const store = useGooseStore;
   const busy = useGooseStore((s) => s.busy);
-
-  const editValue = (dataIndex: number, current: string | null) => {
-    if (!gcb.publishing) return;
-    const v = window.prompt(`Nuevo valor para [${dataIndex}] ${gcb.dataValues[dataIndex]?.name}`, current ?? '');
-    if (v !== null) void store.getState().setValue(gcb.index, dataIndex, v);
-  };
 
   return (
     <>
@@ -68,8 +74,17 @@ function GoCBRow({ gcb, iface }: { gcb: GoCBInfo; iface: string }) {
             <td
               colSpan={2}
               className={`px-2 py-0.5 font-mono font-medium text-accent dark:text-accent-hover ${gcb.publishing ? 'cursor-pointer hover:underline' : ''}`}
-              onDoubleClick={() => editValue(dv.index, dv.value)}
-              title={gcb.publishing ? 'Doble clic para editar y publicar' : undefined}
+              onDoubleClick={() =>
+                gcb.publishing &&
+                onEditValue({
+                  gcbIndex: gcb.index,
+                  dataIndex: dv.index,
+                  name: dv.name,
+                  type: dv.type,
+                  current: dv.value,
+                })
+              }
+              title={gcb.publishing ? 'Doble clic para editar y publicar estado' : undefined}
             >
               {dv.value ?? '—'}
             </td>
@@ -96,6 +111,19 @@ export default function GoosePanel() {
   const [udpRx, setUdpRx] = useState(true);
   const [udpTx, setUdpTx] = useState(false);
   const [udpIp, setUdpIp] = useState('');
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [editVal, setEditVal] = useState('');
+
+  const openEdit = (t: EditTarget) => {
+    setEditTarget(t);
+    setEditVal(t.current ?? '');
+  };
+
+  const submitEdit = () => {
+    if (!editTarget) return;
+    void store.getState().setValue(editTarget.gcbIndex, editTarget.dataIndex, editVal);
+    setEditTarget(null);
+  };
 
   useEffect(() => {
     if (bridgeReady) {
@@ -124,6 +152,15 @@ export default function GoosePanel() {
           placeholder="Ruta del fichero SCL con GoCBs…"
           className="min-w-64 flex-1 rounded border border-gray-300 bg-transparent px-2 py-1 font-mono text-[11px] outline-none focus:border-accent dark:border-surface-border dark:text-gray-200"
         />
+        <button
+          onClick={() =>
+            void pickSclFile('Seleccionar SCL con GoCBs').then((p) => p && setPath(p))
+          }
+          disabled={busy}
+          className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:border-surface-border dark:text-gray-300 dark:hover:bg-surface-raised"
+        >
+          Examinar…
+        </button>
         <button
           onClick={() => void store.getState().loadScl(path, serverIedIndex)}
           disabled={!path || busy}
@@ -185,7 +222,10 @@ export default function GoosePanel() {
 
       {!npcap && (
         <div className="border-b border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400">
-          Npcap no detectado: solo está disponible el modo loopback (sin envío a la red).
+          Npcap no detectado: solo está disponible el modo loopback (sin envío a la red). Para
+          GOOSE/SV en red instale Npcap desde{' '}
+          <span className="font-mono select-all">https://npcap.com</span> (con «WinPcap
+          API-compatible mode») y reinicie la aplicación.
         </div>
       )}
 
@@ -261,7 +301,7 @@ export default function GoosePanel() {
             </thead>
             <tbody>
               {state.gocbs.map((g) => (
-                <GoCBRow key={g.index} gcb={g} iface={iface} />
+                <GoCBRow key={g.index} gcb={g} iface={iface} onEditValue={openEdit} />
               ))}
             </tbody>
           </table>
@@ -326,6 +366,47 @@ export default function GoosePanel() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Diálogo edición valor GOOSE ── */}
+      {editTarget && (
+        <Modal
+          title={`Publicar nuevo valor — [${editTarget.dataIndex}] ${editTarget.name}`}
+          onClose={() => setEditTarget(null)}
+          width={380}
+        >
+          <div className="space-y-3 text-xs">
+            <div className="text-gray-500 dark:text-gray-400">
+              Tipo: <span className="font-medium text-gray-700 dark:text-gray-200">{editTarget.type}</span>
+              {editTarget.current != null && (
+                <> &nbsp;·&nbsp; Actual: <span className="font-medium text-accent">{editTarget.current}</span></>
+              )}
+            </div>
+            <input
+              autoFocus
+              value={editVal}
+              onChange={(e) => setEditVal(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitEdit()}
+              placeholder="Nuevo valor…"
+              className="w-full rounded border border-gray-300 bg-transparent px-2 py-1.5 font-mono text-xs outline-none focus:border-accent dark:border-surface-border dark:bg-surface dark:text-gray-200"
+            />
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={() => setEditTarget(null)}
+                className="rounded border border-gray-300 px-3 py-1.5 dark:border-surface-border dark:text-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submitEdit}
+                disabled={!editVal.trim()}
+                className="rounded bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+              >
+                Publicar
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

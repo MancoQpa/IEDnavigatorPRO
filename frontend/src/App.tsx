@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { BridgeApi, getApi, resolveBridgeInfo, setApi } from './api/client';
 import type { GooseMessageEvent, ReportEvent, SvMessage, ValueChange, WsEnvelope } from './api/types';
 import { BridgeSocket, setSocket } from './api/ws';
+import ModeStrip from './components/ModeStrip';
 import StatusBar from './components/StatusBar';
 import Toolbar from './components/Toolbar';
+import MenuBar from './components/MenuBar';
 import DialogHost from './dialogs/DialogHost';
-import DockManager from './layout/DockManager';
+import ClassicLayout from './layout/ClassicLayout';
 import { useConnectionStore } from './stores/connection';
 import { useGooseStore } from './stores/goose';
 import { log } from './stores/log';
@@ -73,6 +75,8 @@ export default function App() {
         socket.on('server.clientWrite', (env: WsEnvelope) => {
           const { ref, value } = env.payload as { ref: string; value: string };
           log.info(`Escritura de cliente MMS: ${ref} = ${value}`);
+          // Refrescar el árbol del simulador (como updateServerTreeValues original)
+          void useServerStore.getState().refreshStatus();
         });
         socket.on('server.error', (env: WsEnvelope) => {
           const { message } = env.payload as { message: string };
@@ -105,6 +109,16 @@ export default function App() {
         if (status.connected) {
           useConnectionStore.getState().setClientStatus(status);
           await useModelStore.getState().fetch();
+        }
+        await useServerStore.getState().refreshStatus();
+        const srv = useServerStore.getState().status;
+        if (srv.running && srv.port && !status.connected) {
+          // Servidor simulado ya activo: reconectar el cliente interno
+          try {
+            await useConnectionStore.getState().connect('127.0.0.1', srv.port);
+          } catch {
+            /* ya logueado */
+          }
         }
 
         setBoot('ready');
@@ -151,9 +165,11 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
+      <MenuBar />
       <Toolbar />
+      <ModeStrip />
       <div className="min-h-0 flex-1">
-        <DockManager />
+        <ClassicLayout />
       </div>
       <StatusBar />
       <DialogHost />

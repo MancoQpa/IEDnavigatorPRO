@@ -64,6 +64,8 @@ public final class BridgeServer {
 
         // ── Sistema ──
         app.get("/api/v1/system/info", systemApi::info);
+        app.get("/api/v1/system/portcheck", systemApi::portCheck);
+        app.post("/api/v1/system/portrelease", systemApi::portRelease);
         app.post("/api/v1/system/shutdown", systemApi::shutdown);
         app.post("/api/v1/system/ping", ctx -> ctx.json(Map.of("pong", System.currentTimeMillis())));
 

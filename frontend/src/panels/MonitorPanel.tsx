@@ -1,7 +1,11 @@
 import { useState } from 'react';
+import type { ModelNodeDto } from '../api/types';
 import { useConnectionStore } from '../stores/connection';
+import { useDialogStore } from '../stores/dialogs';
 import { useModelStore } from '../stores/model';
 import { useMonitorStore } from '../stores/monitor';
+
+const READONLY_FC = ['ST', 'MX'];
 
 const FC_OPTIONS = ['', 'ST', 'MX', 'CO', 'CF', 'DC', 'SP', 'SG', 'BL'];
 
@@ -19,9 +23,23 @@ export default function MonitorPanel() {
   const values = useModelStore((s) => s.values);
   const connected = useConnectionStore((s) => s.client.connected);
 
+  const openDialog = useDialogStore((s) => s.open);
   const [filter, setFilter] = useState('');
   const [fcFilter, setFcFilter] = useState('');
   const [dragOver, setDragOver] = useState(false);
+
+  const handleRowDoubleClick = (r: { ref: string; fc: string; value: string; type: string }) => {
+    if (!connected || READONLY_FC.includes(r.fc)) return;
+    const node: ModelNodeDto = {
+      name: r.ref.split('.').pop() ?? r.ref,
+      ref: r.ref,
+      kind: 'DA',
+      fc: r.fc,
+      value: r.value,
+      type: r.type,
+    };
+    openDialog('write', node);
+  };
 
   if (!connected) {
     return (
@@ -158,13 +176,15 @@ export default function MonitorPanel() {
               {visible.map((r, i) => (
                 <tr
                   key={r.ref + r.fc}
+                  onDoubleClick={() => handleRowDoubleClick(r)}
+                  title={!READONLY_FC.includes(r.fc) ? 'Doble clic para escribir valor' : undefined}
                   className={`border-t border-gray-100 dark:border-surface-border/50 ${
                     i % 2 ? 'bg-gray-50/60 dark:bg-surface-raised/40' : ''
-                  }`}
+                  } ${!READONLY_FC.includes(r.fc) ? 'cursor-pointer' : ''}`}
                 >
-                  <td className="px-2 py-1 font-mono text-[11px] text-gray-700 dark:text-gray-300">{r.ref}</td>
+                  <td className="px-2 py-1 text-gray-700 dark:text-gray-300">{r.ref}</td>
                   <td className="px-2 py-1 text-gray-500">{r.fc}</td>
-                  <td className="px-2 py-1 font-mono text-[11px] font-medium text-accent dark:text-accent-hover">
+                  <td className="px-2 py-1 font-medium text-accent dark:text-accent-hover">
                     {r.value}
                   </td>
                   <td className="px-2 py-1 text-gray-500">{r.type}</td>

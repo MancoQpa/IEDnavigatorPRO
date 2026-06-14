@@ -148,6 +148,16 @@ export const useGooseStore = create<GooseStoreState>((set, get) => ({
   },
 
   addMessage: (msg) => {
+    // Update stNum/sqNum badge for the matching local GoCB
+    if (msg.source === 'local' && msg.gocbRef && msg.stNum !== undefined) {
+      const state = get().state;
+      const updatedGocbs = state.gocbs.map((g) =>
+        `${g.ldInst}/LLN0$GO$${g.cbName}` === msg.gocbRef
+          ? { ...g, stNum: msg.stNum, sqNum: msg.sqNum }
+          : g,
+      );
+      set({ state: { ...state, gocbs: updatedGocbs } });
+    }
     const messages = [msg, ...get().messages];
     if (messages.length > MAX_MESSAGES) messages.length = MAX_MESSAGES;
     set({ messages });

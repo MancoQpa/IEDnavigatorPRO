@@ -19,7 +19,7 @@ interface ConnectionState {
   setWsState: (s: WsState) => void;
   setSystemInfo: (info: SystemInfo) => void;
   setClientStatus: (c: ClientStatus) => void;
-  connect: (host: string, port: number) => Promise<void>;
+  connect: (host: string, port: number, timeoutMs?: number) => Promise<void>;
   disconnect: () => Promise<void>;
 }
 
@@ -36,12 +36,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   setSystemInfo: (systemInfo) => set({ systemInfo }),
   setClientStatus: (client) => set({ client }),
 
-  connect: async (host, port) => {
+  connect: async (host, port, timeoutMs) => {
     if (get().connecting) return;
     set({ connecting: true });
     log.info(`Conectando a ${host}:${port}...`);
     try {
-      const status = await getApi().connect(host, port);
+      const status = await getApi().connect(host, port, timeoutMs);
       set({ client: status });
       log.info(`Conectado a ${host}:${port} (IED: ${status.iedName ?? '?'})`);
       await useModelStore.getState().fetch();

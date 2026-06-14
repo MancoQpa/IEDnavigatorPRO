@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getApi } from '../api/client';
+import { pickSclFile } from '../api/pickFile';
 import type { GooseMapResult } from '../api/types';
 import { log } from '../stores/log';
 import { useServerStore } from '../stores/server';
@@ -36,6 +37,15 @@ export default function GooseMapPanel() {
           placeholder="Archivo SCL (idealmente SCD multi-IED)"
           className="min-w-72 flex-1 rounded border border-gray-300 bg-transparent px-2 py-1 font-mono text-[11px] dark:border-surface-border dark:text-gray-200"
         />
+        <button
+          onClick={() =>
+            void pickSclFile('Seleccionar archivo SCD').then((p) => p && setPath(p))
+          }
+          disabled={busy}
+          className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:border-surface-border dark:text-gray-300 dark:hover:bg-surface-raised"
+        >
+          Examinar…
+        </button>
         <button
           onClick={() => void analyze()}
           disabled={busy || !path.trim()}

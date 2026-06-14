@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { getApi } from '../api/client';
+import { pickSclFile } from '../api/pickFile';
 import type { SclCompareResult } from '../api/types';
 import { log } from '../stores/log';
 
@@ -52,12 +53,26 @@ export default function SclComparePanel() {
           placeholder="Archivo A (ruta completa .icd/.cid/.scd)"
           className="min-w-72 flex-1 rounded border border-gray-300 bg-transparent px-2 py-1 font-mono text-[11px] dark:border-surface-border dark:text-gray-200"
         />
+        <button
+          onClick={() => void pickSclFile('Seleccionar archivo A').then((p) => p && setPathA(p))}
+          disabled={busy}
+          className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:border-surface-border dark:text-gray-300 dark:hover:bg-surface-raised"
+        >
+          A…
+        </button>
         <input
           value={pathB}
           onChange={(e) => setPathB(e.target.value)}
           placeholder="Archivo B (ruta completa .icd/.cid/.scd)"
           className="min-w-72 flex-1 rounded border border-gray-300 bg-transparent px-2 py-1 font-mono text-[11px] dark:border-surface-border dark:text-gray-200"
         />
+        <button
+          onClick={() => void pickSclFile('Seleccionar archivo B').then((p) => p && setPathB(p))}
+          disabled={busy}
+          className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:border-surface-border dark:text-gray-300 dark:hover:bg-surface-raised"
+        >
+          B…
+        </button>
         <label className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
           <input
             type="checkbox"

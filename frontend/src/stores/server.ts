@@ -96,8 +96,10 @@ export const useServerStore = create<ServerState>((set, get) => ({
     try {
       const status = await getApi().serverStatus();
       set({ status });
-      if (status.modelLoaded && !get().model) {
+      if (status.modelLoaded) {
         set({ model: await getApi().serverModel() });
+      } else if (get().model) {
+        set({ model: null });
       }
     } catch {
       /* bridge aún no listo */

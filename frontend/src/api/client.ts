@@ -102,6 +102,16 @@ export class BridgeApi {
   shutdown() {
     return this.request<{ status: string }>('POST', '/system/shutdown');
   }
+  portCheck(port: number) {
+    return this.request<{ port: number; free: boolean; error?: string }>(
+      'GET', `/system/portcheck?port=${port}`,
+    );
+  }
+  portRelease(port: number) {
+    return this.request<{ port: number; released: boolean; pid?: number; message?: string }>(
+      'POST', '/system/portrelease', { port },
+    );
+  }
 
   // ── Cliente IEC 61850 ──
   connect(host: string, port: number, timeoutMs?: number) {
