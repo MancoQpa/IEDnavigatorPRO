@@ -12,6 +12,7 @@ import com.beanit.iec61850bean.Report;
 import com.beanit.iec61850bean.ServerModel;
 import com.beanit.iec61850bean.Urcb;
 import com.iednavigator.IEC61850Client;
+import com.iednavigator.IEC61850Server;
 import com.iednavigator.ModelReportGenerator;
 import com.iednavigator.bridge.EventBus;
 import com.iednavigator.bridge.SessionManager;
@@ -171,12 +172,36 @@ public final class ServicesApi {
 
     // ── DataSets ──────────────────────────────────────────────────────────
 
+    /**
+     * Busca un DataSet en el modelo del servidor (más completo que el modelo MMS del cliente).
+     * Retorna null si el servidor no está corriendo o no tiene el DataSet.
+     */
+    private DataSet findInServerModel(String ref) {
+        IEC61850Server srv = sessions.getServer();
+        if (srv == null) return null;
+        ServerModel srvModel = srv.getServerModel();
+        if (srvModel == null) return null;
+        for (DataSet ds : srvModel.getDataSets()) {
+            if (ds.getReferenceStr().equals(ref)) return ds;
+        }
+        return null;
+    }
+
     /** GET /client/datasets — lista de DataSets del modelo con sus miembros. */
     public void listDataSets(Context ctx) {
         IEC61850Client client = sessions.requireClient();
         ServerModel model = requireModel(client);
+
+        // El modelo recuperado vía MMS puede ser incompleto para SCDs grandes.
+        // Si hay un servidor corriendo, su modelo (parseado directo del SCL) es autoritativo.
+        IEC61850Server srv = sessions.getServer();
+        ServerModel srvModel = (srv != null) ? srv.getServerModel() : null;
+        Iterable<DataSet> source = (srvModel != null && !srvModel.getDataSets().isEmpty())
+                ? srvModel.getDataSets()
+                : model.getDataSets();
+
         List<Map<String, Object>> out = new ArrayList<>();
-        for (DataSet ds : model.getDataSets()) {
+        for (DataSet ds : source) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("ref", ds.getReferenceStr());
             m.put("deletable", ds.isDeletable());
@@ -198,7 +223,15 @@ public final class ServicesApi {
         DataSetReadRequest req = ctx.bodyAsClass(DataSetReadRequest.class);
         if (req.ref == null || req.ref.isEmpty()) throw new BadRequestResponse("ref requerido");
         IEC61850Client client = sessions.requireClient();
-        DataSet ds = client.readDataSetValues(req.ref);
+        DataSet ds;
+        try {
+            ds = client.readDataSetValues(req.ref);
+        } catch (Exception e) {
+            // El DataSet no está en el modelo MMS del cliente; buscar en modelo del servidor
+            DataSet serverDs = findInServerModel(req.ref);
+            if (serverDs == null) throw e;
+            ds = client.readDataSetValues(serverDs);
+        }
 
         List<Map<String, Object>> values = new ArrayList<>();
         for (FcModelNode member : ds.getMembers()) {

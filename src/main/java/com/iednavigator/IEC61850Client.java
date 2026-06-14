@@ -1262,6 +1262,24 @@ public class IEC61850Client implements ClientEventListener {
         return dataSet;
     }
 
+    /**
+     * Lee valores de un DataSet ya conocido (objeto externo, p.ej. del modelo del servidor).
+     * Útil cuando el DataSet no está en el modelo MMS del cliente pero sí en el servidor.
+     */
+    public DataSet readDataSetValues(DataSet dataSet) throws IOException {
+        if (!isConnected()) throw new IOException("No conectado a ningún IED");
+        List<ServiceError> errors = association.getDataSetValues(dataSet);
+        if (errors != null) {
+            int errCount = 0;
+            for (ServiceError se : errors) if (se != null) errCount++;
+            if (errCount > 0) {
+                System.out.println("[DataSet] " + dataSet.getReferenceStr() + ": "
+                        + errCount + " de " + errors.size() + " miembros con error");
+            }
+        }
+        return dataSet;
+    }
+
     public FcModelNode findBlkEnaNode(String doReference) {
         if (serverModel == null) return null;
         // Intentar construir ref: doRef.blkEna con Fc.BL
