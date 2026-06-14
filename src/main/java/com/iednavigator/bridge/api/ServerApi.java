@@ -87,7 +87,7 @@ public final class ServerApi {
         if (req.iedIndex < 0 || req.iedIndex >= ieds.size()) {
             throw new BadRequestResponse("iedIndex fuera de rango (0.." + (ieds.size() - 1) + ")");
         }
-        if (!server.loadSclFile(f.getAbsolutePath(), req.iedIndex)) {
+        if (!server.loadSclFileWithIED(f.getAbsolutePath(), req.iedIndex)) {
             throw new BadRequestResponse("No se pudo cargar el SCL: " + req.path);
         }
         loadedPath = f.getAbsolutePath();
