@@ -161,8 +161,10 @@ export class BridgeApi {
   }
 
   // ── Reports (RCBs) ──
-  rcbs(refresh = false) {
-    return this.request<{ rcbs: RcbInfo[] }>('GET', `/client/rcbs?refresh=${refresh}`);
+  rcbs(refresh = false, type?: 'URCB' | 'BRCB') {
+    let url = `/client/rcbs?refresh=${refresh}`;
+    if (type) url += `&type=${type}`;
+    return this.request<{ rcbs: RcbInfo[] }>('GET', url);
   }
   enableRcb(ref: string) {
     return this.request<{ ref: string; enabled: boolean }>('POST', '/client/rcbs/enable', { ref });

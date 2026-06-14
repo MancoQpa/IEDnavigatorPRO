@@ -173,9 +173,9 @@ public final class GooseApi {
             stopPublisher(idx);
             SclGoCB gcb = goCBs.get(idx);
             GoosePublisher pub = GooseModelSync.configurePublisher(gcb, idx, dataSets);
-            // En loopback (simulación) usar heartbeat rápido para UI responsiva;
-            // en red real, respetar el timing del SCL (maxTime).
-            if (loopback) pub.setHeartbeatInterval(500);
+            // Heartbeat rápido para UI responsiva (500ms máx.);
+            // SCL maxTime puede ser alto (ej. 2000ms), lo limitamos.
+            pub.setHeartbeatInterval(Math.min(pub.getHeartbeatInterval(), 500));
             pub.setLogListener(msg -> eventBus.emit("goose.log",
                     Map.of("message", "[GoCB#" + idx + "] " + msg)));
             pub.setPublishListener(pm -> emitPublishedMessage(idx, gcb, pm));

@@ -469,6 +469,7 @@ public class GoosePublisher {
     public void setAppId(int appId) { this.appId = appId; }
     public void setConfRev(int confRev) { this.confRev = confRev; }
     public void setTestMode(boolean testMode) { this.testMode = testMode; }
+    public int getHeartbeatInterval() { return this.heartbeatInterval; }
     public void setHeartbeatInterval(int ms) { this.heartbeatInterval = ms; }
     public void setDstMac(String mac) { this.dstMac = MacAddress.getByName(mac); }
     public void setVlan(int vlanId, int vlanPriority) {

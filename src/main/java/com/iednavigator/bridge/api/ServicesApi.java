@@ -78,9 +78,12 @@ public final class ServicesApi {
         ServerModel model = requireModel(client);
         boolean refresh = "true".equals(ctx.queryParam("refresh"));
 
+        String type = ctx.queryParam("type"); // null = ambos, "URCB" o "BRCB"
         List<Map<String, Object>> out = new ArrayList<>();
-        for (Urcb u : model.getUrcbs()) out.add(rcbJson(client, u, "URCB", refresh));
-        for (Brcb b : model.getBrcbs()) out.add(rcbJson(client, b, "BRCB", refresh));
+        if (type == null || "URCB".equalsIgnoreCase(type))
+            for (Urcb u : model.getUrcbs()) out.add(rcbJson(client, u, "URCB", refresh));
+        if (type == null || "BRCB".equalsIgnoreCase(type))
+            for (Brcb b : model.getBrcbs()) out.add(rcbJson(client, b, "BRCB", refresh));
         ctx.json(Map.of("rcbs", out));
     }
 
@@ -157,16 +160,16 @@ public final class ServicesApi {
         if (values != null) {
             for (int i = 0; i < values.size(); i++) {
                 FcModelNode node = values.get(i);
+                if (node == null) continue;
                 String reason = (reasons != null && i < reasons.size() && reasons.get(i) != null)
                         ? reasonString(reasons.get(i)) : "";
-                for (BasicDataAttribute bda : collectLeaves(node)) {
-                    Map<String, Object> e = new LinkedHashMap<>();
-                    e.put("ref", bda.getReference().toString());
-                    e.put("fc", bda.getFc() != null ? bda.getFc().toString() : "");
-                    e.put("value", client.formatValue(bda));
-                    e.put("reason", reason);
-                    entries.add(e);
-                }
+                // Misma lógica que el Swing: extraer valor recursivamente del nodo
+                Map<String, Object> e = new LinkedHashMap<>();
+                e.put("ref", node.getReference().toString());
+                e.put("fc", node.getFc() != null ? node.getFc().toString() : "");
+                e.put("value", extractNodeValue(node));
+                e.put("reason", reason);
+                entries.add(e);
             }
         }
         m.put("entries", entries);
@@ -374,6 +377,12 @@ public final class ServicesApi {
         ServerModel model = requireModel(client);
         boolean includeValues = "true".equals(ctx.queryParam("values"));
 
+        // Preferir el modelo del servidor (tiene todos los DataSets del SCL)
+        IEC61850Server srv = sessions.getServer();
+        ServerModel srvModel = (srv != null) ? srv.getServerModel() : null;
+        ServerModel reportModel = (srvModel != null && !srvModel.getDataSets().isEmpty())
+                ? srvModel : model;
+
         Map<String, String> np = client.readDeviceNameplate();
         String[] nameplate = np.isEmpty() ? null : new String[]{
                 np.getOrDefault("vendor", ""),
@@ -384,7 +393,7 @@ public final class ServicesApi {
 
         File tmp = File.createTempFile("ied-model-", ".html");
         try {
-            ModelReportGenerator.generate(tmp, model,
+            ModelReportGenerator.generate(tmp, reportModel,
                     client.getHost() + ":" + client.getPort(), nameplate, includeValues);
             String html = new String(Files.readAllBytes(tmp.toPath()), StandardCharsets.UTF_8);
             ctx.contentType("text/html; charset=utf-8").result(html);
@@ -426,6 +435,18 @@ public final class ServicesApi {
         if (r.isGeneralInterrogation()) parts.add("gi");
         if (r.isApplicationTrigger()) parts.add("app-trigger");
         return String.join(",", parts);
+    }
+
+    private static String extractNodeValue(ModelNode node) {
+        if (node instanceof BasicDataAttribute) {
+            return ((BasicDataAttribute) node).getValueString();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (ModelNode child : node) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(child.getName()).append("=").append(extractNodeValue(child));
+        }
+        return sb.toString();
     }
 
     private static String str(com.beanit.iec61850bean.BdaVisibleString bda) {

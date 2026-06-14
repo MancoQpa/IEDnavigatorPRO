@@ -17,7 +17,7 @@ export default function ReportsPanel() {
   const clearReports = useReportsStore((s) => s.clearReports);
 
   useEffect(() => {
-    if (connected) void fetch(true);
+    if (connected) void fetch(false);
   }, [connected, fetch]);
 
   if (!connected) {
@@ -37,11 +37,25 @@ export default function ReportsPanel() {
         </span>
         <div className="flex-1" />
         <button
+          onClick={() => void fetch(false, 'URCB')}
+          disabled={loading}
+          className="rounded border border-sky-300 bg-sky-50 px-2 py-1 text-sky-700 hover:bg-sky-100 disabled:opacity-40 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300 dark:hover:bg-sky-900/50"
+        >
+          Cargar URCB
+        </button>
+        <button
+          onClick={() => void fetch(false, 'BRCB')}
+          disabled={loading}
+          className="rounded border border-purple-300 bg-purple-50 px-2 py-1 text-purple-700 hover:bg-purple-100 disabled:opacity-40 dark:border-purple-800 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
+        >
+          Cargar BRCB
+        </button>
+        <button
           onClick={() => void fetch(true)}
           disabled={loading}
           className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:border-surface-border dark:text-gray-300 dark:hover:bg-surface-raised"
         >
-          {loading ? 'Actualizando…' : 'Actualizar'}
+          {loading ? 'Actualizando…' : 'Actualizar todos'}
         </button>
       </div>
       <div className="max-h-[45%] overflow-auto border-b border-gray-200 dark:border-surface-border">

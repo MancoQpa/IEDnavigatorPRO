@@ -10,7 +10,7 @@ interface ReportsState {
   reports: ReportEvent[];
   loading: boolean;
 
-  fetch: (refresh?: boolean) => Promise<void>;
+  fetch: (refresh?: boolean, type?: 'URCB' | 'BRCB') => Promise<void>;
   enable: (ref: string) => Promise<void>;
   disable: (ref: string) => Promise<void>;
   addReport: (r: ReportEvent) => void;
@@ -24,11 +24,17 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   reports: [],
   loading: false,
 
-  fetch: async (refresh = false) => {
+  fetch: async (refresh = false, type?: 'URCB' | 'BRCB') => {
     set({ loading: true });
     try {
-      const { rcbs } = await getApi().rcbs(refresh);
-      set({ rcbs });
+      const { rcbs } = await getApi().rcbs(refresh, type);
+      if (type) {
+        // Merge: reemplazar solo los del tipo solicitado, conservar los otros
+        const other = get().rcbs.filter((r) => r.type !== type);
+        set({ rcbs: [...other, ...rcbs] });
+      } else {
+        set({ rcbs });
+      }
     } catch (e) {
       log.error(`Error listando RCBs: ${(e as Error).message}`);
     } finally {
@@ -40,7 +46,8 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     try {
       await getApi().enableRcb(ref);
       log.info(`Reporting habilitado: ${ref}`);
-      await get().fetch(true);
+      // Actualizar solo el RCB afectado localmente (evita 24 getRcbValues)
+      set({ rcbs: get().rcbs.map((r) => r.ref === ref ? { ...r, rptEna: true, enabledByBridge: true } : r) });
     } catch (e) {
       log.error(`Error habilitando RCB ${ref}: ${(e as Error).message}`);
     }
@@ -50,7 +57,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     try {
       await getApi().disableRcb(ref);
       log.info(`Reporting deshabilitado: ${ref}`);
-      await get().fetch(true);
+      set({ rcbs: get().rcbs.map((r) => r.ref === ref ? { ...r, rptEna: false, enabledByBridge: false } : r) });
     } catch (e) {
       log.error(`Error deshabilitando RCB ${ref}: ${(e as Error).message}`);
     }

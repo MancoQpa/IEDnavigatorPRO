@@ -948,34 +948,10 @@ public class IEC61850Client implements ClientEventListener {
         }
 
         try {
-            // Leer valores actuales
-            association.getRcbValues(rcb);
+            association.disableReporting(rcb);
 
-            // Setear rptEna = false localmente
-            rcb.getRptEna().setValue(false);
-
-            // Escribir SOLO rptEna al servidor (tercer param = true significa "escribir este campo")
             if (rcb instanceof Urcb) {
-                association.setRcbValues((Urcb) rcb,
-                    false,  // rptId
-                    false,  // datSet
-                    true,   // rptEna  - ESCRIBIR este campo (valor = false = deshabilitar)
-                    false,  // optFlds
-                    false,  // bufTm
-                    false,  // sqNum
-                    false,  // trgOps
-                    false); // intgPd
                 try { association.cancelUrcbReservation((Urcb) rcb); } catch (Exception ignore) {}
-            } else if (rcb instanceof Brcb) {
-                association.setRcbValues((Brcb) rcb,
-                    false,  // rptId
-                    false,  // datSet
-                    true,   // rptEna  - ESCRIBIR este campo (valor = false = deshabilitar)
-                    false,  // optFlds
-                    false,  // bufTm
-                    false,  // sqNum
-                    false,  // trgOps
-                    false); // intgPd
             }
 
             System.out.println("[OK] RCB disabled: " + rcb.getName());

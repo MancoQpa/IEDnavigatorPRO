@@ -168,6 +168,8 @@ fn kill_bridge(app: &tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(BridgeState::default())
         .invoke_handler(tauri::generate_handler![get_bridge_info])
         .setup(|app| {

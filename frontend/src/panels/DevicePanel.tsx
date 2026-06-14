@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { save, ask } from '@tauri-apps/plugin-dialog';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { getApi } from '../api/client';
 import { useConnectionStore } from '../stores/connection';
 import { log } from '../stores/log';
@@ -82,12 +84,33 @@ export default function DevicePanel() {
   const exportHtml = async () => {
     setExporting(true);
     try {
+      const defaultName = `modelo_${iedName ?? 'ied'}_${new Date().toISOString().slice(0, 10)}.html`;
+      const filePath = await save({
+        title: 'Guardar reporte HTML',
+        defaultPath: defaultName,
+        filters: [
+          { name: 'HTML', extensions: ['html'] },
+          { name: 'Todos los archivos', extensions: ['*'] },
+        ],
+      });
+      if (!filePath) { setExporting(false); return; }
+
       const html = await getApi().exportModelHtml(includeValues);
-      saveBlob(
-        new Blob([html], { type: 'text/html;charset=utf-8' }),
-        `modelo_${iedName ?? 'ied'}_${new Date().toISOString().slice(0, 10)}.html`,
-      );
-      log.info('Reporte HTML del modelo exportado');
+      // Escribir archivo vía fetch al filesystem nativo
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(html);
+      const fs = await import('@tauri-apps/plugin-fs');
+      await fs.writeFile(filePath, bytes);
+
+      log.info(`Reporte HTML exportado: ${filePath}`);
+
+      const openIt = await ask(`Reporte guardado en:\n${filePath}\n\n¿Desea abrirlo en el navegador?`, {
+        title: 'Exportar HTML',
+        kind: 'info',
+        okLabel: 'Abrir',
+        cancelLabel: 'Cerrar',
+      });
+      if (openIt) await openPath(filePath);
     } catch (e) {
       log.error(`Error exportando HTML: ${(e as Error).message}`);
     } finally {
