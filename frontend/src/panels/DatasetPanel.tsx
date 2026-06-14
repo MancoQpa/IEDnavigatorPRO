@@ -157,6 +157,12 @@ export default function DatasetPanel() {
     }
   };
 
+  // Auto-read cuando se selecciona un dataset (igual que Swing showDatasetMembers)
+  useEffect(() => {
+    if (selected && connected) void read();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, connected]);
+
   const currentDs = datasets.find((ds) => ds.ref === selected);
   const navigateTo = (ref: string) => setTreeSearch(ref);
 

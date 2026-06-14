@@ -431,7 +431,15 @@ public final class GooseApi {
     }
 
     private void emitPublishedMessage(int idx, SclGoCB gcb, GoosePublisher.PublishedMessage pm) {
-        if (!shouldEmit("local|" + pm.gocbRef, pm.stNum)) return;
+        // Para mensajes locales (publicados por nosotros) siempre emitir — igual que el original
+        // Swing que muestra todos los mensajes publicados sin filtro. Solo suprimir si sqNum > 0
+        // para la ráfaga rápida de retransmisiones (sqNum 1-4 del mismo stNum).
+        if (pm.sqNum > 0) {
+            long[] prev = lastEmit.get("local|" + pm.gocbRef);
+            if (prev != null && prev[1] == pm.stNum
+                    && System.currentTimeMillis() - prev[0] < COALESCE_MS) return;
+        }
+        lastEmit.put("local|" + pm.gocbRef, new long[]{ System.currentTimeMillis(), pm.stNum });
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("source", "local");
         p.put("gcbIndex", idx);
