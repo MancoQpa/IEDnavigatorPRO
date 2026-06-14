@@ -58,7 +58,7 @@ function flushMessages() {
 
 const EMPTY: GooseState = { subscribing: false, gocbs: [] };
 
-export const useGooseStore = create<GooseStoreState>((set, get) => ({
+export const useGooseStore = create<GooseStoreState>((set) => ({
   net: null,
   state: EMPTY,
   messages: [],

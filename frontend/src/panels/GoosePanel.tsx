@@ -1,6 +1,6 @@
 import { memo, useEffect, useState } from 'react';
 import { pickSclFile } from '../api/pickFile';
-import type { GoCBInfo, GooseDataValue, GooseMessageEvent } from '../api/types';
+import type { GoCBInfo, GooseMessageEvent } from '../api/types';
 import ContextMenu, { type MenuItem } from '../components/ContextMenu';
 import Modal from '../components/Modal';
 import { useConnectionStore } from '../stores/connection';
