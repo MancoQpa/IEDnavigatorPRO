@@ -52,6 +52,7 @@ public class IEC61850Server implements ServerEventListener {
     private List<ServerModel> parsedModels = null;
     private List<ServerModel> mergedModels = null;
     private String currentSclPath = null;
+    private int loadedIedIndex = 0;
 
     /**
      * Obtiene la lista de IEDs disponibles en un archivo SCL.
@@ -527,6 +528,7 @@ public class IEC61850Server implements ServerEventListener {
                 // Guardar cache para futuras selecciones
                 parsedModels = models;
                 currentSclPath = sclPath;
+                loadedIedIndex = iedIndex;
             }
 
             // Indexar atributos para actualizacion
@@ -757,6 +759,12 @@ public class IEC61850Server implements ServerEventListener {
     public ServerModel getServerModel() {
         return serverModel;
     }
+
+    /** Ruta del archivo SCL cargado (original, sin expandir). */
+    public String getSclPath() { return currentSclPath; }
+
+    /** Índice del IED cargado (para SclFileProcessor.parseIEDByIndex). */
+    public int getLoadedIedIndex() { return loadedIedIndex; }
 
     /**
      * Actualiza un valor en el modelo (igual que la APK)

@@ -14,6 +14,9 @@ import com.beanit.iec61850bean.Urcb;
 import com.iednavigator.IEC61850Client;
 import com.iednavigator.IEC61850Server;
 import com.iednavigator.ModelReportGenerator;
+import com.iednavigator.SclDataSet;
+import com.iednavigator.SclFileProcessor;
+
 import com.iednavigator.bridge.EventBus;
 import com.iednavigator.bridge.SessionManager;
 import io.javalin.http.BadRequestResponse;
@@ -187,20 +190,62 @@ public final class ServicesApi {
         return null;
     }
 
-    /** GET /client/datasets — lista de DataSets del modelo con sus miembros. */
+    /** GET /client/datasets — lista de DataSets del modelo con sus miembros.
+     *  Fuente preferida: SCL (igual que GooseMap/GOOSE — siempre completa).
+     *  Fallback: modelo MMS del cliente (puede ser incompleto para SCDs con múltiples AccessPoints). */
     public void listDataSets(Context ctx) {
         IEC61850Client client = sessions.requireClient();
-        ServerModel model = requireModel(client);
+        List<Map<String, Object>> out = new ArrayList<>();
 
-        // El modelo recuperado vía MMS puede ser incompleto para SCDs grandes.
-        // Si hay un servidor corriendo, su modelo (parseado directo del SCL) es autoritativo.
+        // ── Fuente 1: SCL (autoritativa) ──────────────────────────────────────
         IEC61850Server srv = sessions.getServer();
+        if (srv != null && srv.getSclPath() != null) {
+            File sclFile = new File(srv.getSclPath());
+            if (sclFile.exists()) {
+                try {
+                    SclFileProcessor.SclParsingResult r =
+                            SclFileProcessor.parseIEDByIndex(sclFile, srv.getLoadedIedIndex(), null);
+                    for (SclDataSet sclDs : r.dataSets) {
+                        String lnClass = (sclDs.lnClass != null && !sclDs.lnClass.isEmpty())
+                                ? sclDs.lnClass : "LLN0";
+                        String ref = r.iedName + sclDs.ldInst + "/" + lnClass + "$" + sclDs.name;
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("ref", ref);
+                        m.put("deletable", false);
+                        List<Map<String, Object>> members = new ArrayList<>();
+                        for (String memberStr : sclDs.members) {
+                            int bi = memberStr.lastIndexOf('[');
+                            String fc = "";
+                            String memberRef;
+                            if (bi > 0 && memberStr.endsWith("]")) {
+                                fc = memberStr.substring(bi + 1, memberStr.length() - 1).trim();
+                                memberRef = r.iedName + memberStr.substring(0, bi).trim();
+                            } else {
+                                memberRef = r.iedName + memberStr;
+                            }
+                            Map<String, Object> mm = new LinkedHashMap<>();
+                            mm.put("ref", memberRef);
+                            mm.put("fc", fc);
+                            members.add(mm);
+                        }
+                        m.put("members", members);
+                        out.add(m);
+                    }
+                    if (!out.isEmpty()) {
+                        ctx.json(Map.of("datasets", out));
+                        return;
+                    }
+                } catch (Exception e) {
+                    System.err.println("[WARN] SCL dataset listing failed, fallback to model: " + e.getMessage());
+                }
+            }
+        }
+
+        // ── Fuente 2: modelo MMS (fallback) ───────────────────────────────────
+        ServerModel model = requireModel(client);
         ServerModel srvModel = (srv != null) ? srv.getServerModel() : null;
         Iterable<DataSet> source = (srvModel != null && !srvModel.getDataSets().isEmpty())
-                ? srvModel.getDataSets()
-                : model.getDataSets();
-
-        List<Map<String, Object>> out = new ArrayList<>();
+                ? srvModel.getDataSets() : model.getDataSets();
         for (DataSet ds : source) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("ref", ds.getReferenceStr());
