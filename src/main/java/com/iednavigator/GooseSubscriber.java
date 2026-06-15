@@ -114,17 +114,15 @@ public class GooseSubscriber {
                 100     // Timeout ms
             );
 
-            // Set filter for multicast (GOOSE uses multicast MACs 01-0C-CD-xx-xx-xx)
-            // This is similar to IEDExplorer approach
+            // Set filter for GOOSE: direct (0x88B8) or VLAN-tagged (0x8100 wrapping 0x88B8)
             try {
-                handle.setFilter("multicast", BpfProgram.BpfCompileMode.OPTIMIZE);
-                log("Filtro multicast aplicado (captura GOOSE)");
+                handle.setFilter("ether proto 0x88b8 or (vlan and ether proto 0x88b8)", BpfProgram.BpfCompileMode.OPTIMIZE);
+                log("Filtro GOOSE aplicado (directo + VLAN-tagged)");
             } catch (Exception filterEx) {
-                log("AVISO: No se pudo aplicar filtro multicast: " + filterEx.getMessage());
-                // Try alternative filter
+                // Fallback: multicast captures both tagged and untagged
                 try {
-                    handle.setFilter("ether proto 0x88b8", BpfProgram.BpfCompileMode.OPTIMIZE);
-                    log("Filtro alternativo aplicado (ethertype 0x88B8)");
+                    handle.setFilter("multicast", BpfProgram.BpfCompileMode.OPTIMIZE);
+                    log("Filtro multicast aplicado (captura GOOSE)");
                 } catch (Exception e2) {
                     log("AVISO: Sin filtro, capturando todo el trafico");
                 }
@@ -226,14 +224,27 @@ public class GooseSubscriber {
             EthernetPacket ethPacket = packet.get(EthernetPacket.class);
             if (ethPacket == null) return;
 
-            // Check if it's GOOSE
+            // Check if it's GOOSE (direct or VLAN-tagged)
             int etherType = ethPacket.getHeader().getType().value() & 0xFFFF;
-            if (etherType != GOOSE_ETHERTYPE) return;
+            Packet payload;
+
+            if (etherType == GOOSE_ETHERTYPE) {
+                // Direct GOOSE frame (no VLAN tag)
+                payload = ethPacket.getPayload();
+            } else if (etherType == 0x8100) {
+                // 802.1Q VLAN-tagged frame — check inner EtherType
+                Dot1qVlanTagPacket vlanPacket = ethPacket.get(Dot1qVlanTagPacket.class);
+                if (vlanPacket == null) return;
+                int innerType = vlanPacket.getHeader().getType().value() & 0xFFFF;
+                if (innerType != GOOSE_ETHERTYPE) return;
+                payload = vlanPacket.getPayload();
+            } else {
+                return;
+            }
 
             gooseCount++;
 
             // Parse GOOSE PDU
-            Packet payload = ethPacket.getPayload();
             if (payload == null) {
                 log("GOOSE sin payload");
                 return;

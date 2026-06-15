@@ -284,6 +284,19 @@ class ProtectionSettingsPanel {
                 String nuevo = String.valueOf(tableModel.getValueAt(row, COL_NEW)).trim();
                 try {
                     client.writeValue(ref, Fc.SP, nuevo);
+                    // Re-read from server to confirm the write took effect
+                    try {
+                        BasicDataAttribute bda = rowBdas.get(row);
+                        ModelNode n = bda;
+                        FcModelNode root = bda;
+                        while (n.getParent() instanceof FcModelNode) {
+                            n = n.getParent();
+                            root = (FcModelNode) n;
+                        }
+                        client.readNodeValues(root);
+                    } catch (Exception readEx) {
+                        log.accept("[AjustesSP] Aviso: no se pudo re-leer valor: " + readEx.getMessage());
+                    }
                     ok++;
                     final int fRow = row;
                     SwingUtilities.invokeLater(() -> {

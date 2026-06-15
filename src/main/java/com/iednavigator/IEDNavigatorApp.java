@@ -238,6 +238,29 @@ public class IEDNavigatorApp extends JFrame {
         client = new IEC61850Client();
         server = new IEC61850Server();
 
+        // Wire up ServerListener so client writes refresh the server UI
+        server.setServerListener(new IEC61850Server.ServerListener() {
+            @Override public void onServerStarted(int port) {}
+            @Override public void onServerStopped() {}
+            @Override public void onError(String message) { log("Server error: " + message); }
+            @Override public void onClientWrite(String nodeRef, String value) {
+                SwingUtilities.invokeLater(() -> {
+                    log("[Server] Cliente escribió: " + nodeRef + " = " + value);
+                    updateSingleNodeInTree(nodeRef);
+                    updateServerMonitorValues();
+                    // Propagate to GOOSE publishers if active
+                    GoosePublisher gp = goosePanel != null ? goosePanel.getGoosePublisher() : null;
+                    if (gp != null && gp.isPublishing() && updateGoosePublisherValues()) {
+                        gp.publishStateChange();
+                        logGoose("GOOSE publicado por escritura remota: " + nodeRef + " = " + value);
+                    }
+                    if (goosePanel != null && !goosePanel.getActivePublishers().isEmpty()) {
+                        propagateValueToPublishers(nodeRef, value);
+                    }
+                });
+            }
+        });
+
         IconFactory.fillCache(iconCache);  // Inicializar iconos (F11)
         initUI();
         setupListeners();
