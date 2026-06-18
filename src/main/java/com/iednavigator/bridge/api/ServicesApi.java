@@ -373,28 +373,47 @@ public final class ServicesApi {
 
     /** GET /client/export/model-html?values=true — reporte HTML autocontenido. */
     public void exportModelHtml(Context ctx) throws Exception {
-        IEC61850Client client = sessions.requireClient();
-        ServerModel model = requireModel(client);
         boolean includeValues = "true".equals(ctx.queryParam("values"));
 
-        // Preferir el modelo del servidor (tiene todos los DataSets del SCL)
+        // Obtener modelo: cliente conectado o servidor simulado
+        IEC61850Client client = sessions.getClient();
         IEC61850Server srv = sessions.getServer();
+        ServerModel clientModel = (client != null && client.isConnected()) ? client.getServerModel() : null;
         ServerModel srvModel = (srv != null) ? srv.getServerModel() : null;
-        ServerModel reportModel = (srvModel != null && !srvModel.getDataSets().isEmpty())
-                ? srvModel : model;
 
-        Map<String, String> np = client.readDeviceNameplate();
-        String[] nameplate = np.isEmpty() ? null : new String[]{
-                np.getOrDefault("vendor", ""),
-                np.getOrDefault("phy.model", ""),
-                np.getOrDefault("d", ""),
-                np.getOrDefault("configRev", "")
-        };
+        // Preferir modelo del servidor (tiene todos los DataSets del SCL), luego cliente
+        ServerModel reportModel = (srvModel != null && !srvModel.getDataSets().isEmpty())
+                ? srvModel : (clientModel != null) ? clientModel : srvModel;
+
+        if (reportModel == null) {
+            throw new BadRequestResponse("No hay modelo disponible (conecte a un IED o cargue un SCL)");
+        }
+
+        // Nameplate: intentar del cliente si está conectado, sino null
+        String[] nameplate = null;
+        String sourceDesc = "IED";
+        if (client != null && client.isConnected()) {
+            sourceDesc = client.getHost() + ":" + client.getPort();
+            try {
+                Map<String, String> np = client.readDeviceNameplate();
+                if (!np.isEmpty()) {
+                    nameplate = new String[]{
+                            np.getOrDefault("vendor", ""),
+                            np.getOrDefault("phy.model", ""),
+                            np.getOrDefault("d", ""),
+                            np.getOrDefault("configRev", "")
+                    };
+                }
+            } catch (Exception e) {
+                // Ignore nameplate read errors
+            }
+        } else if (srv != null) {
+            sourceDesc = "Servidor simulado";
+        }
 
         File tmp = File.createTempFile("ied-model-", ".html");
         try {
-            ModelReportGenerator.generate(tmp, reportModel,
-                    client.getHost() + ":" + client.getPort(), nameplate, includeValues);
+            ModelReportGenerator.generate(tmp, reportModel, sourceDesc, nameplate, includeValues);
             String html = new String(Files.readAllBytes(tmp.toPath()), StandardCharsets.UTF_8);
             ctx.contentType("text/html; charset=utf-8").result(html);
         } finally {

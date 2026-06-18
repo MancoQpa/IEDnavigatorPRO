@@ -112,7 +112,8 @@ export default function DevicePanel() {
       });
       if (openIt) await openPath(filePath);
     } catch (e) {
-      log.error(`Error exportando HTML: ${(e as Error).message}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      log.error(`Error exportando HTML: ${msg}`);
     } finally {
       setExporting(false);
     }

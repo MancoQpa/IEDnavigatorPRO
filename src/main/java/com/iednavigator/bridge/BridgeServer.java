@@ -99,6 +99,7 @@ public final class BridgeServer {
         app.get("/api/v1/client/files/scl", servicesApi::findSclFiles);
         app.get("/api/v1/client/files/download", servicesApi::downloadFile);
         app.get("/api/v1/client/export/model-html", servicesApi::exportModelHtml);
+        app.get("/api/v1/export/model-html", servicesApi::exportModelHtml);  // alias for server mode
 
         // ── Servidor simulado (Fase 5) ──
         app.post("/api/v1/server/scl/parse", serverApi::parseScl);
