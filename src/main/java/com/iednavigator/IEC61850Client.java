@@ -149,23 +149,47 @@ public class IEC61850Client implements ClientEventListener {
                         + countNodes(serverModel) + " nodos). DataSets omitidos.");
                     // No lanzar excepción — continuar con modelo parcial
                 } else {
-                    // No se pudo extraer modelo parcial → guardar asociación para fallback SCL
-                    System.err.println("[INFO] No se pudo recuperar modelo parcial - conservando asociación para fallback SCL");
-                    pendingAssociation = association;
-                    association = null;
-                    connected = false;
-                    throw new IOException("SCL_FALLBACK: " + serviceEx.getErrorCode() + " - " + msg, serviceEx);
+                    // La conexión puede haberse roto (Connection reset) durante updateDataSets().
+                    // Intentar reconectar y obtener modelo SIN DataSets.
+                    System.err.println("[INFO] Intentando reconexión para obtener modelo sin DataSets...");
+                    ServerModel retryModel = retryRetrieveModelWithoutDataSets(address, port);
+                    if (retryModel != null) {
+                        serverModel = retryModel;
+                        connected = true;
+                        System.out.println("[INFO] Modelo recuperado via reconexión ("
+                            + countNodes(serverModel) + " nodos). DataSets omitidos.");
+                    } else {
+                        // No se pudo extraer modelo parcial → guardar asociación para fallback SCL
+                        System.err.println("[INFO] No se pudo recuperar modelo - conservando asociación para fallback SCL");
+                        pendingAssociation = association;
+                        association = null;
+                        connected = false;
+                        throw new IOException("SCL_FALLBACK: " + serviceEx.getErrorCode() + " - " + msg, serviceEx);
+                    }
                 }
             } catch (Exception modelEx) {
+                if (modelEx instanceof IOException && modelEx.getMessage() != null
+                        && modelEx.getMessage().startsWith("SCL_FALLBACK:")) {
+                    throw (IOException) modelEx;
+                }
                 System.err.println("[ERROR] Model retrieval failed: " + modelEx.getClass().getName());
                 System.err.println("  Message: " + modelEx.getMessage());
                 modelEx.printStackTrace();
-                connected = false;
-                if (association != null) {
-                    try { association.close(); } catch (Exception ex) {}
-                    association = null;
+                // Intentar reconectar y obtener modelo sin DataSets
+                ServerModel retryModel = retryRetrieveModelWithoutDataSets(address, port);
+                if (retryModel != null) {
+                    serverModel = retryModel;
+                    connected = true;
+                    System.out.println("[INFO] Modelo recuperado via reconexión tras excepción ("
+                        + countNodes(serverModel) + " nodos)");
+                } else {
+                    connected = false;
+                    if (association != null) {
+                        try { association.close(); } catch (Exception ex) {}
+                        association = null;
+                    }
+                    throw new IOException("Model retrieval failed: " + modelEx.getMessage(), modelEx);
                 }
-                throw new IOException("Model retrieval failed: " + modelEx.getMessage(), modelEx);
             }
 
             connected = true;
@@ -231,6 +255,56 @@ public class IEC61850Client implements ClientEventListener {
             }
         } catch (Exception e) {
             System.err.println("[INFO] extractPartialModel via reflexión falló: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Reconecta al IED y obtiene el modelo SIN pedir DataSets.
+     * Útil para IEDs Siemens/NARI que rechazan updateDataSets() con Connection reset.
+     * Usa reflexión para llamar a los pasos internos de retrieveModel() individualmente.
+     */
+    private ServerModel retryRetrieveModelWithoutDataSets(InetAddress address, int port) {
+        ClientAssociation retryAssoc = null;
+        try {
+            // Cerrar asociación rota
+            if (association != null) {
+                try { association.close(); } catch (Exception ex) {}
+                association = null;
+            }
+
+            // Reconectar
+            System.out.println("[RETRY] Reconectando para obtener modelo sin DataSets...");
+            ClientSap retrySap = new ClientSap();
+            retrySap.setResponseTimeout(connectionTimeoutMs);
+            retrySap.setMessageFragmentTimeout(5000);
+            retryAssoc = retrySap.associate(address, port, null, this);
+
+            // Llamar a retrieveModel() — si falla otra vez, extraer modelo parcial
+            // iec61850bean construye el ServerModel ANTES de llamar a updateDataSets()
+            try {
+                ServerModel fullModel = retryAssoc.retrieveModel();
+                // Si funciona esta vez, usar el modelo completo
+                association = retryAssoc;
+                System.out.println("[RETRY] retrieveModel() exitoso en segundo intento");
+                return fullModel;
+            } catch (Exception e2) {
+                System.err.println("[RETRY] retrieveModel() falló otra vez: " + e2.getMessage());
+                // Intentar extraer modelo parcial
+                ServerModel partial = extractPartialModelFromAssociation(retryAssoc);
+                if (partial != null && partial.getChildren() != null && !partial.getChildren().isEmpty()) {
+                    association = retryAssoc;
+                    System.out.println("[RETRY] Modelo parcial extraído: " + countNodes(partial) + " nodos");
+                    return partial;
+                }
+                // Último recurso: cerrar
+                try { retryAssoc.close(); } catch (Exception ex) {}
+            }
+        } catch (Exception e) {
+            System.err.println("[RETRY] Reconexión falló: " + e.getMessage());
+            if (retryAssoc != null) {
+                try { retryAssoc.close(); } catch (Exception ex) {}
+            }
         }
         return null;
     }
