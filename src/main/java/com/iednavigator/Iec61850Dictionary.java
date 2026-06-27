@@ -1184,7 +1184,15 @@ public class Iec61850Dictionary {
      * Muestra el diálogo educativo IEC 61850 para el nombre de nodo dado.
      * Si no hay entrada en el diccionario muestra un mensaje genérico.
      */
+    /** Callback que recibe el diálogo de descripción para posicionar la leyenda al lado. */
+    @FunctionalInterface
+    interface LegendAction { void open(java.awt.Dialog infoDialog); }
+
     static void showInfoDialog(Component parent, String nodeName) {
+        showInfoDialog(parent, nodeName, null);
+    }
+
+    static void showInfoDialog(Component parent, String nodeName, LegendAction legendAction) {
         Entry entry = lookup(nodeName);
 
         // Detectar si el match fue por inferencia parcial
@@ -1195,9 +1203,10 @@ public class Iec61850Dictionary {
                 && inferredClass != null
                 && !stripped.equals(inferredClass);
 
+        boolean modal = (legendAction == null);
         JDialog dialog = new JDialog(
             (Frame) SwingUtilities.getWindowAncestor(parent),
-            "IEC 61850 — Descripción del Elemento", true);
+            "IEC 61850 — Descripción del Elemento", modal);
         dialog.setSize(600, 480);
         dialog.setLocationRelativeTo(parent);
         dialog.setResizable(true);
@@ -1309,12 +1318,22 @@ public class Iec61850Dictionary {
         root.add(scroll, BorderLayout.CENTER);
 
         // ── Footer ───────────────────────────────────────────────────────────
-        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 14, 8));
+        JPanel footer = new JPanel(new BorderLayout());
         footer.setBackground(new Color(0xF5F5F5));
         footer.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0xDDD)));
+
+        JPanel footerRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 14, 8));
+        footerRight.setOpaque(false);
+        if (legendAction != null) {
+            JButton btnLegend = new JButton("Leyenda de íconos y colores");
+            btnLegend.setForeground(new Color(0, 80, 160));
+            btnLegend.addActionListener(e -> legendAction.open(dialog));
+            footerRight.add(btnLegend);
+        }
         JButton btnClose = new JButton("Cerrar");
         btnClose.addActionListener(e -> dialog.dispose());
-        footer.add(btnClose);
+        footerRight.add(btnClose);
+        footer.add(footerRight, BorderLayout.EAST);
         root.add(footer, BorderLayout.SOUTH);
 
         dialog.getRootPane().setDefaultButton(btnClose);

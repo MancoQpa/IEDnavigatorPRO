@@ -99,6 +99,7 @@ public class IEDNavigatorApp extends JFrame {
 
     // GOOSE Panel (extracted to GoosePanel.java - Phase 5 refactor)
     private GoosePanel goosePanel;
+    private ReportsPanel reportsPanel;
 
     // Connection management (extracted to ConnectionManager.java - Phase 7 refactor)
     private ConnectionManager connectionManager;
@@ -357,7 +358,7 @@ public class IEDNavigatorApp extends JFrame {
         cardPanel = new JPanel(cardLayout);
         cardPanel.add(createServerPanel(), "SERVER");
         cardPanel.add(createClientPanel(), "CLIENT");
-        cardPanel.setPreferredSize(new Dimension(300, 210));
+        // No fijar altura: CardLayout toma el max de ambas cards (server ~210, client ~280)
 
         // Panel izquierdo (cards + log)
         JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
@@ -399,9 +400,9 @@ public class IEDNavigatorApp extends JFrame {
         };
         Supplier<IEC61850Client> panelClientSupplier = () ->
             (currentMode == AppMode.CLIENT && isConnected && client != null) ? client : null;
-        rightTabbedPane.addTab("Reports",
-            new ReportsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
-                backgroundExecutor, this::updateSingleNodeInTree, this::navigateToFcdaInModel).createPanel());
+        reportsPanel = new ReportsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
+                backgroundExecutor, this::updateSingleNodeInTree, this::navigateToFcdaInModel);
+        rightTabbedPane.addTab("Reports", reportsPanel.createPanel());
         goosePanel = new GoosePanel(createGooseContext());
         rightTabbedPane.addTab("GOOSE", goosePanel.createPanel());
         // rightTabbedPane.addTab("SV (SMV)", createSampledValuesPanel()); // SIN SMV
@@ -437,7 +438,7 @@ public class IEDNavigatorApp extends JFrame {
         rightSplit.setOneTouchExpandable(true);  // Flechitas para expandir/colapsar
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, rightSplit);
-        mainSplit.setDividerLocation(280);
+        mainSplit.setDividerLocation(310);
         mainSplit.setResizeWeight(0.2);
         mainSplit.setOneTouchExpandable(true);  // Flechitas para expandir/colapsar
 
@@ -597,11 +598,25 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private void showLegendDialog() {
+        JPanel main = buildLegendContent();
+        JScrollPane scroll = new JScrollPane(main);
+        scroll.setPreferredSize(new java.awt.Dimension(560, 580));
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.setBorder(null);
+
+        JDialog dlg = new JDialog(this, "Leyenda de íconos y colores — IED Navigator", true);
+        dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dlg.add(scroll);
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+    }
+
+    private JPanel buildLegendContent() {
         JPanel main = new JPanel();
         main.setLayout(new BoxLayout(main, BoxLayout.Y_AXIS));
         main.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
 
-        // ── Sección: Tipos de nodo ──────────────────────────────────────────
         main.add(legendTitle("Tipos de nodo en el árbol"));
         main.add(legendRow(IconFactory.createNodeIcon("LD", new Color(100,100,200)),
                 "<b>LD</b> — Logical Device (Dispositivo Lógico)"));
@@ -611,7 +626,6 @@ public class IEDNavigatorApp extends JFrame {
                 "<b>DA / BDA</b> — Data Attribute (Atributo de Dato)"));
         main.add(Box.createVerticalStrut(8));
 
-        // ── Sección: Nodos lógicos por grupo ──────────────────────────────
         main.add(legendTitle("Nodos Lógicos (LN) por grupo IEC 61850-7-4"));
         main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(200, 50, 50)),
                 "<b>Grupo X</b> — Equipos de corte: XCBR (disyuntor)"));
@@ -645,7 +659,6 @@ public class IEDNavigatorApp extends JFrame {
                 "<b>Sin clasificar</b> — LN con nombre personalizado de fabricante no reconocido"));
         main.add(Box.createVerticalStrut(8));
 
-        // ── Sección: Estados de disyuntor ──────────────────────────────────
         main.add(legendTitle("Estados de disyuntor (DA stVal)"));
         main.add(legendRow(IconFactory.createBreakerIcon("on"),
                 "<b>Cerrado / ON</b> — Contacto cerrado (valor 2)"));
@@ -655,7 +668,6 @@ public class IEDNavigatorApp extends JFrame {
                 "<b>Intermedio / Transitorio</b> — Estado indefinido (valor 0 o 3)"));
         main.add(Box.createVerticalStrut(8));
 
-        // ── Sección: Colores de texto ──────────────────────────────────────
         main.add(legendTitle("Colores de texto en el árbol"));
         main.add(legendColorRow(new Color(0,150,0),
                 "Verde — Valor activo: ON, OK, CLOSED, TRUE"));
@@ -669,7 +681,6 @@ public class IEDNavigatorApp extends JFrame {
                 "Azul — Nodo en Watchlist (monitoreo activo)"));
         main.add(Box.createVerticalStrut(8));
 
-        // ── Sección: Functional Constraints ───────────────────────────────
         main.add(legendTitle("Functional Constraints (FC) — IEC 61850-7-2"));
         main.add(legendFcRow("ST", new Color(21,101,192),
                 "<b>Status</b> — Estado del proceso: stVal, q, t. Solo lectura desde cliente."));
@@ -701,7 +712,6 @@ public class IEDNavigatorApp extends JFrame {
                 "<b>GOOSE</b> — Atributos de control para publicación GOOSE (GoCB)."));
         main.add(Box.createVerticalStrut(8));
 
-        // ── Sección: Common Data Classes ─────────────────────────────────
         main.add(legendTitle("Clases de Datos Comunes (CDC) — IEC 61850-7-3"));
 
         main.add(legendCdcHeader("Estado binario"));
@@ -763,17 +773,55 @@ public class IEDNavigatorApp extends JFrame {
                 "LN Name Plate — vendor, swRev, d (descripción). Uso: identificación de cada Nodo Lógico."));
         main.add(Box.createVerticalStrut(8));
 
+        return main;
+    }
+
+    /**
+     * Abre la leyenda no-modal, posicionada al lado de un diálogo existente.
+     * Llamado desde el diálogo de descripción IEC 61850.
+     */
+    private void showLegendDialogBeside(java.awt.Dialog infoDialog) {
+        JPanel main = buildLegendContent();
         JScrollPane scroll = new JScrollPane(main);
-        scroll.setPreferredSize(new java.awt.Dimension(560, 580));
+        scroll.setPreferredSize(new java.awt.Dimension(480, 580));
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setBorder(null);
 
-        JDialog dlg = new JDialog(this, "Leyenda de íconos y colores — IED Navigator", true);
+        JDialog dlg = new JDialog(this, "Leyenda de íconos y colores — IED Navigator", false);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dlg.add(scroll);
         dlg.pack();
-        dlg.setLocationRelativeTo(this);
+
+        if (infoDialog != null && infoDialog.isShowing()) {
+            java.awt.Rectangle screen = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
+                .getDefaultScreenDevice().getDefaultConfiguration().getBounds();
+            java.awt.Insets insets = java.awt.Toolkit.getDefaultToolkit().getScreenInsets(
+                getGraphicsConfiguration());
+            int usableWidth = screen.width - insets.left - insets.right;
+            int usableX = screen.x + insets.left;
+            int usableY = screen.y + insets.top;
+            int usableH = screen.height - insets.top - insets.bottom;
+            int half = usableWidth / 2;
+
+            // Descripción ocupa mitad izquierda, leyenda mitad derecha
+            infoDialog.setBounds(usableX, usableY, half, usableH);
+            dlg.setBounds(usableX + half, usableY, usableWidth - half, usableH);
+
+            // Cerrar la leyenda automáticamente al cerrar la descripción
+            infoDialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                    dlg.dispose();
+                }
+            });
+        } else {
+            dlg.setLocationRelativeTo(this);
+        }
         dlg.setVisible(true);
+        // Traer ambos al frente en orden: primero leyenda, luego descripción encima
+        SwingUtilities.invokeLater(() -> {
+            dlg.toFront();
+            infoDialog.toFront();
+        });
     }
 
     /** Título de sección para el diálogo de leyenda. */
@@ -1022,9 +1070,10 @@ public class IEDNavigatorApp extends JFrame {
         panel.setBorder(BorderFactory.createTitledBorder("Simulador IED (Servidor IEC 61850)"));
 
         // Fila 1: Seleccionar archivo SCL
-        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         btnSelectFile = new JButton("Cargar SCL/ICD/CID...");
         btnSelectFile.setToolTipText("Cargar archivo SCL, SCD, ICD o CID para simular IED");
+        btnSelectFile.setMargin(new Insets(2, 6, 2, 6));
         lblFileName = new JLabel("Ningun archivo");
         lblFileName.setForeground(Color.GRAY);
         row1.add(btnSelectFile);
@@ -1032,7 +1081,7 @@ public class IEDNavigatorApp extends JFrame {
         panel.add(row1);
 
         // Fila 2: Puerto
-        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         row2.add(new JLabel("Puerto:"));
         tfServerPort = new JTextField("102", 6);
         row2.add(tfServerPort);
@@ -1045,29 +1094,31 @@ public class IEDNavigatorApp extends JFrame {
         panel.add(row2);
 
         // Fila 3: Boton Start/Stop
-        JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         btnStartStop = new JButton("Iniciar Simulacion");
-        btnStartStop.setPreferredSize(new Dimension(200, 35));
+        btnStartStop.setPreferredSize(new Dimension(200, 30));
         btnStartStop.setEnabled(false);
         btnStartStop.setToolTipText("Iniciar servidor IEC 61850 para simular el IED");
         row3.add(btnStartStop);
         panel.add(row3);
 
         // Fila 4: Verificar Puerto + Liberar Puerto
-        JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         btnCheckPort = new JButton("Verificar Puerto");
         btnCheckPort.setToolTipText("<html>Verifica si el puerto indicado esta libre,<br>en uso o requiere permisos de administrador</html>");
         btnCheckPort.setForeground(new Color(0, 80, 160));
+        btnCheckPort.setMargin(new Insets(2, 6, 2, 6));
         row4.add(btnCheckPort);
 
         btnReleasePort = new JButton("Liberar Puerto");
         btnReleasePort.setToolTipText("<html>Termina el proceso que esta usando el puerto indicado</html>");
         btnReleasePort.setForeground(new Color(160, 30, 0));
+        btnReleasePort.setMargin(new Insets(2, 6, 2, 6));
         row4.add(btnReleasePort);
         panel.add(row4);
 
         // Fila 5: Info de uso
-        JPanel row5 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel row5 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 1));
         JLabel lblUsage = new JLabel("<html><small>1. Carga SCL/ICD &nbsp; 2. Inicia servidor &nbsp; 3. Conecta cliente</small></html>");
         lblUsage.setForeground(new Color(100, 100, 150));
         row5.add(lblUsage);
@@ -1081,37 +1132,33 @@ public class IEDNavigatorApp extends JFrame {
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createTitledBorder("Cliente IEC 61850"));
 
-        // Fila 1: Host
-        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // Fila 1: Host + Puerto
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         row1.add(new JLabel("Host:"));
-        tfHost = new JTextField("192.168.1.100", 15);
+        tfHost = new JTextField("192.168.1.100", 12);
         row1.add(tfHost);
+        row1.add(new JLabel("Puerto:"));
+        tfClientPort = new JTextField("102", 4);
+        row1.add(tfClientPort);
         panel.add(row1);
 
-        // Fila 2: Puerto
-        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        row2.add(new JLabel("Puerto:"));
-        tfClientPort = new JTextField("102", 6);
-        row2.add(tfClientPort);
-        panel.add(row2);
-
-        // Fila 3: Timeout de conexión
-        JPanel row3t = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        row3t.add(new JLabel("Timeout (s):"));
+        // Fila 2: Timeout de conexión
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
+        row2.add(new JLabel("Timeout (s):"));
         spinnerTimeout = new JSpinner(new SpinnerNumberModel(10, 5, 60, 5));
         ((JSpinner.DefaultEditor) spinnerTimeout.getEditor()).getTextField().setColumns(3);
-        row3t.add(spinnerTimeout);
-        panel.add(row3t);
+        row2.add(spinnerTimeout);
+        panel.add(row2);
 
-        // Fila 4: Boton Connect
-        JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // Fila 3: Boton Connect
+        JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         btnConnect = new JButton("Conectar");
-        btnConnect.setPreferredSize(new Dimension(200, 35));
+        btnConnect.setPreferredSize(new Dimension(200, 30));
         row3.add(btnConnect);
         panel.add(row3);
 
         // Fila 4: Polling
-        JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         cbPolling = new JCheckBox("Polling");
         cbPolling.setEnabled(false);
         row4.add(cbPolling);
@@ -1121,8 +1168,8 @@ public class IEDNavigatorApp extends JFrame {
         row4.add(spinnerInterval);
         panel.add(row4);
 
-        // Fila 5: Watchlist info
-        JPanel row5 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // Fila 5: Watchlist + Obtener/Guardar CID
+        JPanel row5 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         lblWatchlistCount = new JLabel("Watchlist: 0 nodos");
         lblWatchlistCount.setForeground(new Color(0, 100, 180));
         row5.add(lblWatchlistCount);
@@ -1130,21 +1177,17 @@ public class IEDNavigatorApp extends JFrame {
         btnClearWatchlist.setMargin(new Insets(2, 5, 2, 5));
         btnClearWatchlist.addActionListener(e -> clearWatchlist());
         row5.add(btnClearWatchlist);
-        panel.add(row5);
-
-        // Fila 6: Obtener/Guardar CID
-        JPanel row6 = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton btnGetCid = new JButton("Obtener CID");
         btnGetCid.setMargin(new Insets(2, 5, 2, 5));
         btnGetCid.setToolTipText("Buscar y descargar archivo CID del IED");
         btnGetCid.addActionListener(e -> obtenerCidDelIed());
-        row6.add(btnGetCid);
+        row5.add(btnGetCid);
         JButton btnSaveCid = new JButton("Guardar CID");
         btnSaveCid.setMargin(new Insets(2, 5, 2, 5));
         btnSaveCid.setToolTipText("Guardar el CID descargado en disco");
         btnSaveCid.addActionListener(e -> guardarCid());
-        row6.add(btnSaveCid);
-        panel.add(row6);
+        row5.add(btnSaveCid);
+        panel.add(row5);
 
         return panel;
     }
@@ -1701,7 +1744,8 @@ public class IEDNavigatorApp extends JFrame {
             String[] parts = after.replaceAll("\\[.*?\\]", "").trim().split("[./]");
             if (parts.length > 0) name = parts[parts.length - 1].trim();
         }
-        Iec61850Dictionary.showInfoDialog(this, name != null ? name : "");
+        Iec61850Dictionary.showInfoDialog(this, name != null ? name : "",
+            this::showLegendDialogBeside);
     }
 
     private DefaultMutableTreeNode findNodeInModel(String fcdaName) {
@@ -2547,8 +2591,23 @@ public class IEDNavigatorApp extends JFrame {
         JScrollPane scrollPane = new JScrollPane(iedList);
         scrollPane.setPreferredSize(new Dimension(350, 150));
         panel.add(scrollPane, BorderLayout.CENTER);
+        // Doble clic en la lista equivale a Aceptar
+        final int[] doubleClickIndex = {-1};
+        iedList.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2 && iedList.getSelectedIndex() >= 0) {
+                    doubleClickIndex[0] = iedList.getSelectedIndex();
+                    // Cerrar el JOptionPane buscando el diálogo contenedor
+                    java.awt.Window w = SwingUtilities.getWindowAncestor(iedList);
+                    if (w != null) w.dispose();
+                }
+            }
+        });
         int result = JOptionPane.showConfirmDialog(this, panel,
             "Seleccionar IED", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (doubleClickIndex[0] >= 0) {
+            return doubleClickIndex[0];
+        }
         if (result == JOptionPane.OK_OPTION) {
             return iedList.getSelectedIndex();
         }
@@ -2690,6 +2749,9 @@ public class IEDNavigatorApp extends JFrame {
 
     private void clearModel() {
         ModelTreeBuilder.clearModel(rootNode, nodeMap, treeModel);
+        // Limpiar GOOSE y Reports al cambiar de modelo
+        if (goosePanel != null) goosePanel.clearAll();
+        if (reportsPanel != null) reportsPanel.clearAll();
     }
 
     private void updateNodeValue(String reference, String value) {
