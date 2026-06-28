@@ -280,6 +280,14 @@ public class IEDNavigatorApp extends JFrame {
         setSize(1200, 800);
         setLocationRelativeTo(null);
 
+        // Icono de la aplicación (múltiples tamaños para barra de título, taskbar, Alt+Tab)
+        java.util.List<java.awt.Image> icons = new java.util.ArrayList<>();
+        for (int sz : new int[]{16, 32, 48, 64, 256}) {
+            java.net.URL url = getClass().getResource("/app_icon_" + sz + ".png");
+            if (url != null) icons.add(new javax.swing.ImageIcon(url).getImage());
+        }
+        if (!icons.isEmpty()) setIconImages(icons);
+
         // Barra de menu
         setJMenuBar(createMenuBar());
 
@@ -935,10 +943,17 @@ public class IEDNavigatorApp extends JFrame {
         ));
         toolbar.setBackground(Color.WHITE);
 
-        // Logo / Titulo (bicolor, estilo marca comercial)
-        JLabel lblTitle = new JLabel("<html>&nbsp;<span style='color:#37474F;'>IED</span>"
+        // Logo / Titulo (icono + texto bicolor, estilo marca comercial)
+        java.net.URL iconUrl = getClass().getResource("/app_icon_32.png");
+        if (iconUrl != null) {
+            javax.swing.ImageIcon appIcon = new javax.swing.ImageIcon(iconUrl);
+            JLabel lblIcon = new JLabel(appIcon);
+            lblIcon.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 4));
+            toolbar.add(lblIcon);
+        }
+        JLabel lblTitle = new JLabel("<html><span style='color:#37474F;'>IED</span>"
             + "<span style='color:#1976D2;'>Navigator</span>"
-            + "&nbsp;<span style='color:#90A4AE;font-size:9px;'>PRO</span>&nbsp;</html>");
+            + "&nbsp;<span style='color:#90A4AE;font-size:9px;'>PRO</span></html>");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
         toolbar.add(lblTitle);
         toolbar.addSeparator(new Dimension(20, 0));
