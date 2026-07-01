@@ -1602,8 +1602,15 @@ public class IEC61850Client implements ClientEventListener {
             if ("origin".equals(name)) {
                 if (child.getChildren() == null) continue;
                 for (ModelNode oc : child.getChildren()) {
-                    if ("orCat".equals(oc.getName()) && oc instanceof BdaInt8U) {
-                        ((BdaInt8U) oc).setValue((short) 3); // remote-control
+                    if ("orCat".equals(oc.getName())) {
+                        // orCat = 3 (remote-control). Segun el modelo puede ser BdaInt8U o
+                        // BdaInt8 (enum INT8): antes solo se cubria BdaInt8U y quedaba en 0
+                        // (= "not-supported"), lo que NARI rechaza con addCause=Not-supported.
+                        if (oc instanceof BdaInt8U) {
+                            ((BdaInt8U) oc).setValue((short) 3);
+                        } else if (oc instanceof BasicDataAttribute) {
+                            setBasicDataAttributeValue((BasicDataAttribute) oc, "3");
+                        }
                     } else if ("orIdent".equals(oc.getName()) && oc instanceof BdaOctetString) {
                         byte[] b = (orIdent != null && !orIdent.isEmpty())
                             ? orIdent.getBytes(java.nio.charset.StandardCharsets.UTF_8)
