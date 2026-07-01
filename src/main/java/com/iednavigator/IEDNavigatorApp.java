@@ -2054,21 +2054,32 @@ public class IEDNavigatorApp extends JFrame {
         cbTest.setForeground(new Color(150, 70, 0));
         panel.add(cbTest, g);
 
-        // Check field (IEC 61850-7-2: synchroChk + interlkChk)
+        // Aviso interacción Test/Mode (IEC 61850-7-2): con Test=ON y la LN en modo "on"
+        // el IED rechaza con Blocked-by-Mode (addCause 8).
         g.gridy = 5;
+        JLabel lblTestWarn = new JLabel("<html><div style='width:430px;color:#966400;'>"
+            + "⚠ Con <b>Test</b> activado, si la Logical Node está en modo <b>on</b> el IED "
+            + "rechaza el comando con <b>Blocked-by-Mode</b> (addCause 8). Para una prueba "
+            + "<i>simulada</i>, poné antes la LN en modo <b>test</b> (Mod=test); para una "
+            + "maniobra <i>real</i>, dejá Test <b>desmarcado</b>.</div></html>");
+        lblTestWarn.setFont(lblTestWarn.getFont().deriveFont(Font.PLAIN, 11f));
+        panel.add(lblTestWarn, g);
+
+        // Check field (IEC 61850-7-2: synchroChk + interlkChk)
+        g.gridy = 6;
         JCheckBox cbSynchro = new JCheckBox(
             "synchroChk — verificar sincronismo (tensión, ángulo, frecuencia)");
         cbSynchro.setToolTipText("Check.synchroChk: el IED verifica sincronismo antes de operar");
         panel.add(cbSynchro, g);
 
-        g.gridy = 6;
+        g.gridy = 7;
         JCheckBox cbInterlock = new JCheckBox(
             "interlkChk — verificar enclavamiento lógico del IED");
         cbInterlock.setToolTipText("Check.interlkChk: el IED verifica enclavamientos antes de operar");
         panel.add(cbInterlock, g);
 
         // orIdent
-        g.gridy = 7; g.gridwidth = 1; g.gridx = 0;
+        g.gridy = 8; g.gridwidth = 1; g.gridx = 0;
         panel.add(new JLabel("Operador (orIdent):"), g);
         g.gridx = 1;
         JTextField tfOrIdent = new JTextField("IEDNavigator", 14);
@@ -2123,6 +2134,13 @@ public class IEDNavigatorApp extends JFrame {
                         msg.append("  Error: ").append(cr.error);
                         if (cr.lastApplError != null) {
                             msg.append("\n  LastApplError: ").append(cr.lastApplError);
+                        }
+                        // Pista: si se operó con Test=ON, la causa frecuente es Blocked-by-Mode
+                        // (la LN está en modo "on"). El IED puede no exponer LastApplError.
+                        if (testFlag) {
+                            msg.append("\n\n  Sugerencia: operó con Modo Test activado. Si la LN está en "
+                                + "modo \"on\", el IED lo rechaza (Blocked-by-Mode). Para prueba simulada "
+                                + "ponga la LN en modo test (Mod=test); para maniobra real desmarque Test.");
                         }
                         log("[CONTROL ERROR] " + ref + " — " + cr.error
                             + (cr.lastApplError != null ? " | " + cr.lastApplError : ""));
