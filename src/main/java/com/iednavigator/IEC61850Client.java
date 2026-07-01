@@ -1636,26 +1636,32 @@ public class IEC61850Client implements ClientEventListener {
     private String readLastApplError(FcModelNode operNode) {
         if (serverModel == null || association == null) return null;
         try {
-            String operRef = operNode.getReference().toString();
+            String operRef = operNode.getReference().toString(); // "LD/LN.DO.Oper"
+            // LastApplError es un DO a NIVEL DE LN (LD/LN.LastApplError), no bajo el DO de
+            // control. Se prueba primero el nivel LN y, como respaldo, el nivel DO.
+            java.util.List<String> candidates = new java.util.ArrayList<>();
+            int firstDot = operRef.indexOf('.');
+            if (firstDot > 0) candidates.add(operRef.substring(0, firstDot) + ".LastApplError"); // LN
             int lastDot = operRef.lastIndexOf('.');
-            if (lastDot < 0) return null;
-            String doRef = operRef.substring(0, lastDot);
-            ModelNode laeNode = serverModel.findModelNode(doRef + ".LastApplError", Fc.CO);
-            if (laeNode instanceof FcModelNode) {
-                try { association.getDataValues((FcModelNode) laeNode); } catch (Exception ignore) {}
-                StringBuilder sb = new StringBuilder();
-                if (laeNode.getChildren() != null) {
-                    for (ModelNode child : laeNode.getChildren()) {
-                        String n = child.getName();
-                        if ("error".equals(n) || "addCause".equals(n)) {
+            if (lastDot > 0) candidates.add(operRef.substring(0, lastDot) + ".LastApplError");   // DO (fallback)
+
+            for (String ref : candidates) {
+                for (Fc fc : new Fc[]{Fc.CO, Fc.ST, Fc.MX, Fc.SP, Fc.CF, Fc.DC}) {
+                    ModelNode laeNode = serverModel.findModelNode(ref, fc);
+                    if (!(laeNode instanceof FcModelNode)) continue;
+                    try { association.getDataValues((FcModelNode) laeNode); } catch (Exception ignore) {}
+                    StringBuilder sb = new StringBuilder();
+                    if (laeNode.getChildren() != null) {
+                        for (ModelNode child : laeNode.getChildren()) {
+                            if ("origin".equals(child.getName())) continue; // estructura, no informativa
                             String v = formatValue(child);
                             if (v != null && !v.isEmpty()) {
-                                sb.append(n).append("=").append(v).append(" ");
+                                sb.append(child.getName()).append("=").append(v).append(" ");
                             }
                         }
                     }
+                    if (sb.length() > 0) return sb.toString().trim();
                 }
-                return sb.length() > 0 ? sb.toString().trim() : null;
             }
         } catch (Exception ignore) {}
         return null;
