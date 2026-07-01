@@ -51,6 +51,16 @@ class ReportsPanel {
         this.onNavigate        = onNavigate;
     }
 
+    /** Limpia todas las tablas y datos de reportes (llamar al cambiar de modelo). */
+    void clearAll() {
+        SwingUtilities.invokeLater(() -> {
+            if (reportsTableModel != null) reportsTableModel.setRowCount(0);
+            if (reportDataTableModel != null) reportDataTableModel.setRowCount(0);
+            rcbMap.clear();
+            previousReportValues.clear();
+        });
+    }
+
     JPanel createPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
@@ -131,6 +141,11 @@ class ReportsPanel {
         btnEnableAll.setToolTipText("Habilitar todos los RCBs");
         btnEnableAll.addActionListener(e -> enableAllReports(true));
         rcbBtnPanel.add(btnEnableAll);
+
+        JButton btnDisableAll = new JButton("Deshabilitar Todos");
+        btnDisableAll.setToolTipText("Deshabilitar todos los RCBs");
+        btnDisableAll.addActionListener(e -> enableAllReports(false));
+        rcbBtnPanel.add(btnDisableAll);
 
         JLabel lblRcbCount = new JLabel("  RCBs: 0");
         rcbBtnPanel.add(lblRcbCount);

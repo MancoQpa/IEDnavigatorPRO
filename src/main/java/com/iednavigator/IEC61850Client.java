@@ -262,44 +262,58 @@ public class IEC61850Client implements ClientEventListener {
     /**
      * Reconecta al IED y obtiene el modelo SIN pedir DataSets.
      * Útil para IEDs Siemens/NARI que rechazan updateDataSets() con Connection reset.
-     * Usa reflexión para llamar a los pasos internos de retrieveModel() individualmente.
+     *
+     * Estrategia: reconectar, intentar retrieveModel() estándar primero;
+     * si falla de nuevo, construir el modelo manualmente via reflexión
+     * llamando a retrieveLogicalDevices(), retrieveLogicalNodeNames(),
+     * retrieveDataDefinitions() individualmente y omitiendo updateDataSets().
      */
     private ServerModel retryRetrieveModelWithoutDataSets(InetAddress address, int port) {
         ClientAssociation retryAssoc = null;
         try {
-            // Cerrar asociación rota
             if (association != null) {
                 try { association.close(); } catch (Exception ex) {}
                 association = null;
             }
-
-            // Reconectar
             System.out.println("[RETRY] Reconectando para obtener modelo sin DataSets...");
             ClientSap retrySap = new ClientSap();
             retrySap.setResponseTimeout(connectionTimeoutMs);
             retrySap.setMessageFragmentTimeout(5000);
             retryAssoc = retrySap.associate(address, port, null, this);
 
-            // Llamar a retrieveModel() — si falla otra vez, extraer modelo parcial
-            // iec61850bean construye el ServerModel ANTES de llamar a updateDataSets()
+            // Primero intentar retrieveModel() estándar por si fue un error transitorio
             try {
                 ServerModel fullModel = retryAssoc.retrieveModel();
-                // Si funciona esta vez, usar el modelo completo
                 association = retryAssoc;
                 System.out.println("[RETRY] retrieveModel() exitoso en segundo intento");
                 return fullModel;
             } catch (Exception e2) {
                 System.err.println("[RETRY] retrieveModel() falló otra vez: " + e2.getMessage());
-                // Intentar extraer modelo parcial
+                // Intentar extraer modelo parcial ya construido
                 ServerModel partial = extractPartialModelFromAssociation(retryAssoc);
                 if (partial != null && partial.getChildren() != null && !partial.getChildren().isEmpty()) {
                     association = retryAssoc;
                     System.out.println("[RETRY] Modelo parcial extraído: " + countNodes(partial) + " nodos");
                     return partial;
                 }
-                // Último recurso: cerrar
+                // La asociación se rompió — reconectar para intento manual
                 try { retryAssoc.close(); } catch (Exception ex) {}
+                retryAssoc = null;
             }
+
+            // Tercer intento: construir modelo manualmente via reflexión (sin DataSets)
+            System.out.println("[RETRY-MANUAL] Reconectando para construcción manual del modelo...");
+            ClientSap manualSap = new ClientSap();
+            manualSap.setResponseTimeout(connectionTimeoutMs);
+            manualSap.setMessageFragmentTimeout(5000);
+            retryAssoc = manualSap.associate(address, port, null, this);
+            ServerModel manualModel = retrieveModelManually(retryAssoc);
+            if (manualModel != null) {
+                association = retryAssoc;
+                return manualModel;
+            }
+            try { retryAssoc.close(); } catch (Exception ex) {}
+
         } catch (Exception e) {
             System.err.println("[RETRY] Reconexión falló: " + e.getMessage());
             if (retryAssoc != null) {
@@ -307,6 +321,107 @@ public class IEC61850Client implements ClientEventListener {
             }
         }
         return null;
+    }
+
+    /**
+     * Construye el ServerModel manualmente usando reflexión para llamar a los métodos
+     * privados de ClientAssociation paso a paso, omitiendo updateDataSets().
+     *
+     * Flujo: retrieveLogicalDevices() → para cada LD: retrieveLogicalNodeNames(ld)
+     *        → para cada LN: retrieveDataDefinitions(ref) → construir ServerModel
+     *        → setServerModel(model)
+     *
+     * Errores individuales por LD/LN se saltan sin abortar toda la operación.
+     */
+    @SuppressWarnings("unchecked")
+    private ServerModel retrieveModelManually(ClientAssociation assoc) {
+        try {
+            Class<?> caClass = assoc.getClass();
+
+            // Obtener métodos privados via reflexión
+            java.lang.reflect.Method mRetrieveLDs = caClass.getDeclaredMethod("retrieveLogicalDevices");
+            mRetrieveLDs.setAccessible(true);
+
+            java.lang.reflect.Method mRetrieveLNNames = caClass.getDeclaredMethod("retrieveLogicalNodeNames", String.class);
+            mRetrieveLNNames.setAccessible(true);
+
+            java.lang.reflect.Method mRetrieveDataDefs = caClass.getDeclaredMethod("retrieveDataDefinitions", ObjectReference.class);
+            mRetrieveDataDefs.setAccessible(true);
+
+            // 1) Obtener lista de Logical Devices
+            List<String> ldNames = (List<String>) mRetrieveLDs.invoke(assoc);
+            System.out.println("[MANUAL] Logical Devices encontrados: " + ldNames.size() + " → " + ldNames);
+
+            if (ldNames == null || ldNames.isEmpty()) {
+                System.err.println("[MANUAL] No se encontraron Logical Devices");
+                return null;
+            }
+
+            // 2) Para cada LD, obtener sus Logical Nodes y sus definiciones
+            List<LogicalDevice> logicalDevices = new ArrayList<>();
+            int totalNodes = 0;
+
+            for (String ldName : ldNames) {
+                try {
+                    List<String> lnNames = (List<String>) mRetrieveLNNames.invoke(assoc, ldName);
+                    if (lnNames == null || lnNames.isEmpty()) {
+                        System.err.println("[MANUAL] LD '" + ldName + "' sin Logical Nodes — omitido");
+                        continue;
+                    }
+                    System.out.println("[MANUAL] LD '" + ldName + "': " + lnNames.size() + " LN(s)");
+
+                    List<LogicalNode> logicalNodes = new ArrayList<>();
+                    for (String lnName : lnNames) {
+                        try {
+                            String refStr = ldName + "/" + lnName;
+                            ObjectReference ref = new ObjectReference(refStr);
+                            LogicalNode ln = (LogicalNode) mRetrieveDataDefs.invoke(assoc, ref);
+                            if (ln != null) {
+                                logicalNodes.add(ln);
+                                totalNodes++;
+                            }
+                        } catch (Exception lnEx) {
+                            Throwable cause = lnEx instanceof java.lang.reflect.InvocationTargetException
+                                    ? ((java.lang.reflect.InvocationTargetException) lnEx).getTargetException()
+                                    : lnEx;
+                            System.err.println("[MANUAL] Error en LN '" + ldName + "/" + lnName + "': "
+                                    + cause.getMessage() + " — omitido");
+                        }
+                    }
+
+                    if (!logicalNodes.isEmpty()) {
+                        ObjectReference ldRef = new ObjectReference(ldName);
+                        LogicalDevice ld = new LogicalDevice(ldRef, logicalNodes);
+                        logicalDevices.add(ld);
+                    }
+                } catch (Exception ldEx) {
+                    Throwable cause = ldEx instanceof java.lang.reflect.InvocationTargetException
+                            ? ((java.lang.reflect.InvocationTargetException) ldEx).getTargetException()
+                            : ldEx;
+                    System.err.println("[MANUAL] Error en LD '" + ldName + "': " + cause.getMessage() + " — omitido");
+                }
+            }
+
+            if (logicalDevices.isEmpty()) {
+                System.err.println("[MANUAL] No se pudo obtener ningún Logical Device completo");
+                return null;
+            }
+
+            // 3) Construir ServerModel sin DataSets
+            ServerModel model = new ServerModel(logicalDevices, null);
+
+            // 4) Inyectar el modelo en la asociación (método público)
+            assoc.setServerModel(model);
+
+            System.out.println("[MANUAL] Modelo construido manualmente: " + logicalDevices.size()
+                    + " LD(s), " + totalNodes + " LN(s), sin DataSets");
+            return model;
+
+        } catch (Exception e) {
+            System.err.println("[MANUAL] Error construyendo modelo manualmente: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
     }
 
     /**
@@ -1470,6 +1585,17 @@ public class IEC61850Client implements ClientEventListener {
      */
     private void fillControlStructure(FcModelNode operNode, boolean testFlag, String orIdent,
                                        boolean synchroCheck, boolean interlockCheck) {
+        fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck, -1);
+    }
+
+    /**
+     * Variante con ctlNum explícito. Si ctlNumOverride >= 0 se usa ese valor (imprescindible
+     * para el SBO enhanced, donde SBOw y Oper deben llevar el MISMO ctlNum); si es -1 se
+     * autoincrementa el contador interno.
+     */
+    private void fillControlStructure(FcModelNode operNode, boolean testFlag, String orIdent,
+                                       boolean synchroCheck, boolean interlockCheck,
+                                       int ctlNumOverride) {
         if (operNode.getChildren() == null) return;
         for (ModelNode child : operNode.getChildren()) {
             String name = child.getName();
@@ -1486,8 +1612,12 @@ public class IEC61850Client implements ClientEventListener {
                     }
                 }
             } else if ("ctlNum".equals(name) && child instanceof BdaInt8U) {
-                ctlNumCounter = (ctlNumCounter + 1) & 0xFF;
-                ((BdaInt8U) child).setValue((short) ctlNumCounter);
+                if (ctlNumOverride >= 0) {
+                    ((BdaInt8U) child).setValue((short) (ctlNumOverride & 0xFF));
+                } else {
+                    ctlNumCounter = (ctlNumCounter + 1) & 0xFF;
+                    ((BdaInt8U) child).setValue((short) ctlNumCounter);
+                }
             } else if ("T".equals(name) && child instanceof BdaTimestamp) {
                 ((BdaTimestamp) child).setCurrentTime();
             } else if ("Test".equals(name) && child instanceof BdaBoolean) {
@@ -1619,18 +1749,26 @@ public class IEC61850Client implements ClientEventListener {
                 "Nodo status-only (ctlModel=0): no acepta comandos", null);
         }
 
-        // Preparar estructura Oper completa
-        setOperCtlVal(operNode, ctlValStr);
-        fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck);
-
         // iec61850bean: select()/operate() esperan el DO de control (padre de Oper);
         // internamente hacen getChild("SBO") / getChild("Oper").
         FcModelNode controlDo = (operNode.getParent() instanceof FcModelNode)
             ? (FcModelNode) operNode.getParent() : operNode;
 
+        // ctlModel=4 (sbo-enhanced-security): iec61850bean 1.9.0 NO implementa el
+        // select-with-value (su select() sólo LEE el atributo SBO del SBO normal, y su
+        // operate() fuerza ctlNum=1). Se hace el handshake enhanced a mano.
+        if (ctlModel == 4) {
+            return operateEnhancedSbo(operNode, controlDo, ctlValStr, testFlag, orIdent,
+                                      synchroCheck, interlockCheck, ctlModelName);
+        }
+
+        // Preparar estructura Oper completa (ctlModel 1/2/3)
+        setOperCtlVal(operNode, ctlValStr);
+        fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck);
+
         try {
-            if (ctlModel == 2 || ctlModel == 4) {
-                // SBO: enviar SELECT primero
+            if (ctlModel == 2) {
+                // SBO normal: beanit select() LEE el atributo SBO (VisibleString)
                 System.out.println("[SBO] SELECT → " + operNode.getReference());
                 boolean selected = association.select(controlDo);
                 if (!selected) {
@@ -1652,6 +1790,64 @@ public class IEC61850Client implements ClientEventListener {
             System.out.println("[ERROR] OPERATE falló: ServiceError " + e.getErrorCode()
                 + (lastErr != null ? " | LastApplError: " + lastErr : ""));
             return ControlResult.fail(ctlModel, ctlModelName,
+                "ServiceError: " + e.getErrorCode(), lastErr);
+        }
+    }
+
+    /**
+     * SBO enhanced (ctlModel=4) implementado a mano, porque iec61850bean 1.9.0 no lo soporta:
+     * su select() sólo lee el atributo SBO (SBO normal) y su operate() fuerza ctlNum=1.
+     *
+     * Flujo IEC 61850-7-2 §20 (select-with-value / enhanced security):
+     *   1. Escribir SBOw con {ctlVal, origin, ctlNum=N, T, Test, Check}  → SELECT-WITH-VALUE
+     *   2. Escribir Oper con los MISMOS {ctlVal, origin, ctlNum=N, Test, Check} y T nuevo → OPERATE
+     * ctlVal, origin, ctlNum, Test y Check deben COINCIDIR entre SBOw y Oper; sólo T difiere.
+     * Se usa setDataValues() directo (no association.operate(), que reescribiría ctlNum=1).
+     */
+    private ControlResult operateEnhancedSbo(FcModelNode operNode, FcModelNode controlDo,
+                                             String ctlValStr, boolean testFlag, String orIdent,
+                                             boolean synchroCheck, boolean interlockCheck,
+                                             String ctlModelName) throws IOException {
+        ModelNode sbowNode = controlDo.getChild("SBOw");
+        if (!(sbowNode instanceof FcModelNode)) {
+            return ControlResult.fail(4, ctlModelName,
+                "Nodo SBOw no encontrado: el modelo no expone select-with-value", null);
+        }
+        FcModelNode sbow = (FcModelNode) sbowNode;
+
+        // ctlNum único para todo el ciclo SELECT+OPERATE
+        ctlNumCounter = (ctlNumCounter + 1) & 0xFF;
+        int ctlNum = ctlNumCounter;
+
+        // 1) SELECT-WITH-VALUE: escribir SBOw
+        setOperCtlVal(sbow, ctlValStr);
+        fillControlStructure(sbow, testFlag, orIdent, synchroCheck, interlockCheck, ctlNum);
+        try {
+            System.out.println("[SBOe] SELECT-WITH-VALUE (SBOw ctlNum=" + ctlNum + ") → "
+                + sbow.getReference());
+            association.setDataValues(sbow);
+            System.out.println("[SBOe] SELECT-WITH-VALUE aceptado. Enviando OPERATE...");
+        } catch (ServiceError e) {
+            String lastErr = readLastApplError(operNode);
+            System.out.println("[SBOe] SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode()
+                + (lastErr != null ? " | LastApplError: " + lastErr : ""));
+            return ControlResult.fail(4, ctlModelName,
+                "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), lastErr);
+        }
+
+        // 2) OPERATE: escribir Oper con el MISMO ctlNum y T nuevo
+        setOperCtlVal(operNode, ctlValStr);
+        fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck, ctlNum);
+        try {
+            association.setDataValues(operNode);
+            System.out.println("[OK] OPERATE (enhanced) ejecutado: " + operNode.getReference()
+                + " = " + ctlValStr + (testFlag ? " [TEST MODE]" : ""));
+            return ControlResult.ok(4, ctlModelName);
+        } catch (ServiceError e) {
+            String lastErr = readLastApplError(operNode);
+            System.out.println("[ERROR] OPERATE (enhanced) falló: ServiceError " + e.getErrorCode()
+                + (lastErr != null ? " | LastApplError: " + lastErr : ""));
+            return ControlResult.fail(4, ctlModelName,
                 "ServiceError: " + e.getErrorCode(), lastErr);
         }
     }

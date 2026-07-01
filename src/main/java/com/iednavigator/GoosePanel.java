@@ -89,8 +89,25 @@ class GoosePanel {
     private volatile boolean internalLoopbackEnabled = false;
     private volatile boolean udpBridgeEnabled = false;
 
+    /** Filtro de retransmisión: solo muestra cambios de stNum (omite heartbeats/sqNum). */
+    private volatile boolean filterRetransmissions = false;
+    /** Último stNum visto por gocbRef/appId para filtrar retransmisiones. */
+    private final Map<String, Integer> lastStNumBySource = new ConcurrentHashMap<>();
+
     GoosePanel(Context ctx) {
         this.ctx = ctx;
+    }
+
+    /** Limpia todas las tablas y datos GOOSE (llamar al cambiar de modelo). */
+    void clearAll() {
+        SwingUtilities.invokeLater(() -> {
+            if (gooseDataTableModel != null) gooseDataTableModel.setRowCount(0);
+            if (gooseTableModel != null) gooseTableModel.setRowCount(0);
+            gooseMessages.clear();
+            lastStNumBySource.clear();
+            if (gooseLogArea != null) gooseLogArea.setText("");
+            logGoose("Datos GOOSE limpiados (cambio de modelo)");
+        });
     }
 
     // ─── Public accessors for GOOSE-MODEL SYNC section in IEDNavigatorApp ─────
@@ -224,9 +241,20 @@ class GoosePanel {
 
         topPanel.add(row1, BorderLayout.NORTH);
 
-        // Row 2: Publisher controls
+        // Row 2: Publisher controls + filtro de retransmisión
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
         row2.setOpaque(false);
+
+        JCheckBox cbFilterRetrans = new JCheckBox("Filtrar retransmisiones");
+        cbFilterRetrans.setToolTipText("Solo mostrar cambios de estado (stNum nuevo). Omite heartbeats/retransmisiones (mismo stNum, distinto sqNum).");
+        cbFilterRetrans.setOpaque(false);
+        cbFilterRetrans.addActionListener(e -> {
+            filterRetransmissions = cbFilterRetrans.isSelected();
+            lastStNumBySource.clear();
+        });
+        row2.add(cbFilterRetrans);
+
+        row2.add(Box.createHorizontalStrut(20));
 
         row2.add(new JLabel("Publicar:"));
         btnGoosePublish = new JButton("▶ Publicar");
@@ -1320,7 +1348,25 @@ class GoosePanel {
 
     // ─── Message handlers ──────────────────────────────────────────────────────
 
+    /**
+     * Filtro de retransmisión: devuelve true si el mensaje debe mostrarse.
+     * Muestra la primera aparición de cada stNum y omite las siguientes con el mismo stNum.
+     */
+    private boolean shouldShowGoose(String key, int stNum) {
+        if (!filterRetransmissions) return true;
+        Integer prev = lastStNumBySource.get(key);
+        if (prev != null && prev.intValue() == stNum) {
+            return false; // retransmisión (mismo stNum) → omitir
+        }
+        // stNum nuevo o primera vez → mostrar y registrar
+        lastStNumBySource.put(key, stNum);
+        return true;
+    }
+
     private void handleGooseMessage(GooseSubscriber.GooseMessage msg) {
+        String key = msg.appId + "|" + (msg.gocbRef != null ? msg.gocbRef : "");
+        if (!shouldShowGoose(key, msg.stNum)) return;
+
         SwingUtilities.invokeLater(() -> {
             StringBuilder dataStr = new StringBuilder();
             for (GooseSubscriber.DataEntry entry : msg.dataEntries) {
@@ -1346,6 +1392,9 @@ class GoosePanel {
     }
 
     private void handleNativeGooseMessage(NativeGooseSubscriber.NativeGooseMessage msg) {
+        String key = msg.appId + "|" + (msg.goCbRef != null ? msg.goCbRef : "");
+        if (!shouldShowGoose(key, msg.stNum)) return;
+
         SwingUtilities.invokeLater(() -> {
             StringBuilder dataStr = new StringBuilder();
             for (NativeGooseSubscriber.DataValue dv : msg.dataValues) {
