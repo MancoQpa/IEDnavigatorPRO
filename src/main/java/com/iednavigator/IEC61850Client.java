@@ -27,6 +27,12 @@ public class IEC61850Client implements ClientEventListener {
     private int port;
     private boolean connected = false;
 
+    // true mientras connect() está en curso. Contra IEDs que rechazan retrieveModel()
+    // (Siemens/NARI) las asociaciones intermedias se rompen y beanit dispara
+    // associationClosed() por cada una; sin este flag la GUI mostraba "Desconectado"
+    // en medio de una conexión que iba a terminar bien.
+    private volatile boolean connectInProgress = false;
+
     // Cache de valores leidos
     private final Map<String, CachedValue> valueCache = new ConcurrentHashMap<>();
 
@@ -88,6 +94,7 @@ public class IEC61850Client implements ClientEventListener {
         // NOTA: Removida verificación isHostReachable que causaba problemas
         // con iec61850bean al hacer conexión TCP previa al puerto MMS
 
+        connectInProgress = true;
         try {
             System.out.println("[INFO] Creating ClientSap...");
             clientSap = new ClientSap();
@@ -208,6 +215,8 @@ public class IEC61850Client implements ClientEventListener {
                 association = null;
             }
             throw new IOException("Connection error: " + e.getMessage(), e);
+        } finally {
+            connectInProgress = false;
         }
     }
 
@@ -1175,6 +1184,16 @@ public class IEC61850Client implements ClientEventListener {
 
     @Override
     public void associationClosed(IOException e) {
+        // Durante connect() los reintentos internos (retryRetrieveModelWithoutDataSets,
+        // retrieveModelManually) rompen asociaciones intermedias a propósito. Esos cierres
+        // no deben tocar el estado (pisarían la asociación nueva del reintento) ni
+        // notificar a la GUI ("Desconectado" fantasma mientras aún se está conectando).
+        if (connectInProgress) {
+            System.out.println("[INFO] Association closed durante conexión en curso (reintento) — ignorado"
+                + (e != null ? ": " + e.getMessage() : ""));
+            return;
+        }
+
         System.out.println("[WARN] Association closed" + (e != null ? ": " + e.getMessage() : ""));
         connected = false;
         serverModel = null;
@@ -1869,5 +1888,98 @@ public class IEC61850Client implements ClientEventListener {
     public ControlResult operateControl(FcModelNode operNode, String ctlValStr,
                                          boolean testFlag, String orIdent) throws IOException {
         return operateControl(operNode, ctlValStr, testFlag, orIdent, false, false);
+    }
+
+    /**
+     * Resultado de la verificación de posición post-control (lectura de stVal).
+     */
+    public static class FeedbackResult {
+        public final boolean verifiable;  // el DO tiene stVal [ST] y el comando es on/off
+        public final boolean confirmed;   // stVal alcanzó el valor comandado dentro del timeout
+        public final String observed;     // último stVal leído (normalizado: on/off/intermediate/bad)
+        public final long elapsedMs;
+
+        FeedbackResult(boolean verifiable, boolean confirmed, String observed, long elapsedMs) {
+            this.verifiable = verifiable;
+            this.confirmed = confirmed;
+            this.observed = observed;
+            this.elapsedMs = elapsedMs;
+        }
+    }
+
+    /**
+     * Verifica el feedback físico de un control: pollea el stVal [ST] del mismo DO
+     * (p.ej. Pos.stVal tras operar Pos.Oper) hasta que coincida con el valor comandado
+     * o venza el timeout. El ack MMS del OPERATE solo significa "comando aceptado";
+     * el cambio real de posición lo reporta el proceso (contactos auxiliares → stVal).
+     *
+     * Solo verifica comandos on/off (Boolean o Dbpos). Para otros tipos (setpoints,
+     * tap changer) retorna verifiable=false y el llamador decide qué mostrar.
+     *
+     * @param operNode  nodo Oper del DO operado
+     * @param ctlValStr valor comandado ("true"/"false"/"on"/"off")
+     * @param timeoutMs tiempo máximo de espera del cambio de posición
+     */
+    public FeedbackResult verifyControlFeedback(FcModelNode operNode, String ctlValStr, int timeoutMs) {
+        long start = System.currentTimeMillis();
+
+        String expected = normalizeOnOff(ctlValStr);
+        if (expected == null || serverModel == null || association == null) {
+            return new FeedbackResult(false, false, null, 0);
+        }
+
+        // stVal vive en el mismo DO pero bajo FC=ST: "LD/LN.Pos.Oper" → "LD/LN.Pos" [ST].stVal
+        String operRef = operNode.getReference().toString();
+        int lastDot = operRef.lastIndexOf('.');
+        if (lastDot < 0) return new FeedbackResult(false, false, null, 0);
+        ModelNode stDo = serverModel.findModelNode(operRef.substring(0, lastDot), Fc.ST);
+        ModelNode stValNode = (stDo != null) ? stDo.getChild("stVal") : null;
+        if (!(stValNode instanceof FcModelNode) || !(stValNode instanceof BasicDataAttribute)) {
+            return new FeedbackResult(false, false, null, 0);
+        }
+
+        String observed = null;
+        while (System.currentTimeMillis() - start < timeoutMs) {
+            try {
+                association.getDataValues((FcModelNode) stValNode);
+                observed = normalizeStVal(stValNode);
+                if (expected.equals(observed)) {
+                    long elapsed = System.currentTimeMillis() - start;
+                    System.out.println("[FEEDBACK] Posición confirmada: stVal=" + observed
+                        + " en " + elapsed + "ms");
+                    return new FeedbackResult(true, true, observed, elapsed);
+                }
+            } catch (Exception e) {
+                System.out.println("[FEEDBACK] Error leyendo stVal (se reintenta): " + e.getMessage());
+            }
+            try { Thread.sleep(500); } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        long elapsed = System.currentTimeMillis() - start;
+        System.out.println("[FEEDBACK] SIN confirmación tras " + elapsed + "ms; último stVal=" + observed);
+        return new FeedbackResult(true, false, observed, elapsed);
+    }
+
+    /** Normaliza un valor comandado a "on"/"off"; null si no es un comando binario. */
+    private static String normalizeOnOff(String v) {
+        if (v == null) return null;
+        String s = v.trim().toLowerCase();
+        if (s.equals("true") || s.equals("on") || s.equals("close") || s.equals("closed")) return "on";
+        if (s.equals("false") || s.equals("off") || s.equals("open")) return "off";
+        return null;
+    }
+
+    /** Normaliza el stVal leído a on/off/intermediate/bad según su tipo BDA. */
+    private String normalizeStVal(ModelNode stValNode) {
+        if (stValNode instanceof BdaBoolean) {
+            return ((BdaBoolean) stValNode).getValue() ? "on" : "off";
+        }
+        if (stValNode instanceof BdaDoubleBitPos) {
+            return formatDoubleBitPos((BdaDoubleBitPos) stValNode);
+        }
+        String s = formatValue(stValNode);
+        return s != null ? s.trim().toLowerCase() : null;
     }
 }

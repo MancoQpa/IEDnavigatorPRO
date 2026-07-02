@@ -578,7 +578,7 @@ public class IEDNavigatorApp extends JFrame {
             "<p style='color: #666; font-size: 11px;'>Version 2.0 - Hybrid Edition</p>" +
             "<hr style='margin: 10px 0;'>" +
             "<p><b>IEC 61850 Explorer Tool</b></p>" +
-            "<p>Herramienta profesional para explorar, monitorear y configurar " +
+            "<p>Herramienta educativa para explorar, monitorear y configurar " +
             "dispositivos IED compatibles con el estandar IEC 61850.</p>" +
             "<br>" +
             "<p><b>Caracteristicas:</b></p>" +
@@ -596,6 +596,12 @@ public class IEDNavigatorApp extends JFrame {
             "<p style='font-size: 11px;'>T\u00e9cnico Superior en Electr\u00f3nica</p>" +
             "<p style='font-size: 11px;'>\uD83C\uDDF5\uD83C\uDDFE Paraguay</p>" +
             "<br>" +
+            "<p style='color: #B71C1C; font-size: 10px;'>" +
+            "<b>USO EXCLUSIVAMENTE EDUCATIVO:</b> esta herramienta se distribuye para " +
+            "aprendizaje y exploracion del estandar IEC 61850. NO es apta para pruebas " +
+            "FAT/SAT, comisionamiento ni operacion de instalaciones en servicio. El " +
+            "desarrollador no garantiza el desempe\u00F1o, exactitud ni idoneidad para " +
+            "ning\u00FAn proposito; el uso es bajo exclusiva responsabilidad del usuario.</p>" +
             "<p style='color: #888; font-size: 10px;'>" +
             "Bibliotecas: iec61850bean (MMS), libiec61850 (GOOSE/SV), pcap4j, JNA<br>" +
             "&copy; 2024 - Todos los derechos reservados</p>" +
@@ -2085,6 +2091,16 @@ public class IEDNavigatorApp extends JFrame {
         JTextField tfOrIdent = new JTextField("IEDNavigator", 14);
         panel.add(tfOrIdent, g);
 
+        // Descargo de uso educativo
+        g.gridy = 9; g.gridx = 0; g.gridwidth = 2;
+        JLabel lblDisclaimer = new JLabel("<html><div style='width:430px;color:#B71C1C;'>"
+            + "⚠ <b>Herramienta de uso exclusivamente educativo.</b> No apta para pruebas "
+            + "FAT/SAT, comisionamiento ni maniobras en instalaciones en servicio. El "
+            + "desarrollador no garantiza la ejecución ni el resultado de los comandos; "
+            + "el uso es bajo exclusiva responsabilidad del usuario.</div></html>");
+        lblDisclaimer.setFont(lblDisclaimer.getFont().deriveFont(Font.PLAIN, 11f));
+        panel.add(lblDisclaimer, g);
+
         // ── Mostrar diálogo ──────────────────────────────────────────────────────
         String title = isSbo ? "Operar nodo — SBO" : "Operar nodo — Direct";
         int result = JOptionPane.showConfirmDialog(this, panel, title,
@@ -2105,25 +2121,74 @@ public class IEDNavigatorApp extends JFrame {
                     client.operateControl(operNode, ctlVal, testFlag, orIdent,
                                           synchroCheck, interlockCheck);
 
+                // Verificación de posición: pollear stVal [ST] del DO operado hasta que
+                // refleje el valor comandado. El ack MMS solo confirma la aceptación;
+                // el cambio real llega por el proceso (contactos auxiliares → stVal).
+                // En modo Test el IED no actúa sobre el proceso → no hay nada que verificar.
+                IEC61850Client.FeedbackResult fb = null;
+                if (cr.success && !testFlag) {
+                    log("[FEEDBACK] Comando aceptado. Verificando posición (stVal) de " + ref + "...");
+                    fb = client.verifyControlFeedback(operNode, ctlVal, 10000);
+                }
+                final IEC61850Client.FeedbackResult fbf = fb;
+
                 SwingUtilities.invokeLater(() -> {
                     if (cr.success) {
                         String checkInfo = (synchroCheck || interlockCheck)
                             ? "\n  Check: " + (synchroCheck ? "synchroChk " : "")
                               + (interlockCheck ? "interlkChk" : "") : "";
-                        String msg = "OPERATE exitoso\n"
+
+                        String fbInfo;
+                        String fbLog;
+                        String dlgTitle;
+                        int dlgType;
+                        if (testFlag) {
+                            fbInfo = "\n\nModo Test: sin verificación de posición "
+                                + "(el IED registra el comando pero no actúa en el proceso).";
+                            fbLog = " [TEST, sin verificación]";
+                            dlgTitle = "Comando aceptado (Test)";
+                            dlgType = JOptionPane.INFORMATION_MESSAGE;
+                        } else if (fbf != null && fbf.verifiable && fbf.confirmed) {
+                            String secs = String.format("%.1f", fbf.elapsedMs / 1000.0);
+                            fbInfo = "\n\nPosición CONFIRMADA: stVal = " + fbf.observed
+                                + " (verificado por lectura en " + secs + " s)";
+                            fbLog = " | posición confirmada: stVal=" + fbf.observed + " en " + secs + "s";
+                            dlgTitle = "Maniobra confirmada";
+                            dlgType = JOptionPane.INFORMATION_MESSAGE;
+                        } else if (fbf != null && fbf.verifiable) {
+                            String secs = String.format("%.0f", fbf.elapsedMs / 1000.0);
+                            fbInfo = "\n\n⚠ SIN confirmación de posición tras " + secs + " s.\n"
+                                + "Último stVal leído: " + fbf.observed + "\n"
+                                + "El comando fue aceptado pero el equipo no reportó el cambio.\n"
+                                + "Verifique el interruptor y la señalización local.";
+                            fbLog = " | SIN confirmación de posición (último stVal=" + fbf.observed + ")";
+                            dlgTitle = "Comando aceptado — sin confirmación";
+                            dlgType = JOptionPane.WARNING_MESSAGE;
+                        } else {
+                            fbInfo = "\n\nNota: la aceptación MMS no confirma la maniobra física\n"
+                                + "y este DO no expone stVal on/off verificable.\n"
+                                + "Verifique la posición real del equipo.";
+                            fbLog = " (aceptado; sin stVal verificable)";
+                            dlgTitle = "Comando aceptado";
+                            dlgType = JOptionPane.INFORMATION_MESSAGE;
+                        }
+
+                        String msg = "Comando ACEPTADO por el IED\n"
                             + "  Nodo: " + ref + "\n"
                             + "  Valor: " + ctlVal + "\n"
                             + "  Modelo: " + cr.ctlModelName
                             + (isSbo ? " (SELECT → OPERATE)" : "")
                             + (testFlag ? "\n  [MODO TEST activado]" : "")
-                            + checkInfo;
+                            + checkInfo
+                            + fbInfo;
                         log("[CONTROL OK] " + ref + " = " + ctlVal
                             + (testFlag ? " [TEST]" : "")
                             + (synchroCheck ? " [SYNCHRO]" : "")
                             + (interlockCheck ? " [INTERLOCK]" : "")
-                            + " via " + cr.ctlModelName);
+                            + " via " + cr.ctlModelName
+                            + fbLog);
                         JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg,
-                            "Control exitoso", JOptionPane.INFORMATION_MESSAGE);
+                            dlgTitle, dlgType);
                         // Refrescar el nodo en el árbol
                         updateSingleNodeInTree(ref.substring(0, ref.lastIndexOf('.')));
                     } else {
