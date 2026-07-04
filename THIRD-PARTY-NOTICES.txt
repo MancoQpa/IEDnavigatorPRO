@@ -1,0 +1,50 @@
+IEDNavigator PRO — Avisos de componentes de terceros
+=====================================================
+
+IEDNavigator PRO se distribuye bajo la Licencia Pública General GNU versión 3
+(GPLv3, ver archivo LICENSE), condición derivada de las bibliotecas de motor
+IEC 61850 que utiliza (iec61850bean y libiec61850), ambas licenciadas bajo GPLv3.
+El código fuente completo está disponible en:
+
+    https://github.com/MancoQpa/IEDnavigatorPRO
+
+Componentes de terceros incluidos y sus licencias:
+
+1. iec61850bean 1.9.0 (com.beanit) — pila MMS/ACSE
+   Licencia: GNU GPL v3.0 (con opción de licencia comercial de beanit GmbH).
+   https://www.beanit.com/
+
+2. libiec61850 (archivo nativo iec61850.dll) — GOOSE/SV nativo
+   Autor: MZ Automation GmbH (Michael Zillgith).
+   Licencia: GNU GPL v3.0 (con opción de licencia comercial).
+   https://libiec61850.com/
+
+3. asn1bean 1.13.0 (com.beanit) — codificación ASN.1/BER
+   Licencia: Apache License 2.0.
+
+4. pcap4j 1.8.2 (org.pcap4j) — acceso a tramas Ethernet Capa 2
+   Licencia: MIT.
+
+5. FlatLaf 3.2 (com.formdev) — aspecto de la interfaz Swing
+   Licencia: Apache License 2.0.
+
+6. Java Native Access (JNA) 5.14.0 (net.java.dev.jna)
+   Licencia: Apache License 2.0 OR LGPL 2.1 (a elección del usuario).
+
+7. SLF4J 2.0.9 (org.slf4j) — registro (logging)
+   Licencia: MIT.
+
+8. ANTLR 2.7.7 — utilitario transitivo
+   Licencia: ANTLR 2 License (tipo BSD/dominio público).
+
+9. Runtime Java embebido (OpenJDK / Eclipse Temurin, generado con jlink)
+   Licencia: GNU GPL v2.0 con Classpath Exception (redistribución permitida).
+
+COMPONENTE NO DISTRIBUIDO (se instala por separado):
+
+  Npcap (Nmap Project) — driver de captura de paquetes en Windows.
+  NO se incluye en este paquete: la licencia gratuita de Npcap no permite su
+  redistribución dentro de instaladores de terceros. El usuario debe descargarlo
+  e instalarlo desde el sitio oficial:
+      https://npcap.com/#download
+  Licencia: Npcap License (Nmap Software LLC).
