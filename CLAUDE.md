@@ -1,5 +1,9 @@
 # CLAUDE.md - IEC 61850 Java Explorer (IEDNavigator)
 
+> Ver también [`VOCABULARIO.md`](VOCABULARIO.md): diccionario de jerga técnica,
+> convenciones de commits/código y estilo de escritura de Emilio Medina. Léelo
+> al empezar a trabajar en este repo y amplíalo cuando surjan términos nuevos.
+
 ## Project Overview
 
 Java desktop application for IEC 61850 protocol exploration and IED (Intelligent Electronic Device) simulation. Developed by Emilio Medina.
