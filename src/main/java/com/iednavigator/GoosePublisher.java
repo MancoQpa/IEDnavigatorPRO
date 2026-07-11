@@ -52,8 +52,12 @@ public class GoosePublisher {
     private String datSet = "simulated/LLN0$DataSet1";
     private int appId = 0x0001;
     private int confRev = 1;
-    private int stNum = 1;
-    private int sqNum = 0;
+    private volatile int stNum = 1;
+    private volatile int sqNum = 0;
+    // Serializa las mutaciones de stNum/sqNum entre el hilo del heartbeat y el hilo que dispara
+    // el cambio de estado, y unifica la convención "publicar y LUEGO incrementar" para que
+    // sqNum sea estrictamente monótono dentro de un mismo stNum (IEC 61850-8-1).
+    private final Object counterLock = new Object();
     private boolean testMode = false;
     private boolean needsCommissioning = false;
 
@@ -140,16 +144,10 @@ public class GoosePublisher {
         publishing = true;
         sqNum = 0;
 
-        // Schedule periodic publishing
+        // Schedule periodic publishing (misma convención publicar->incrementar, bajo lock)
         scheduler.scheduleAtFixedRate(() -> {
             if (publishing) {
-                try {
-                    publishGoose();
-                    sqNum++;
-                    if (sqNum > 65535) sqNum = 0;
-                } catch (Exception e) {
-                    log("Error publishing GOOSE: " + e.getMessage());
-                }
+                synchronized (counterLock) { publishAndBump(); }
             }
         }, 0, heartbeatInterval, TimeUnit.MILLISECONDS);
 
@@ -169,25 +167,37 @@ public class GoosePublisher {
      * Publish a single GOOSE message (for state changes)
      */
     public void publishStateChange() {
+        // stNum++ + reset de sqNum + primer envío: TODO bajo el lock, para que un tick de
+        // heartbeat no se intercale entre stNum++ y sqNum=0 (race), y usando la misma
+        // convención "publicar y luego incrementar" que el heartbeat.
+        synchronized (counterLock) {
+            stNum++;
+            sqNum = 0;
+            publishAndBump();  // publica sqNum=0 y deja sqNum=1
+        }
+        log("GOOSE state change published (stNum=" + stNum + ")");
 
-        // Increment state number and reset sequence
-        stNum++;
-        sqNum = 0;
+        // Retransmisión rápida (IEC 61850-8-1): T1=2ms, T2=4ms, T3=8ms, T4=16ms, luego heartbeat.
+        // Cada envío publica el sqNum actual y lo incrementa (monótono), bajo el mismo lock.
+        scheduler.schedule(() -> { synchronized (counterLock) { publishAndBump(); } }, 2, TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> { synchronized (counterLock) { publishAndBump(); } }, 4, TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> { synchronized (counterLock) { publishAndBump(); } }, 8, TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> { synchronized (counterLock) { publishAndBump(); } }, 16, TimeUnit.MILLISECONDS);
+    }
 
+    /**
+     * Publica una trama GOOSE con el sqNum actual y luego incrementa sqNum. Convención única
+     * "publicar y luego incrementar" que garantiza sqNum monótono dentro de un stNum.
+     * El llamador DEBE tener tomado {@code counterLock}.
+     */
+    private void publishAndBump() {
         try {
             publishGoose();
-            log("GOOSE state change published (stNum=" + stNum + ")");
-
-            // Rapid retransmission for state changes (T0, T1, T2, T3)
-            // T0=immediate (done), T1=2ms, T2=4ms, T3=8ms, then heartbeat
-            scheduler.schedule(() -> { sqNum++; try { publishGoose(); } catch (Exception e) {} }, 2, TimeUnit.MILLISECONDS);
-            scheduler.schedule(() -> { sqNum++; try { publishGoose(); } catch (Exception e) {} }, 4, TimeUnit.MILLISECONDS);
-            scheduler.schedule(() -> { sqNum++; try { publishGoose(); } catch (Exception e) {} }, 8, TimeUnit.MILLISECONDS);
-            scheduler.schedule(() -> { sqNum++; try { publishGoose(); } catch (Exception e) {} }, 16, TimeUnit.MILLISECONDS);
-
         } catch (Exception e) {
-            log("Error publishing state change: " + e.getMessage());
+            log("Error publishing GOOSE: " + e.getMessage());
         }
+        sqNum++;
+        if (sqNum > 65535) sqNum = 0;
     }
 
     /**
