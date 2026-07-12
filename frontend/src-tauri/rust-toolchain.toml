@@ -1,4 +1,0 @@
-# rustc 1.96 rompe la compilación del crate `time` 0.3.x (E0119).
-# Fijamos 1.90.0 hasta que time publique una versión compatible.
-[toolchain]
-channel = "1.90.0"
