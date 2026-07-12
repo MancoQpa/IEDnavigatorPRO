@@ -138,7 +138,7 @@ test/test_ied.cid             # CID de prueba
 
 | Librería                    | Versión | Licencia               | Incluida |
 |-----------------------------|---------|------------------------|----------|
-| iec61850bean                | 1.9.0   | GPL v3                 | Sí       |
+| iec61850bean                | 1.9.0   | Apache 2.0             | Sí       |
 | libiec61850 (iec61850.dll)  | —       | GPL v3                 | Sí       |
 | asn1bean                    | 1.13.0  | Apache 2.0             | Sí       |
 | pcap4j                      | 1.8.2   | MIT                    | Sí       |
@@ -156,9 +156,10 @@ Los avisos y licencias completos están en
 ## Licencia
 
 Se distribuye bajo la **GNU General Public License v3 (GPL v3)** — ver [LICENSE](LICENSE).
-Esta condición deriva de las bibliotecas del motor IEC 61850 (`iec61850bean` y `libiec61850`),
-ambas GPL v3. Podés usar, modificar y redistribuir el software siempre que mantengas la misma
-licencia, incluyas el código fuente y conserves los avisos de copyright.
+Esta condición deriva de la biblioteca nativa `libiec61850` (`iec61850.dll`, **GPL v3**), que
+se incluye para las funciones GOOSE/SV nativas; las demás dependencias son permisivas
+(Apache 2.0, MIT, LGPL/BSD). Podés usar, modificar y redistribuir el software siempre que
+mantengas la misma licencia, incluyas el código fuente y conserves los avisos de copyright.
 
 Npcap **no** se redistribuye con este proyecto (su licencia no lo permite); se enlaza al sitio
 oficial de descarga, lo cual no constituye redistribución.

@@ -2,16 +2,17 @@ IEDNavigator PRO — Avisos de componentes de terceros
 =====================================================
 
 IEDNavigator PRO se distribuye bajo la Licencia Pública General GNU versión 3
-(GPLv3, ver archivo LICENSE), condición derivada de las bibliotecas de motor
-IEC 61850 que utiliza (iec61850bean y libiec61850), ambas licenciadas bajo GPLv3.
-El código fuente completo está disponible en:
+(GPLv3, ver archivo LICENSE), condición derivada de la biblioteca nativa
+libiec61850 (iec61850.dll), licenciada bajo GPLv3, que se incluye para las
+funciones GOOSE/SV nativas. Las demás dependencias son permisivas (Apache 2.0,
+MIT, LGPL/BSD). El código fuente completo está disponible en:
 
     https://github.com/MancoQpa/IEDnavigatorPRO
 
 Componentes de terceros incluidos y sus licencias:
 
 1. iec61850bean 1.9.0 (com.beanit) — pila MMS/ACSE
-   Licencia: GNU GPL v3.0 (con opción de licencia comercial de beanit GmbH).
+   Licencia: Apache License 2.0 (declarada en el POM de Maven Central).
    https://www.beanit.com/
 
 2. libiec61850 (archivo nativo iec61850.dll) — GOOSE/SV nativo
