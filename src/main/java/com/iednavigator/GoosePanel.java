@@ -196,6 +196,9 @@ class GoosePanel {
                 }
             }
             handleGooseMessage(tableMsg);
+            // En modo UDP, cada trama publicada (heartbeat Y ráfaga de cambio) se envía por UDP.
+            // Antes el envío UDP solo ocurría en el cambio de estado, no en el heartbeat.
+            if (udpBridgeEnabled) gooseUdpBridge.send(goosePublisher);
         });
 
         // UDP Bridge for WiFi/routed networks
@@ -1231,11 +1234,13 @@ class GoosePanel {
 
             if (selected.contains("Loopback Interno")) {
                 internalLoopbackEnabled = true;
+                goosePublisher.closeSendHandle();  // soltar handle L2 fantasma de una sesión previa
                 publishStarted = true;
                 logGoose("Publisher iniciado en modo LOOPBACK INTERNO");
                 logGoose("Los mensajes se mostraran localmente sin red");
             } else if (selected.contains("GOOSE sobre UDP") || selected.contains("UDP")) {
                 udpBridgeEnabled = true;
+                goosePublisher.closeSendHandle();  // soltar handle L2 fantasma de una sesión previa
                 if (gooseUdpBridge.initSender(null)) {
                     publishStarted = true;
                     logGoose("Publisher iniciado en modo UDP BROADCAST");

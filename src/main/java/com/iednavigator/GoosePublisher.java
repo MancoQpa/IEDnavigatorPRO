@@ -204,8 +204,9 @@ public class GoosePublisher {
      * Build and send GOOSE packet
      */
     private void publishGoose() throws Exception {
-        // Only send to network if handle is available (not in loopback-only mode)
-        if (sendHandle != null) {
+        // Only send to network if handle is available AND open (en modo UDP/loopback no hay handle;
+        // el && isOpen() evita usar un handle L2 cerrado que haya quedado de una sesión previa).
+        if (sendHandle != null && sendHandle.isOpen()) {
             byte[] goosePdu = buildGoosePdu();
             byte[] payload = buildGoosePayload(goosePdu);
 
@@ -467,8 +468,18 @@ public class GoosePublisher {
     public void close() {
         stopPublishing();
         scheduler.shutdown();
-        if (sendHandle != null && sendHandle.isOpen()) {
-            sendHandle.close();
+        closeSendHandle();
+    }
+
+    /**
+     * Cierra y LIBERA (pone en null) el handle pcap de envío L2. Antes close() lo cerraba pero
+     * no lo anulaba, por lo que al cambiar a modo UDP/loopback el heartbeat seguía intentando
+     * enviar por pcap sobre un handle cerrado (pcap_sendpacket: PacketSendPacket failed).
+     */
+    public void closeSendHandle() {
+        if (sendHandle != null) {
+            if (sendHandle.isOpen()) sendHandle.close();
+            sendHandle = null;
         }
     }
 
