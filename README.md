@@ -37,7 +37,7 @@ Es la versión evolucionada (núcleo activo) del proyecto IEDNavigator, con inte
 
 #### Modo Servidor / Simulador de IED
 - Carga de archivos SCL (ICD / CID / SCD) e instanciación de un servidor IEC 61850.
-- Responde a lecturas MMS de clientes externos (p. ej. IEDScout).
+- Responde a lecturas MMS de clientes externos estándar del mercado.
 - Edición interactiva de valores desde la interfaz.
 - Sincronización bidireccional entre el modelo de datos y los publicadores GOOSE.
 
@@ -173,7 +173,7 @@ This is the evolved (actively maintained) version of the IEDNavigator project, w
 
 #### Server Mode / IED Simulator
 - Loads SCL files (ICD / CID / SCD) and instantiates an IEC 61850 server.
-- Responds to MMS reads from external clients (e.g. IEDScout).
+- Responds to MMS reads from standard external MMS clients.
 - Interactive value editing from the interface.
 - Bidirectional sync between the data model and GOOSE publishers.
 
@@ -309,7 +309,7 @@ Copyright © Emilio Medina.
 
 #### 服务端模式 / IED 仿真器
 - 加载 SCL 文件（ICD / CID / SCD）并实例化一个 IEC 61850 服务端。
-- 响应外部客户端（如 IEDScout）的 MMS 读取请求。
+- 响应标准外部 MMS 客户端的读取请求。
 - 通过界面交互式编辑数值。
 - 数据模型与 GOOSE 发布者之间的双向同步。
 
@@ -445,7 +445,7 @@ Desenvolvida por **Emilio Medina** (Paraguai). Software livre sob **GPL v3**.
 
 #### Modo Servidor / Simulador de IED
 - Carregamento de arquivos SCL (ICD / CID / SCD) e instanciação de um servidor IEC 61850.
-- Responde a leituras MMS de clientes externos (ex.: IEDScout).
+- Responde a leituras MMS de clientes externos padrão do mercado.
 - Edição interativa de valores pela interface.
 - Sincronização bidirecional entre o modelo de dados e os publicadores GOOSE.
 
@@ -581,7 +581,7 @@ Copyright © Emilio Medina.
 
 #### وضع الخادم / محاكي IED
 - تحميل ملفات SCL (ICD / CID / SCD) وإنشاء خادم IEC 61850.
-- الاستجابة لطلبات القراءة عبر MMS من عملاء خارجيين (مثل IEDScout).
+- الاستجابة لطلبات القراءة عبر MMS من عملاء MMS خارجيين قياسيين.
 - تحرير القيم بشكل تفاعلي من الواجهة.
 - مزامنة ثنائية الاتجاه بين نموذج البيانات وناشري GOOSE.
 
