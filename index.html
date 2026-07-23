@@ -67,7 +67,12 @@
   .brand img{width:26px; height:26px; border-radius:6px; display:block;}
 
   /* ---------- HERO ---------- */
-  .hero{padding:88px 0 56px;}
+  .hero{
+    padding:88px 0 56px;
+    background:
+      linear-gradient(180deg, rgba(10,18,32,0.90) 0%, rgba(10,18,32,0.78) 45%, rgba(10,18,32,0.94) 100%),
+      url('hero-banner.jpg') center top / cover no-repeat;
+  }
   .eyebrow{
     display:inline-flex; align-items:center; gap:8px;
     font-family:'IBM Plex Mono'; font-size:12px; color:var(--teal);
@@ -210,7 +215,8 @@
 </header>
 
 <main>
-  <section class="hero wrap">
+  <section class="hero">
+   <div class="wrap">
     <div class="eyebrow"><span class="pulse"></span>
       <span lang="es">MMS · GOOSE · IEC 61850-8-1</span>
       <span lang="en">MMS · GOOSE · IEC 61850-8-1</span>
@@ -270,6 +276,7 @@
         </g>
       </svg>
     </div>
+   </div>
   </section>
 
   <section class="wrap" style="padding-top:0;">
