@@ -67,7 +67,7 @@ class ReportsPanel {
 
         // ===== TOP: RCB List with controls =====
         JPanel rcbPanel = new JPanel(new BorderLayout());
-        rcbPanel.setBorder(BorderFactory.createTitledBorder("Report Control Blocks (URCB/BRCB)"));
+        rcbPanel.setBorder(BorderFactory.createTitledBorder(I18n.t("reports.title")));
 
         String[] rcbColumns = {"RCB Reference", "Tipo", "Dataset", "TrgOps", "IntgPd", "Estado"};
         reportsTableModel = new DefaultTableModel(rcbColumns, 0) {
@@ -118,32 +118,32 @@ class ReportsPanel {
 
         JPanel rcbBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
 
-        JButton btnRefreshRcb = new JButton("Cargar RCBs");
-        btnRefreshRcb.setToolTipText("Cargar Report Control Blocks del modelo");
+        JButton btnRefreshRcb = new JButton(I18n.t("reports.loadrcb"));
+        btnRefreshRcb.setToolTipText(I18n.t("reports.loadrcb.tip"));
         btnRefreshRcb.addActionListener(e -> refreshReportControlBlocks());
         rcbBtnPanel.add(btnRefreshRcb);
 
         rcbBtnPanel.add(new JSeparator(SwingConstants.VERTICAL));
 
-        JButton btnEnableRcb = new JButton("Habilitar");
+        JButton btnEnableRcb = new JButton(I18n.t("reports.enable"));
         btnEnableRcb.setBackground(new Color(0, 150, 0));
         btnEnableRcb.setForeground(Color.WHITE);
-        btnEnableRcb.setToolTipText("Habilitar el RCB seleccionado para recibir reportes");
+        btnEnableRcb.setToolTipText(I18n.t("reports.enable.tip"));
         btnEnableRcb.addActionListener(e -> enableSelectedReport(true));
         rcbBtnPanel.add(btnEnableRcb);
 
-        JButton btnDisableRcb = new JButton("Deshabilitar");
-        btnDisableRcb.setToolTipText("Deshabilitar el RCB seleccionado");
+        JButton btnDisableRcb = new JButton(I18n.t("reports.disable"));
+        btnDisableRcb.setToolTipText(I18n.t("reports.disable.tip"));
         btnDisableRcb.addActionListener(e -> enableSelectedReport(false));
         rcbBtnPanel.add(btnDisableRcb);
 
-        JButton btnEnableAll = new JButton("Habilitar Todos");
-        btnEnableAll.setToolTipText("Habilitar todos los RCBs");
+        JButton btnEnableAll = new JButton(I18n.t("reports.enableall"));
+        btnEnableAll.setToolTipText(I18n.t("reports.enableall.tip"));
         btnEnableAll.addActionListener(e -> enableAllReports(true));
         rcbBtnPanel.add(btnEnableAll);
 
-        JButton btnDisableAll = new JButton("Deshabilitar Todos");
-        btnDisableAll.setToolTipText("Deshabilitar todos los RCBs");
+        JButton btnDisableAll = new JButton(I18n.t("reports.disableall"));
+        btnDisableAll.setToolTipText(I18n.t("reports.disableall.tip"));
         btnDisableAll.addActionListener(e -> enableAllReports(false));
         rcbBtnPanel.add(btnDisableAll);
 
@@ -155,7 +155,7 @@ class ReportsPanel {
 
         // ===== BOTTOM: Received Report Data =====
         JPanel dataPanel = new JPanel(new BorderLayout());
-        dataPanel.setBorder(BorderFactory.createTitledBorder("Datos de Reportes Recibidos (Tiempo Real)"));
+        dataPanel.setBorder(BorderFactory.createTitledBorder(I18n.t("reports.datatitle")));
 
         String[] dataColumns = {"Timestamp", "RCB", "SeqNum", "Referencia", "Valor Anterior", "Valor Nuevo", "Razon"};
         reportDataTableModel = new DefaultTableModel(dataColumns, 0) {
@@ -199,19 +199,19 @@ class ReportsPanel {
 
         JPanel dataBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
 
-        JButton btnClearReports = new JButton("Limpiar");
+        JButton btnClearReports = new JButton(I18n.t("btn.clear"));
         btnClearReports.addActionListener(e -> reportDataTableModel.setRowCount(0));
         dataBtnPanel.add(btnClearReports);
 
-        JCheckBox cbAutoScroll = new JCheckBox("Auto-scroll", true);
+        JCheckBox cbAutoScroll = new JCheckBox(I18n.t("reports.autoscroll"), true);
         dataBtnPanel.add(cbAutoScroll);
 
-        JLabel lblReportCount = new JLabel("  Reportes: 0");
+        JLabel lblReportCount = new JLabel("  " + I18n.t("reports.count", 0));
         dataBtnPanel.add(lblReportCount);
 
         javax.swing.Timer reportTimer = new javax.swing.Timer(500, e -> {
             lblRcbCount.setText("  RCBs: " + reportsTableModel.getRowCount());
-            lblReportCount.setText("  Reportes: " + reportDataTableModel.getRowCount());
+            lblReportCount.setText("  " + I18n.t("reports.count", reportDataTableModel.getRowCount()));
         });
         reportTimer.start();
 
@@ -358,7 +358,7 @@ class ReportsPanel {
     private void enableSelectedReport(boolean enable) {
         int row = reportsTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(parent, "Selecciona un RCB primero");
+            JOptionPane.showMessageDialog(parent, I18n.t("reports.selectfirst"));
             return;
         }
 

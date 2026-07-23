@@ -1,5 +1,6 @@
 package com.iednavigator.native_lib;
 
+import com.iednavigator.I18n;
 import com.sun.jna.*;
 
 import java.util.*;
@@ -121,7 +122,7 @@ public class NativeGooseSubscriber {
      */
     public boolean startObserver(String interfaceId) {
         if (running) {
-            log("Ya en ejecucion");
+            log(I18n.t("log.native.alreadyrunning"));
             return false;
         }
 
@@ -131,18 +132,18 @@ public class NativeGooseSubscriber {
             // Create receiver
             receiver = lib.GooseReceiver_create();
             if (receiver == null) {
-                log("Error: No se pudo crear GooseReceiver");
+                log(I18n.t("log.native.receivercreateerror"));
                 return false;
             }
 
             // Set interface
             lib.GooseReceiver_setInterfaceId(receiver, interfaceId);
-            log("Interface configurada: " + interfaceId);
+            log(I18n.t("log.native.ifaceconfigured", interfaceId));
 
             // Create subscriber in observer mode (null gocbRef)
             subscriber = lib.GooseSubscriber_create(null, null);
             if (subscriber == null) {
-                log("Error: No se pudo crear GooseSubscriber");
+                log(I18n.t("log.native.subscribercreateerror"));
                 lib.GooseReceiver_destroy(receiver);
                 return false;
             }
@@ -170,9 +171,9 @@ public class NativeGooseSubscriber {
             running = lib.GooseReceiver_isRunning(receiver);
 
             if (running) {
-                log("GOOSE Receiver iniciado exitosamente");
+                log(I18n.t("log.native.receiverstarted.ok"));
             } else {
-                log("Error: GooseReceiver no inicio correctamente");
+                log(I18n.t("log.native.receiver.notstarted1"));
                 cleanup();
                 return false;
             }
@@ -180,7 +181,7 @@ public class NativeGooseSubscriber {
             return true;
 
         } catch (Exception e) {
-            log("Error iniciando GOOSE: " + e.getMessage());
+            log(I18n.t("log.native.starterror", e.getMessage()));
             e.printStackTrace();
             cleanup();
             return false;
@@ -195,7 +196,7 @@ public class NativeGooseSubscriber {
      */
     public boolean start(String interfaceId, String goCbRef) {
         if (running) {
-            log("Ya en ejecucion");
+            log(I18n.t("log.native.alreadyrunning"));
             return false;
         }
 
@@ -205,23 +206,23 @@ public class NativeGooseSubscriber {
             // Create receiver
             receiver = lib.GooseReceiver_create();
             if (receiver == null) {
-                log("Error: No se pudo crear GooseReceiver");
+                log(I18n.t("log.native.receivercreateerror"));
                 return false;
             }
 
             // Set interface
             lib.GooseReceiver_setInterfaceId(receiver, interfaceId);
-            log("Interface: " + interfaceId);
+            log(I18n.t("log.native.iface", interfaceId));
 
             // Create subscriber for specific GoCB
             subscriber = lib.GooseSubscriber_create(goCbRef, null);
             if (subscriber == null) {
-                log("Error: No se pudo crear GooseSubscriber para " + goCbRef);
+                log(I18n.t("log.native.subscribercreateerror.for", goCbRef));
                 lib.GooseReceiver_destroy(receiver);
                 return false;
             }
 
-            log("Suscrito a GoCB: " + goCbRef);
+            log(I18n.t("log.native.subscribed", goCbRef));
 
             // Create and set native callback
             nativeListener = new LibIec61850.GooseListener() {
@@ -242,9 +243,9 @@ public class NativeGooseSubscriber {
             running = lib.GooseReceiver_isRunning(receiver);
 
             if (running) {
-                log("GOOSE Receiver iniciado para " + goCbRef);
+                log(I18n.t("log.native.receiverstarted.for", goCbRef));
             } else {
-                log("Error: GooseReceiver no inicio");
+                log(I18n.t("log.native.receiver.notstarted2"));
                 cleanup();
                 return false;
             }
@@ -252,7 +253,7 @@ public class NativeGooseSubscriber {
             return true;
 
         } catch (Exception e) {
-            log("Error: " + e.getMessage());
+            log(I18n.t("log.native.generror", e.getMessage()));
             e.printStackTrace();
             cleanup();
             return false;
@@ -308,7 +309,7 @@ public class NativeGooseSubscriber {
             }
 
         } catch (Exception e) {
-            log("Error procesando mensaje GOOSE: " + e.getMessage());
+            log(I18n.t("log.native.processerror", e.getMessage()));
         }
     }
 
@@ -336,7 +337,7 @@ public class NativeGooseSubscriber {
                 values.add(dv);
             }
         } catch (Exception e) {
-            log("Error parseando dataset: " + e.getMessage());
+            log(I18n.t("log.native.dsparseerror", e.getMessage()));
         }
     }
 
@@ -430,7 +431,7 @@ public class NativeGooseSubscriber {
 
         running = false;
         cleanup();
-        log("GOOSE Receiver detenido. Total mensajes: " + messageCount);
+        log(I18n.t("log.native.receiverstopped", messageCount));
     }
 
     private void cleanup() {
@@ -443,7 +444,7 @@ public class NativeGooseSubscriber {
             subscriber = null;
             nativeListener = null;
         } catch (Exception e) {
-            log("Error en cleanup: " + e.getMessage());
+            log(I18n.t("log.native.cleanuperror", e.getMessage()));
         }
     }
 

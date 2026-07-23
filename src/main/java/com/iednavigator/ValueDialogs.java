@@ -18,7 +18,7 @@ class ValueDialogs {
         combo.setSelectedItem(currentValue.toUpperCase().replace(" ", "_"));
 
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.add(new JLabel("Seleccionar estado para " + name + ":"), BorderLayout.NORTH);
+        panel.add(new JLabel(I18n.t("dlg.selectstate.for") + name + ":"), BorderLayout.NORTH);
         panel.add(combo, BorderLayout.CENTER);
 
         int result = JOptionPane.showConfirmDialog(parent, panel,
@@ -44,7 +44,7 @@ class ValueDialogs {
         combo.setSelectedItem(currentValue.toLowerCase());
 
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.add(new JLabel("Seleccionar valor para " + name + ":"), BorderLayout.NORTH);
+        panel.add(new JLabel(I18n.t("dlg.selectvalue.for") + name + ":"), BorderLayout.NORTH);
         panel.add(combo, BorderLayout.CENTER);
 
         int result = JOptionPane.showConfirmDialog(parent, panel,
@@ -60,7 +60,7 @@ class ValueDialogs {
         combo.setSelectedItem(currentValue.toUpperCase());
 
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.add(new JLabel("Seleccionar comando para " + name + ":"), BorderLayout.NORTH);
+        panel.add(new JLabel(I18n.t("dlg.selectcmd.for") + name + ":"), BorderLayout.NORTH);
         panel.add(combo, BorderLayout.CENTER);
 
         int result = JOptionPane.showConfirmDialog(parent, panel,

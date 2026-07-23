@@ -37,13 +37,13 @@ class GooseMapPanel {
 
         // ─── Toolbar ───
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        JButton btnLoad = new JButton("Cargar SCL/SCD...");
+        JButton btnLoad = new JButton(I18n.t("goosemap.load"));
         btnLoad.addActionListener(e -> loadFile());
-        lblFile = new JLabel("(sin archivo)");
+        lblFile = new JLabel(I18n.t("goosemap.nofile"));
         iedFilter = new JComboBox<>();
-        iedFilter.addItem("Todos los IEDs");
+        iedFilter.addItem(I18n.t("goosemap.allieds"));
         iedFilter.addActionListener(e -> applyFilter());
-        JButton btnExport = new JButton("Exportar CSV");
+        JButton btnExport = new JButton(I18n.t("btn.exportcsv"));
         btnExport.addActionListener(e -> exportCsv());
         top.add(btnLoad);
         top.add(lblFile);
@@ -60,7 +60,7 @@ class GooseMapPanel {
         pubTable = new JTable(pubModel);
         pubTable.setAutoCreateRowSorter(true);
         JScrollPane pubScroll = new JScrollPane(pubTable);
-        pubScroll.setBorder(BorderFactory.createTitledBorder("Publicadores (GSEControl)"));
+        pubScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("goosemap.pub")));
 
         // ─── Tabla suscripciones ───
         subModel = new DefaultTableModel(
@@ -89,13 +89,13 @@ class GooseMapPanel {
             }
         });
         JScrollPane subScroll = new JScrollPane(subTable);
-        subScroll.setBorder(BorderFactory.createTitledBorder("Suscripciones (ExtRef / LGOS)"));
+        subScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("goosemap.sub")));
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, pubScroll, subScroll);
         split.setResizeWeight(0.35);
         panel.add(split, BorderLayout.CENTER);
 
-        lblSummary = new JLabel("Cargue un archivo SCL (idealmente SCD multi-IED)");
+        lblSummary = new JLabel(I18n.t("goosemap.load.tip"));
         panel.add(lblSummary, BorderLayout.SOUTH);
 
         return panel;
@@ -129,30 +129,30 @@ class GooseMapPanel {
                 if (!s.resolved) unresolved++;
                 subModel.addRow(new Object[]{
                     s.pubRef(), s.dataRef, s.subscriberIed, s.target, s.via,
-                    s.resolved ? "OK" : "No resuelto"});
+                    s.resolved ? "OK" : I18n.t("goosemap.unresolved")});
             }
 
             iedFilter.removeAllItems();
-            iedFilter.addItem("Todos los IEDs");
+            iedFilter.addItem(I18n.t("goosemap.allieds"));
             for (String n : lastResult.iedNames) iedFilter.addItem(n);
 
             String summary = String.format(
-                "%d IEDs  |  %d GoCBs publicadores  |  %d suscripciones (%d no resueltas)",
+                I18n.t("goosemap.summary"),
                 lastResult.iedNames.size(), lastResult.publishers.size(),
                 lastResult.subscriptions.size(), unresolved);
             lblSummary.setText(summary);
             log.accept("[MapaGOOSE] " + sclFile.getName() + ": " + summary);
         } catch (Exception ex) {
             log.accept("[MapaGOOSE] ERROR: " + ex.getMessage());
-            JOptionPane.showMessageDialog(parent, "Error analizando archivo:\n" + ex.getMessage(),
-                "Mapa GOOSE", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(parent, I18n.t("goosemap.err.analyze") + "\n" + ex.getMessage(),
+                I18n.t("tab.goosemap"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
     /** Filtra suscripciones donde el IED participa como publicador o suscriptor. */
     private void applyFilter() {
         String sel = (String) iedFilter.getSelectedItem();
-        if (sel == null || sel.startsWith("Todos")) {
+        if (sel == null || sel.equals(I18n.t("goosemap.allieds"))) {
             subSorter.setRowFilter(null);
             return;
         }
@@ -169,7 +169,7 @@ class GooseMapPanel {
 
     private void exportCsv() {
         if (lastResult == null || lastResult.subscriptions.isEmpty()) {
-            JOptionPane.showMessageDialog(parent, "No hay suscripciones que exportar");
+            JOptionPane.showMessageDialog(parent, I18n.t("goosemap.nosubs"));
             return;
         }
         JFileChooser fc = new JFileChooser();
@@ -183,7 +183,7 @@ class GooseMapPanel {
             }
             log.accept("[MapaGOOSE] Exportado: " + fc.getSelectedFile().getAbsolutePath());
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(parent, "Error exportando: " + ex.getMessage());
+            JOptionPane.showMessageDialog(parent, I18n.t("err.export") + " " + ex.getMessage());
         }
     }
 

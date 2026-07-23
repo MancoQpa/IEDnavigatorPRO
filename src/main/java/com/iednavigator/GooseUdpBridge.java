@@ -70,17 +70,17 @@ public class GooseUdpBridge {
             if (targetIp != null && !targetIp.isEmpty()) {
                 targetAddress = InetAddress.getByName(targetIp);
                 useBroadcast = false;
-                log("GOOSE-UDP Sender: unicast to " + targetIp + ":" + port);
+                log(I18n.t("log.udp.unicast", targetIp, port));
             } else {
                 // Use broadcast
                 targetAddress = InetAddress.getByName("255.255.255.255");
                 useBroadcast = true;
-                log("GOOSE-UDP Sender: broadcast on port " + port);
+                log(I18n.t("log.udp.broadcast", port));
             }
 
             return true;
         } catch (Exception e) {
-            log("Error initializing GOOSE-UDP sender: " + e.getMessage());
+            log(I18n.t("log.udp.sender.initerror", e.getMessage()));
             return false;
         }
     }
@@ -94,10 +94,10 @@ public class GooseUdpBridge {
             receiveSocket.setBroadcast(true);
             receiveSocket.setSoTimeout(1000); // 1 second timeout for clean shutdown
 
-            log("GOOSE-UDP Receiver: listening on port " + port);
+            log(I18n.t("log.udp.receiver.listening", port));
             return true;
         } catch (Exception e) {
-            log("Error initializing GOOSE-UDP receiver: " + e.getMessage());
+            log(I18n.t("log.udp.receiver.initerror", e.getMessage()));
             return false;
         }
     }
@@ -114,7 +114,7 @@ public class GooseUdpBridge {
 
         receiving = true;
         executor.submit(this::receiveLoop);
-        log("GOOSE-UDP receiver started");
+        log(I18n.t("log.udp.receiver.started"));
         return true;
     }
 
@@ -127,7 +127,7 @@ public class GooseUdpBridge {
             receiveSocket.close();
             receiveSocket = null;
         }
-        log("GOOSE-UDP receiver stopped. Received: " + receivedCount + " messages");
+        log(I18n.t("log.udp.receiver.stopped", receivedCount));
     }
 
     /**
@@ -150,7 +150,7 @@ public class GooseUdpBridge {
 
             return true;
         } catch (Exception e) {
-            log("Error sending GOOSE-UDP: " + e.getMessage());
+            log(I18n.t("log.udp.send.error", e.getMessage()));
             return false;
         }
     }
@@ -212,7 +212,7 @@ public class GooseUdpBridge {
 
             return true;
         } catch (Exception e) {
-            log("Error sending GOOSE-UDP raw: " + e.getMessage());
+            log(I18n.t("log.udp.sendraw.error", e.getMessage()));
             return false;
         }
     }
@@ -297,7 +297,7 @@ public class GooseUdpBridge {
                 // Normal timeout, continue
             } catch (Exception e) {
                 if (receiving) {
-                    log("Error receiving GOOSE-UDP: " + e.getMessage());
+                    log(I18n.t("log.udp.receive.error", e.getMessage()));
                 }
             }
         }
@@ -445,7 +445,7 @@ public class GooseUdpBridge {
                 useBroadcast = true;
             }
         } catch (Exception e) {
-            log("Error setting target IP: " + e.getMessage());
+            log(I18n.t("log.udp.targetip.error", e.getMessage()));
         }
     }
 }

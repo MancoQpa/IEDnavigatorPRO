@@ -218,7 +218,7 @@ public class IEDNavigatorApp extends JFrame {
                     }
                     dtde.dropComplete(true);
                 } catch (Exception e) {
-                    log("Drop error: " + e.getMessage());
+                    log(I18n.t("log.app.droperror", e.getMessage()));
                     dtde.dropComplete(false);
                 }
             }
@@ -243,17 +243,17 @@ public class IEDNavigatorApp extends JFrame {
         server.setServerListener(new IEC61850Server.ServerListener() {
             @Override public void onServerStarted(int port) {}
             @Override public void onServerStopped() {}
-            @Override public void onError(String message) { log("Server error: " + message); }
+            @Override public void onError(String message) { log(I18n.t("log.app.servererror", message)); }
             @Override public void onClientWrite(String nodeRef, String value) {
                 SwingUtilities.invokeLater(() -> {
-                    log("[Server] Cliente escribió: " + nodeRef + " = " + value);
+                    log(I18n.t("log.app.serverclientwrite", nodeRef, value));
                     updateSingleNodeInTree(nodeRef);
                     updateServerMonitorValues();
                     // Propagate to GOOSE publishers if active
                     GoosePublisher gp = goosePanel != null ? goosePanel.getGoosePublisher() : null;
                     if (gp != null && gp.isPublishing() && updateGoosePublisherValues()) {
                         gp.publishStateChange();
-                        logGoose("GOOSE publicado por escritura remota: " + nodeRef + " = " + value);
+                        logGoose(I18n.t("log.app.goosepubremote", nodeRef, value));
                     }
                     if (goosePanel != null && !goosePanel.getActivePublishers().isEmpty()) {
                         propagateValueToPublishers(nodeRef, value);
@@ -275,7 +275,7 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private void initUI() {
-        setTitle("IED Navigator - IEC 61850 Explorer");
+        setTitle(I18n.t("app.title"));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 800);
         setLocationRelativeTo(null);
@@ -307,10 +307,10 @@ public class IEDNavigatorApp extends JFrame {
 
         // Selector de modo
         JPanel modePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        modePanel.setBorder(BorderFactory.createTitledBorder("Modo"));
+        modePanel.setBorder(BorderFactory.createTitledBorder(I18n.t("mode.border")));
         ButtonGroup modeGroup = new ButtonGroup();
-        rbServer = new JRadioButton("Servidor");
-        rbClient = new JRadioButton("Cliente", true);
+        rbServer = new JRadioButton(I18n.t("mode.server"));
+        rbClient = new JRadioButton(I18n.t("mode.client"), true);
         modeGroup.add(rbServer);
         modeGroup.add(rbClient);
         modePanel.add(rbServer);
@@ -323,7 +323,7 @@ public class IEDNavigatorApp extends JFrame {
         statusIndicator.setPreferredSize(new Dimension(16, 16));
         statusIndicator.setBackground(COLOR_STOPPED);
         statusIndicator.setBorder(BorderFactory.createLineBorder(Color.DARK_GRAY));
-        lblStatus = new JLabel("Desconectado");
+        lblStatus = new JLabel(I18n.t("status.disconnected"));
         lblStatus.setFont(lblStatus.getFont().deriveFont(Font.BOLD));
         statusPanel.add(statusIndicator);
         statusPanel.add(lblStatus);
@@ -334,17 +334,17 @@ public class IEDNavigatorApp extends JFrame {
         statusPanel.add(sep);
 
         // Info de conexion (IP:Puerto)
-        lblConnectionInfo = new JLabel("Sin conexion");
+        lblConnectionInfo = new JLabel(I18n.t("status.noconn"));
         lblConnectionInfo.setFont(new Font("Monospaced", Font.BOLD, 12));
         lblConnectionInfo.setForeground(new Color(0, 80, 160));
-        statusPanel.add(new JLabel("Conexion:"));
+        statusPanel.add(new JLabel(I18n.t("lbl.connection")));
         statusPanel.add(lblConnectionInfo);
 
         topPanel.add(statusPanel, BorderLayout.CENTER);
 
         // Panel EAST: nombre del IED/equipo activo destacado
-        lblIedDisplay = new JLabel("  Sin equipo  ");
-        lblIedDisplay.setFont(new Font("Arial", Font.BOLD, 15));
+        lblIedDisplay = new JLabel("  " + I18n.t("status.nodevice") + "  ");
+        lblIedDisplay.setFont(new Font("Dialog", Font.BOLD, 15));
         lblIedDisplay.setForeground(new Color(15, 55, 120));
         lblIedDisplay.setHorizontalAlignment(SwingConstants.CENTER);
         lblIedDisplay.setVerticalAlignment(SwingConstants.CENTER);
@@ -375,17 +375,17 @@ public class IEDNavigatorApp extends JFrame {
         // Log
         logArea = new JTextArea(8, 30);
         logArea.setEditable(false);
-        logArea.setFont(new Font("Consolas", Font.PLAIN, 12));
+        logArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
         // Estilo consola: fondo levemente diferenciado (solo cosmético)
         logArea.setBackground(new Color(0xF7F9FB));
         logArea.setForeground(new Color(0x37474F));
         logArea.setMargin(new Insets(4, 8, 4, 8));
         JScrollPane logScroll = new JScrollPane(logArea);
-        logScroll.setBorder(BorderFactory.createTitledBorder("Log"));
+        logScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.log")));
         leftPanel.add(logScroll, BorderLayout.CENTER);
 
         // Tree del modelo con soporte Drag
-        rootNode = new DefaultMutableTreeNode("Modelo");
+        rootNode = new DefaultMutableTreeNode(I18n.t("tree.root"));
         treeModel = new DefaultTreeModel(rootNode);
         modelTree = new JTree(treeModel);
         modelTree.setRootVisible(true);
@@ -396,11 +396,11 @@ public class IEDNavigatorApp extends JFrame {
         modelTree.setLargeModel(true);
         JScrollPane treeScroll = new JScrollPane(modelTree);
         treeScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        treeScroll.setBorder(BorderFactory.createTitledBorder("Modelo de Datos"));
+        treeScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.datamodel")));
 
         // Panel derecho con tabs: Activity Monitor, Reports, GOOSE, Setting Groups, Dataset, Data Model
         JTabbedPane rightTabbedPane = new JTabbedPane();
-        rightTabbedPane.addTab("Monitor", createMonitorPanel());
+        rightTabbedPane.addTab(I18n.t("tab.monitor"), createMonitorPanel());
         Supplier<ServerModel> panelModelSupplier = () -> {
             if (currentMode == AppMode.SERVER && server != null) return server.getServerModel();
             if (currentMode == AppMode.CLIENT && client != null && isConnected) return client.getServerModel();
@@ -410,24 +410,24 @@ public class IEDNavigatorApp extends JFrame {
             (currentMode == AppMode.CLIENT && isConnected && client != null) ? client : null;
         reportsPanel = new ReportsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
                 backgroundExecutor, this::updateSingleNodeInTree, this::navigateToFcdaInModel);
-        rightTabbedPane.addTab("Reports", reportsPanel.createPanel());
+        rightTabbedPane.addTab(I18n.t("tab.reports"), reportsPanel.createPanel());
         goosePanel = new GoosePanel(createGooseContext());
-        rightTabbedPane.addTab("GOOSE", goosePanel.createPanel());
+        rightTabbedPane.addTab(I18n.t("tab.goose"), goosePanel.createPanel());
         // rightTabbedPane.addTab("SV (SMV)", createSampledValuesPanel()); // SIN SMV
-        rightTabbedPane.addTab("Setting Groups",
+        rightTabbedPane.addTab(I18n.t("tab.sg"),
             new SettingGroupsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
                 backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab("Ajustes (SP)",
+        rightTabbedPane.addTab(I18n.t("tab.sp"),
             new ProtectionSettingsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
                 backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab("Dataset",
+        rightTabbedPane.addTab(I18n.t("tab.dataset"),
             new DatasetPanel(this, this::log, panelModelSupplier, panelClientSupplier,
                 backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab("Data Model",
+        rightTabbedPane.addTab(I18n.t("tab.datamodel"),
             new DataModelPanel(this, this::log, panelModelSupplier, iconCache).createPanel());
-        rightTabbedPane.addTab("Comparar SCL",
+        rightTabbedPane.addTab(I18n.t("tab.sclcmp"),
             new SclComparePanel(this, this::log).createPanel());
-        rightTabbedPane.addTab("Mapa GOOSE",
+        rightTabbedPane.addTab(I18n.t("tab.goosemap"),
             new GooseMapPanel(this, this::log).createPanel());
         rightTabbedPane.setTabPlacement(JTabbedPane.TOP);
 
@@ -466,8 +466,8 @@ public class IEDNavigatorApp extends JFrame {
         JMenuBar menuBar = new JMenuBar();
 
         // Menu Archivo
-        JMenu menuFile = new JMenu("Archivo");
-        JMenuItem miLoadScl = new JMenuItem("Cargar SCL/CID...");
+        JMenu menuFile = new JMenu(I18n.t("menu.file"));
+        JMenuItem miLoadScl = new JMenuItem(I18n.t("menu.file.loadscl"));
         miLoadScl.addActionListener(e -> {
             if (currentMode == AppMode.SERVER) {
                 selectSclFile();
@@ -478,34 +478,53 @@ public class IEDNavigatorApp extends JFrame {
         });
         menuFile.add(miLoadScl);
         menuFile.addSeparator();
-        JMenuItem miExit = new JMenuItem("Salir");
+        JMenuItem miExit = new JMenuItem(I18n.t("menu.file.exit"));
         miExit.addActionListener(e -> System.exit(0));
         menuFile.add(miExit);
         menuBar.add(menuFile);
 
         // Menu Herramientas
-        JMenu menuTools = new JMenu("Herramientas");
-        JMenuItem miGetCid = new JMenuItem("Obtener CID del IED...");
+        JMenu menuTools = new JMenu(I18n.t("menu.tools"));
+        JMenuItem miGetCid = new JMenuItem(I18n.t("menu.tools.getcid"));
         miGetCid.addActionListener(e -> obtenerCidDelIed());
         menuTools.add(miGetCid);
-        JMenuItem miSaveCid = new JMenuItem("Guardar CID...");
+        JMenuItem miSaveCid = new JMenuItem(I18n.t("menu.tools.savecid"));
         miSaveCid.addActionListener(e -> guardarCid());
         menuTools.add(miSaveCid);
         menuTools.addSeparator();
-        JMenuItem miHtmlReport = new JMenuItem("Generar reporte HTML del modelo...");
+        JMenuItem miHtmlReport = new JMenuItem(I18n.t("menu.tools.htmlreport"));
         miHtmlReport.addActionListener(e -> generateModelReport());
         menuTools.add(miHtmlReport);
         menuBar.add(menuTools);
 
         // Menu Ayuda
-        JMenu menuHelp = new JMenu("Ayuda");
-        JMenuItem miAbout = new JMenuItem("Acerca de...");
+        JMenu menuHelp = new JMenu(I18n.t("menu.help"));
+        JMenuItem miAbout = new JMenuItem(I18n.t("menu.help.about"));
         miAbout.addActionListener(e -> showAboutDialog());
         menuHelp.add(miAbout);
-        JMenuItem miLegend = new JMenuItem("Leyenda de íconos y colores...");
+        JMenuItem miLegend = new JMenuItem(I18n.t("menu.help.legend"));
         miLegend.addActionListener(e -> showLegendDialog());
         menuHelp.add(miLegend);
         menuBar.add(menuHelp);
+
+        // Menú de idioma (Idioma / Language / 语言). Los nombres van en su propio idioma.
+        JMenu menuLang = new JMenu(I18n.t("menu.lang"));
+        ButtonGroup langGroup = new ButtonGroup();
+        String[][] langs = { {"es", "Español"}, {"zh", "中文 (简体)"}, {"en", "English"}, {"pt", "Português"} };
+        String currentTag = I18n.currentTag();
+        for (String[] lg : langs) {
+            final String tag = lg[0];
+            JRadioButtonMenuItem mi = new JRadioButtonMenuItem(lg[1]);
+            if (currentTag.startsWith(tag)) mi.setSelected(true);
+            mi.addActionListener(e -> {
+                I18n.setLocaleAndSave(tag);
+                JOptionPane.showMessageDialog(this, I18n.t("lang.restart"),
+                        I18n.t("menu.lang"), JOptionPane.INFORMATION_MESSAGE);
+            });
+            langGroup.add(mi);
+            menuLang.add(mi);
+        }
+        menuBar.add(menuLang);
 
         return menuBar;
     }
@@ -522,14 +541,14 @@ public class IEDNavigatorApp extends JFrame {
         }
         if (model == null) {
             JOptionPane.showMessageDialog(this,
-                "No hay modelo cargado.\nConéctate a un IED (modo cliente) o carga un SCL (modo servidor).",
-                "Reporte HTML", JOptionPane.WARNING_MESSAGE);
+                I18n.t("report.nomodel"),
+                I18n.t("report.title"), JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         int opt = JOptionPane.showConfirmDialog(this,
-            "¿Incluir los valores actuales de todos los atributos?\n(El reporte puede ser extenso en modelos grandes)",
-            "Reporte HTML", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            I18n.t("report.includevalues"),
+            I18n.t("report.title"), JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (opt == JOptionPane.CANCEL_OPTION || opt == JOptionPane.CLOSED_OPTION) return;
         boolean includeValues = (opt == JOptionPane.YES_OPTION);
 
@@ -548,20 +567,20 @@ public class IEDNavigatorApp extends JFrame {
         backgroundExecutor.submit(() -> {
             try {
                 ModelReportGenerator.generate(fOut, fModel, fSource, loadedIedNameplate, includeValues);
-                log("[Reporte] Generado: " + fOut.getAbsolutePath());
+                log(I18n.t("log.app.reportgen", fOut.getAbsolutePath()));
                 SwingUtilities.invokeLater(() -> {
                     try {
                         java.awt.Desktop.getDesktop().browse(fOut.toURI());
                     } catch (Exception ex) {
                         JOptionPane.showMessageDialog(this,
-                            "Reporte guardado en:\n" + fOut.getAbsolutePath(), "Reporte HTML",
+                            I18n.t("report.saved") + "\n" + fOut.getAbsolutePath(), I18n.t("report.title"),
                             JOptionPane.INFORMATION_MESSAGE);
                     }
                 });
             } catch (Exception ex) {
-                log("[Reporte] ERROR: " + ex.getMessage());
+                log(I18n.t("log.app.reporterror", ex.getMessage()));
                 SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this,
-                    "Error generando reporte:\n" + ex.getMessage(), "Reporte HTML",
+                    I18n.t("report.error") + "\n" + ex.getMessage(), I18n.t("report.title"),
                     JOptionPane.ERROR_MESSAGE));
             }
         });
@@ -569,8 +588,8 @@ public class IEDNavigatorApp extends JFrame {
 
     private void showAboutDialog() {
         String nativeStatus = nativeLibAvailable ?
-            "<span style='color: green;'>✓ libiec61850 disponible</span>" :
-            "<span style='color: red;'>✗ libiec61850 no encontrada</span>";
+            "<span style='color: green;'>✓ " + I18n.t("about.native.ok") + "</span>" :
+            "<span style='color: red;'>✗ " + I18n.t("about.native.missing") + "</span>";
 
         String message =
             "<html><body style='width: 380px; padding: 10px;'>" +
@@ -578,36 +597,31 @@ public class IEDNavigatorApp extends JFrame {
             "<p style='color: #666; font-size: 11px;'>Version 2.0 - Hybrid Edition</p>" +
             "<hr style='margin: 10px 0;'>" +
             "<p><b>IEC 61850 Explorer Tool</b></p>" +
-            "<p>Herramienta educativa para explorar, monitorear y configurar " +
-            "dispositivos IED compatibles con el estandar IEC 61850.</p>" +
+            "<p>" + I18n.t("about.desc") + "</p>" +
             "<br>" +
-            "<p><b>Caracteristicas:</b></p>" +
+            "<p><b>" + I18n.t("about.features") + "</b></p>" +
             "<ul>" +
             "<li>Cliente/Servidor MMS (iec61850bean)</li>" +
-            "<li>Monitoreo de datos en tiempo real</li>" +
+            "<li>" + I18n.t("about.feat.monitor") + "</li>" +
             "<li>Reports (URCB/BRCB)</li>" +
             "<li>GOOSE Subscriber/Publisher</li>" +
-            "<li>Carga y descarga de archivos SCL/CID</li>" +
+            "<li>" + I18n.t("about.feat.scl") + "</li>" +
             "</ul>" +
             "<p style='font-size: 10px;'>" + nativeStatus + "</p>" +
             "<hr style='margin: 10px 0;'>" +
-            "<p><b>Desarrollado por:</b></p>" +
+            "<p><b>" + I18n.t("about.devby") + "</b></p>" +
             "<p style='color: #2E86AB; font-size: 13px;'><b>Emilio Medina</b></p>" +
-            "<p style='font-size: 11px;'>T\u00e9cnico Superior en Electr\u00f3nica</p>" +
+            "<p style='font-size: 11px;'>" + I18n.t("about.role") + "</p>" +
             "<p style='font-size: 11px;'>\uD83C\uDDF5\uD83C\uDDFE Paraguay</p>" +
             "<br>" +
             "<p style='color: #B71C1C; font-size: 10px;'>" +
-            "<b>USO EXCLUSIVAMENTE EDUCATIVO:</b> esta herramienta se distribuye para " +
-            "aprendizaje y exploracion del estandar IEC 61850. NO es apta para pruebas " +
-            "FAT/SAT, comisionamiento ni operacion de instalaciones en servicio. El " +
-            "desarrollador no garantiza el desempe\u00F1o, exactitud ni idoneidad para " +
-            "ning\u00FAn proposito; el uso es bajo exclusiva responsabilidad del usuario.</p>" +
+            "<b>" + I18n.t("about.edu.title") + "</b> " + I18n.t("about.edu.body") + "</p>" +
             "<p style='color: #888; font-size: 10px;'>" +
-            "Bibliotecas: iec61850bean (MMS), libiec61850 (GOOSE/SV), pcap4j, JNA<br>" +
-            "&copy; 2024 - Todos los derechos reservados</p>" +
+            I18n.t("about.libs") + " iec61850bean (MMS), libiec61850 (GOOSE/SV), pcap4j, JNA<br>" +
+            "&copy; 2024 - " + I18n.t("about.rights") + "</p>" +
             "</body></html>";
 
-        JOptionPane.showMessageDialog(this, message, "Acerca de IED Navigator",
+        JOptionPane.showMessageDialog(this, message, I18n.t("about.title"),
             JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -618,7 +632,7 @@ public class IEDNavigatorApp extends JFrame {
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setBorder(null);
 
-        JDialog dlg = new JDialog(this, "Leyenda de íconos y colores — IED Navigator", true);
+        JDialog dlg = new JDialog(this, I18n.t("legend.title"), true);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dlg.add(scroll);
         dlg.pack();
@@ -631,160 +645,137 @@ public class IEDNavigatorApp extends JFrame {
         main.setLayout(new BoxLayout(main, BoxLayout.Y_AXIS));
         main.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
 
-        main.add(legendTitle("Tipos de nodo en el árbol"));
+        main.add(legendTitle(I18n.t("legend.nodetypes.title")));
         main.add(legendRow(IconFactory.createNodeIcon("LD", new Color(100,100,200)),
-                "<b>LD</b> — Logical Device (Dispositivo Lógico)"));
+                I18n.t("legend.nodetypes.ld")));
         main.add(legendRow(IconFactory.createNodeIcon("DO", new Color(150,150,200)),
-                "<b>DO</b> — Data Object (Objeto de Datos)"));
+                I18n.t("legend.nodetypes.do")));
         main.add(legendRow(IconFactory.createCircleIcon(new Color(100,180,100), 14),
-                "<b>DA / BDA</b> — Data Attribute (Atributo de Dato)"));
+                I18n.t("legend.nodetypes.da")));
         main.add(Box.createVerticalStrut(8));
 
-        main.add(legendTitle("Nodos Lógicos (LN) por grupo IEC 61850-7-4"));
+        main.add(legendTitle(I18n.t("legend.lngroups.title")));
         main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(200, 50, 50)),
-                "<b>Grupo X</b> — Equipos de corte: XCBR (disyuntor)"));
+                I18n.t("legend.lngroups.x")));
         main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(200,100, 50)),
-                "<b>Grupo X / C</b> — Seccionadores y control: XSWI, CSWI, CILO"));
+                I18n.t("legend.lngroups.xc")));
         main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(150,100,200)),
-                "<b>Grupo C</b> — Control: CPOW, CPDM y otros"));
+                I18n.t("legend.lngroups.c")));
         main.add(legendRow(IconFactory.createMeterIcon(new Color(0,100,200)),
-                "<b>Grupo M</b> — Medición: MMXU, MSQI, MHAI (medidor azul)"));
+                I18n.t("legend.lngroups.m1")));
         main.add(legendRow(IconFactory.createMeterIcon(new Color(0,150,100)),
-                "<b>Grupo M</b> — Energía y demanda: MMTR, MSTA (medidor verde)"));
+                I18n.t("legend.lngroups.m2")));
         main.add(legendRow(IconFactory.createShieldIcon(new Color(180,30,30)),
-                "<b>Grupo P</b> — Protección: PDIS, PDIF, PTRC, PDIR…"));
+                I18n.t("legend.lngroups.p")));
         main.add(legendRow(IconFactory.createShieldIcon(new Color(130,30,170)),
-                "<b>Grupo R</b> — Funciones relacionadas con protección: RREC, RPSB, RSYN…"));
+                I18n.t("legend.lngroups.r")));
         main.add(legendRow(IconFactory.createGearIcon(new Color(0,150,170)),
-                "<b>Grupo A</b> — Control automático: ATCC, ARCO, ARIS…"));
+                I18n.t("legend.lngroups.a")));
         main.add(legendRow(IconFactory.createDiamondIcon(new Color(70,70,70)),
-                "<b>Grupo L</b> — Nodos de sistema: LLN0 (nodo cero), LPHD (salud del IED)"));
+                I18n.t("legend.lngroups.l")));
         main.add(legendRow(IconFactory.createDiamondIcon(new Color(90,90,90)),
-                "<b>Grupo G</b> — Genérico: GAPC, GGIO"));
+                I18n.t("legend.lngroups.g")));
         main.add(legendRow(IconFactory.createMeterIcon(new Color(20,140,120)),
-                "<b>Grupo S</b> — Supervisión y sensores: STMP, SARC, SIMG…"));
+                I18n.t("legend.lngroups.s")));
         main.add(legendRow(IconFactory.createMeterIcon(new Color(140,80,0)),
-                "<b>Grupo T</b> — Transformadores de instrumento: TCTR, TVTR"));
+                I18n.t("legend.lngroups.t")));
         main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(50,90,200)),
-                "<b>Grupo I</b> — Interfaz: IHMI, ITCI, ITMI…"));
+                I18n.t("legend.lngroups.i")));
         main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(80,80,150)),
-                "<b>Grupo Z</b> — Otros equipos de potencia: ZAXN, ZBAT…"));
+                I18n.t("legend.lngroups.z")));
         main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(100,150,100)),
-                "<b>Sin clasificar</b> — LN con nombre personalizado de fabricante no reconocido"));
+                I18n.t("legend.lngroups.unclassified")));
         main.add(Box.createVerticalStrut(8));
 
-        main.add(legendTitle("Estados de disyuntor (DA stVal)"));
+        main.add(legendTitle(I18n.t("legend.breaker.title")));
         main.add(legendRow(IconFactory.createBreakerIcon("on"),
-                "<b>Cerrado / ON</b> — Contacto cerrado (valor 2)"));
+                I18n.t("legend.breaker.on")));
         main.add(legendRow(IconFactory.createBreakerIcon("off"),
-                "<b>Abierto / OFF</b> — Contacto abierto (valor 1)"));
+                I18n.t("legend.breaker.off")));
         main.add(legendRow(IconFactory.createBreakerIcon("intermediate"),
-                "<b>Intermedio / Transitorio</b> — Estado indefinido (valor 0 o 3)"));
+                I18n.t("legend.breaker.intermediate")));
         main.add(Box.createVerticalStrut(8));
 
-        main.add(legendTitle("Colores de texto en el árbol"));
+        main.add(legendTitle(I18n.t("legend.colors.title")));
         main.add(legendColorRow(new Color(0,150,0),
-                "Verde — Valor activo: ON, OK, CLOSED, TRUE"));
+                I18n.t("legend.colors.green")));
         main.add(legendColorRow(new Color(200,0,0),
-                "Rojo — Valor inactivo: OFF, ALARM, OPEN, FALSE"));
+                I18n.t("legend.colors.red")));
         main.add(legendColorRow(new Color(255,140,0),
-                "Naranja — Advertencia: INTERMEDIATE, BAD, WARNING, TEST"));
+                I18n.t("legend.colors.orange")));
         main.add(legendColorRow(new Color(120,80,180),
-                "Violeta — Nodo bloqueado (FC=BL, blkEna=true)"));
+                I18n.t("legend.colors.purple")));
         main.add(legendColorRow(new Color(0,100,200),
-                "Azul — Nodo en Watchlist (monitoreo activo)"));
+                I18n.t("legend.colors.blue")));
         main.add(Box.createVerticalStrut(8));
 
-        main.add(legendTitle("Functional Constraints (FC) — IEC 61850-7-2"));
+        main.add(legendTitle(I18n.t("legend.fc.title")));
         main.add(legendFcRow("ST", new Color(21,101,192),
-                "<b>Status</b> — Estado del proceso: stVal, q, t. Solo lectura desde cliente."));
+                I18n.t("legend.fc.st")));
         main.add(legendFcRow("MX", new Color(0,105,92),
-                "<b>Measurands</b> — Mediciones analógicas en tiempo real: mag.f, q, t."));
+                I18n.t("legend.fc.mx")));
         main.add(legendFcRow("CO", new Color(183,28,28),
-                "<b>Control</b> — Comandos de maniobra: Oper, SBOw, Cancel."));
+                I18n.t("legend.fc.co")));
         main.add(legendFcRow("CF", new Color(74,20,140),
-                "<b>Configuration</b> — Parámetros de configuración del IED."));
+                I18n.t("legend.fc.cf")));
         main.add(legendFcRow("DC", new Color(55,71,79),
-                "<b>Description</b> — Placa del equipo: VendorName, Model, SerialNum."));
+                I18n.t("legend.fc.dc")));
         main.add(legendFcRow("SP", new Color(230,81,0),
-                "<b>Setting</b> — Ajustes operativos del IED (setpoints de protección)."));
+                I18n.t("legend.fc.sp")));
         main.add(legendFcRow("SG", new Color(245,127,23),
-                "<b>Setting Group</b> — Selector del grupo activo de ajustes."));
+                I18n.t("legend.fc.sg")));
         main.add(legendFcRow("SE", new Color(130,119,23),
-                "<b>Setting Group Edit</b> — Edición del grupo inactivo de ajustes."));
+                I18n.t("legend.fc.se")));
         main.add(legendFcRow("BL", new Color(78,52,46),
-                "<b>Blocking</b> — Bloqueo funcional: blkEna inhabilita operación del LN."));
+                I18n.t("legend.fc.bl")));
         main.add(legendFcRow("EX", new Color(84,110,122),
-                "<b>Extended</b> — Atributos propietarios del fabricante."));
+                I18n.t("legend.fc.ex")));
         main.add(legendFcRow("OR", new Color(27,94,32),
-                "<b>Operate Received</b> — Confirmación de recepción de operación."));
+                I18n.t("legend.fc.or")));
         main.add(legendFcRow("RP", new Color(0,96,100),
-                "<b>Unbuffered Report</b> — Control de reporte sin buffer (URCB)."));
+                I18n.t("legend.fc.rp")));
         main.add(legendFcRow("BR", new Color(1,87,155),
-                "<b>Buffered Report</b> — Control de reporte con buffer, conserva histórico (BRCB)."));
+                I18n.t("legend.fc.br")));
         main.add(legendFcRow("GO", new Color(136,14,79),
-                "<b>GOOSE</b> — Atributos de control para publicación GOOSE (GoCB)."));
+                I18n.t("legend.fc.go")));
         main.add(Box.createVerticalStrut(8));
 
-        main.add(legendTitle("Clases de Datos Comunes (CDC) — IEC 61850-7-3"));
+        main.add(legendTitle(I18n.t("legend.cdc.title")));
 
-        main.add(legendCdcHeader("Estado binario"));
-        main.add(legendCdcRow("SPS",
-                "Single Point Status — stVal <i>BOOL</i>. Uso: señales ON/OFF (alarmas, contactos auxiliares)."));
-        main.add(legendCdcRow("DPS",
-                "Double Point Status — stVal {off | intermediate | on | bad}. Uso: disyuntores y seccionadores."));
-        main.add(legendCdcRow("ACT",
-                "Protection Activation — general <i>BOOL</i> + phsA/B/C. Uso: PTRC, PDIF, señales de disparo."));
-        main.add(legendCdcRow("ACD",
-                "Directional Protection Activation — general + dirGeneral {forward | backward}. Uso: PDIR, PDIS."));
+        main.add(legendCdcHeader(I18n.t("legend.cdc.hdr.binary")));
+        main.add(legendCdcRow("SPS", I18n.t("legend.cdc.sps")));
+        main.add(legendCdcRow("DPS", I18n.t("legend.cdc.dps")));
+        main.add(legendCdcRow("ACT", I18n.t("legend.cdc.act")));
+        main.add(legendCdcRow("ACD", I18n.t("legend.cdc.acd")));
 
-        main.add(legendCdcHeader("Estado entero / enumerado"));
-        main.add(legendCdcRow("INS",
-                "Integer Status — stVal <i>INT32</i>. Uso: posición de tap, contadores, modos de operación."));
-        main.add(legendCdcRow("ENS",
-                "Enumerated Status — stVal <i>enum</i>. Uso: estados nombrados de equipos."));
-        main.add(legendCdcRow("BCR",
-                "Binary Counter Reading — actVal <i>INT64</i>. Uso: MMTR (energía activa kWh, reactiva kVArh)."));
+        main.add(legendCdcHeader(I18n.t("legend.cdc.hdr.intenum")));
+        main.add(legendCdcRow("INS", I18n.t("legend.cdc.ins")));
+        main.add(legendCdcRow("ENS", I18n.t("legend.cdc.ens")));
+        main.add(legendCdcRow("BCR", I18n.t("legend.cdc.bcr")));
 
-        main.add(legendCdcHeader("Medición analógica"));
-        main.add(legendCdcRow("MV",
-                "Measured Value — mag.f <i>FLOAT32</i> escalar. Uso: frecuencia, temperatura, potencia total."));
-        main.add(legendCdcRow("CMV",
-                "Complex Measured Value — cVal.mag.f + cVal.ang.f. Uso: fasorial monofásico (puntero complejo)."));
-        main.add(legendCdcRow("WYE",
-                "Three Phase Y — phsA/phsB/phsC de tipo CMV. Uso: MMXU tensiones (Va/Vb/Vc) y corrientes."));
-        main.add(legendCdcRow("DEL",
-                "Three Phase \u0394 — phsAB/phsBC/phsCA de tipo CMV. Uso: MMXU tensiones de línea."));
-        main.add(legendCdcRow("SEQ",
-                "Sequence Components — c1/c2/c0 CMV. Uso: MSQI (componentes simétricas: directa, inversa, homopolar)."));
-        main.add(legendCdcRow("HMV",
-                "Harmonic Measured Value — array de armónicos. Uso: MHAI (THD, H1\u2013H50 de tensión y corriente)."));
+        main.add(legendCdcHeader(I18n.t("legend.cdc.hdr.analog")));
+        main.add(legendCdcRow("MV", I18n.t("legend.cdc.mv")));
+        main.add(legendCdcRow("CMV", I18n.t("legend.cdc.cmv")));
+        main.add(legendCdcRow("WYE", I18n.t("legend.cdc.wye")));
+        main.add(legendCdcRow("DEL", I18n.t("legend.cdc.del")));
+        main.add(legendCdcRow("SEQ", I18n.t("legend.cdc.seq")));
+        main.add(legendCdcRow("HMV", I18n.t("legend.cdc.hmv")));
 
-        main.add(legendCdcHeader("Control (comandables)"));
-        main.add(legendCdcRow("SPC",
-                "Single Point Controllable — stVal BOOL + Oper. Uso: control simple (LED, bloqueo, reset)."));
-        main.add(legendCdcRow("DPC",
-                "Double Point Controllable — stVal DPS + Oper. Uso: disyuntores (XCBR) y seccionadores (XSWI/CSWI)."));
-        main.add(legendCdcRow("APC",
-                "Analogue Point Controllable — setMag FLOAT32 + Oper. Uso: setpoint analógico (tensión de referencia)."));
-        main.add(legendCdcRow("BSC",
-                "Binary Controlled Step — valWTr + Oper RAISE/LOWER. Uso: regulador de tap (ATCC, ITCP)."));
+        main.add(legendCdcHeader(I18n.t("legend.cdc.hdr.control")));
+        main.add(legendCdcRow("SPC", I18n.t("legend.cdc.spc")));
+        main.add(legendCdcRow("DPC", I18n.t("legend.cdc.dpc")));
+        main.add(legendCdcRow("APC", I18n.t("legend.cdc.apc")));
+        main.add(legendCdcRow("BSC", I18n.t("legend.cdc.bsc")));
 
-        main.add(legendCdcHeader("Ajustes (FC = SP / SG / SE)"));
-        main.add(legendCdcRow("ING",
-                "Integer Setting — setVal <i>INT32</i>. Uso: retardos en ms, contadores de intentos (RREC)."));
-        main.add(legendCdcRow("SPG",
-                "Single Point Setting — setVal <i>BOOL</i>. Uso: habilitación de funciones (PDIS, RREC)."));
-        main.add(legendCdcRow("ASG",
-                "Analogue Setting — setVal <i>FLOAT32</i>. Uso: umbrales de protección (distancia, diferencial)."));
-        main.add(legendCdcRow("ENG",
-                "Enumerated Setting — setVal <i>enum</i>. Uso: modo de operación, característica de protección."));
+        main.add(legendCdcHeader(I18n.t("legend.cdc.hdr.settings")));
+        main.add(legendCdcRow("ING", I18n.t("legend.cdc.ing")));
+        main.add(legendCdcRow("SPG", I18n.t("legend.cdc.spg")));
+        main.add(legendCdcRow("ASG", I18n.t("legend.cdc.asg")));
+        main.add(legendCdcRow("ENG", I18n.t("legend.cdc.eng")));
 
-        main.add(legendCdcHeader("Placa del equipo (FC = DC)"));
-        main.add(legendCdcRow("DPL",
-                "Device Name Plate — vendor, model, hwRev, swRev, serNum, location. Uso: identificación del IED."));
-        main.add(legendCdcRow("LPL",
-                "LN Name Plate — vendor, swRev, d (descripción). Uso: identificación de cada Nodo Lógico."));
+        main.add(legendCdcHeader(I18n.t("legend.cdc.hdr.nameplate")));
+        main.add(legendCdcRow("DPL", I18n.t("legend.cdc.dpl")));
+        main.add(legendCdcRow("LPL", I18n.t("legend.cdc.lpl")));
         main.add(Box.createVerticalStrut(8));
 
         return main;
@@ -930,12 +921,12 @@ public class IEDNavigatorApp extends JFrame {
 
         if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File file = fc.getSelectedFile();
-            log("Cargando SCL para GoCBs: " + file.getName());
+            log(I18n.t("log.app.loadingsclgocb", file.getName()));
 
             // Delegate to goosePanel (handles IED detection, parsing, and table refresh)
             if (goosePanel != null) {
                 goosePanel.loadSclFile(file);
-                log("GoCBs cargados: " + sclGoCBs.size());
+                log(I18n.t("log.app.gocbsloaded", sclGoCBs.size()));
             }
         }
     }
@@ -965,16 +956,16 @@ public class IEDNavigatorApp extends JFrame {
         toolbar.addSeparator(new Dimension(20, 0));
 
         // Botones de toolbar
-        JButton btnNewConnection = new JButton("Nueva Conexion");
-        btnNewConnection.setToolTipText("Conectar a un IED");
+        JButton btnNewConnection = new JButton(I18n.t("toolbar.newconn"));
+        btnNewConnection.setToolTipText(I18n.t("toolbar.newconn.tip"));
         btnNewConnection.addActionListener(e -> {
             rbClient.setSelected(true);
             switchToClientMode();
         });
         toolbar.add(btnNewConnection);
 
-        JButton btnSimulate = new JButton("Simular IED");
-        btnSimulate.setToolTipText("Cargar SCL y simular un IED");
+        JButton btnSimulate = new JButton(I18n.t("toolbar.simulate"));
+        btnSimulate.setToolTipText(I18n.t("toolbar.simulate.tip"));
         btnSimulate.addActionListener(e -> {
             rbServer.setSelected(true);
             switchToServerMode();
@@ -983,17 +974,11 @@ public class IEDNavigatorApp extends JFrame {
 
         toolbar.addSeparator();
 
-        JButton btnClearLog = new JButton("Limpiar Log");
+        JButton btnClearLog = new JButton(I18n.t("toolbar.clearlog"));
         btnClearLog.addActionListener(e -> logArea.setText(""));
         toolbar.add(btnClearLog);
 
         toolbar.add(Box.createHorizontalGlue());
-
-        // Info version
-        JLabel lblVersion = new JLabel("v1.0 | IEC 61850  ");
-        lblVersion.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        lblVersion.setForeground(new Color(0x90A4AE));
-        toolbar.add(lblVersion);
 
         return toolbar;
     }
@@ -1006,7 +991,7 @@ public class IEDNavigatorApp extends JFrame {
         ));
         statusBar.setBackground(new Color(0xF7F9FB));
 
-        JLabel lblReady = new JLabel("Listo");
+        JLabel lblReady = new JLabel(I18n.t("status.ready"));
         statusBar.add(lblReady, BorderLayout.WEST);
 
         // Placa de identificación del IED (se llena tras conectar con FC=DC)
@@ -1088,14 +1073,14 @@ public class IEDNavigatorApp extends JFrame {
     private JPanel createServerPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createTitledBorder("Simulador IED (Servidor IEC 61850)"));
+        panel.setBorder(BorderFactory.createTitledBorder(I18n.t("border.server")));
 
         // Fila 1: Seleccionar archivo SCL
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        btnSelectFile = new JButton("Cargar SCL/ICD/CID...");
-        btnSelectFile.setToolTipText("Cargar archivo SCL, SCD, ICD o CID para simular IED");
+        btnSelectFile = new JButton(I18n.t("btn.loadscl"));
+        btnSelectFile.setToolTipText(I18n.t("btn.loadscl.tip"));
         btnSelectFile.setMargin(new Insets(2, 6, 2, 6));
-        lblFileName = new JLabel("Ningun archivo");
+        lblFileName = new JLabel(I18n.t("lbl.nofile"));
         lblFileName.setForeground(Color.GRAY);
         row1.add(btnSelectFile);
         row1.add(lblFileName);
@@ -1103,12 +1088,12 @@ public class IEDNavigatorApp extends JFrame {
 
         // Fila 2: Puerto
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        row2.add(new JLabel("Puerto:"));
+        row2.add(new JLabel(I18n.t("lbl.port")));
         tfServerPort = new JTextField("102", 6);
         row2.add(tfServerPort);
 
         // Info
-        JLabel lblInfo = new JLabel("(102=MMS, 49151=pruebas)");
+        JLabel lblInfo = new JLabel(I18n.t("lbl.porthint"));
         lblInfo.setForeground(Color.GRAY);
         lblInfo.setFont(lblInfo.getFont().deriveFont(Font.ITALIC, 10f));
         row2.add(lblInfo);
@@ -1116,23 +1101,23 @@ public class IEDNavigatorApp extends JFrame {
 
         // Fila 3: Boton Start/Stop
         JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        btnStartStop = new JButton("Iniciar Simulacion");
+        btnStartStop = new JButton(I18n.t("btn.startsim"));
         btnStartStop.setPreferredSize(new Dimension(200, 30));
         btnStartStop.setEnabled(false);
-        btnStartStop.setToolTipText("Iniciar servidor IEC 61850 para simular el IED");
+        btnStartStop.setToolTipText(I18n.t("btn.startsim.tip"));
         row3.add(btnStartStop);
         panel.add(row3);
 
         // Fila 4: Verificar Puerto + Liberar Puerto
         JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        btnCheckPort = new JButton("Verificar Puerto");
-        btnCheckPort.setToolTipText("<html>Verifica si el puerto indicado esta libre,<br>en uso o requiere permisos de administrador</html>");
+        btnCheckPort = new JButton(I18n.t("port.check"));
+        btnCheckPort.setToolTipText(I18n.t("port.check.tip"));
         btnCheckPort.setForeground(new Color(0, 80, 160));
         btnCheckPort.setMargin(new Insets(2, 6, 2, 6));
         row4.add(btnCheckPort);
 
-        btnReleasePort = new JButton("Liberar Puerto");
-        btnReleasePort.setToolTipText("<html>Termina el proceso que esta usando el puerto indicado</html>");
+        btnReleasePort = new JButton(I18n.t("port.release"));
+        btnReleasePort.setToolTipText(I18n.t("port.release.tip"));
         btnReleasePort.setForeground(new Color(160, 30, 0));
         btnReleasePort.setMargin(new Insets(2, 6, 2, 6));
         row4.add(btnReleasePort);
@@ -1140,7 +1125,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Fila 5: Info de uso
         JPanel row5 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 1));
-        JLabel lblUsage = new JLabel("<html><small>1. Carga SCL/ICD &nbsp; 2. Inicia servidor &nbsp; 3. Conecta cliente</small></html>");
+        JLabel lblUsage = new JLabel(I18n.t("server.usage"));
         lblUsage.setForeground(new Color(100, 100, 150));
         row5.add(lblUsage);
         panel.add(row5);
@@ -1151,21 +1136,21 @@ public class IEDNavigatorApp extends JFrame {
     private JPanel createClientPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createTitledBorder("Cliente IEC 61850"));
+        panel.setBorder(BorderFactory.createTitledBorder(I18n.t("border.client")));
 
         // Fila 1: Host + Puerto
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        row1.add(new JLabel("Host:"));
+        row1.add(new JLabel(I18n.t("lbl.host")));
         tfHost = new JTextField("192.168.1.100", 12);
         row1.add(tfHost);
-        row1.add(new JLabel("Puerto:"));
+        row1.add(new JLabel(I18n.t("lbl.port")));
         tfClientPort = new JTextField("102", 4);
         row1.add(tfClientPort);
         panel.add(row1);
 
         // Fila 2: Timeout de conexión
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        row2.add(new JLabel("Timeout (s):"));
+        row2.add(new JLabel(I18n.t("lbl.timeout")));
         spinnerTimeout = new JSpinner(new SpinnerNumberModel(10, 5, 60, 5));
         ((JSpinner.DefaultEditor) spinnerTimeout.getEditor()).getTextField().setColumns(3);
         row2.add(spinnerTimeout);
@@ -1173,17 +1158,17 @@ public class IEDNavigatorApp extends JFrame {
 
         // Fila 3: Boton Connect
         JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        btnConnect = new JButton("Conectar");
+        btnConnect = new JButton(I18n.t("btn.connect"));
         btnConnect.setPreferredSize(new Dimension(200, 30));
         row3.add(btnConnect);
         panel.add(row3);
 
         // Fila 4: Polling
         JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        cbPolling = new JCheckBox("Polling");
+        cbPolling = new JCheckBox(I18n.t("cb.polling"));
         cbPolling.setEnabled(false);
         row4.add(cbPolling);
-        row4.add(new JLabel("Intervalo (ms):"));
+        row4.add(new JLabel(I18n.t("lbl.interval")));
         spinnerInterval = new JSpinner(new SpinnerNumberModel(2000, 500, 60000, 500));
         spinnerInterval.setEnabled(false);
         row4.add(spinnerInterval);
@@ -1191,21 +1176,21 @@ public class IEDNavigatorApp extends JFrame {
 
         // Fila 5: Watchlist + Obtener/Guardar CID
         JPanel row5 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        lblWatchlistCount = new JLabel("Watchlist: 0 nodos");
+        lblWatchlistCount = new JLabel(I18n.t("watchlist.count", 0));
         lblWatchlistCount.setForeground(new Color(0, 100, 180));
         row5.add(lblWatchlistCount);
-        JButton btnClearWatchlist = new JButton("Limpiar");
+        JButton btnClearWatchlist = new JButton(I18n.t("btn.clear"));
         btnClearWatchlist.setMargin(new Insets(2, 5, 2, 5));
         btnClearWatchlist.addActionListener(e -> clearWatchlist());
         row5.add(btnClearWatchlist);
-        JButton btnGetCid = new JButton("Obtener CID");
+        JButton btnGetCid = new JButton(I18n.t("btn.getcid"));
         btnGetCid.setMargin(new Insets(2, 5, 2, 5));
-        btnGetCid.setToolTipText("Buscar y descargar archivo CID del IED");
+        btnGetCid.setToolTipText(I18n.t("btn.getcid.tip"));
         btnGetCid.addActionListener(e -> obtenerCidDelIed());
         row5.add(btnGetCid);
-        JButton btnSaveCid = new JButton("Guardar CID");
+        JButton btnSaveCid = new JButton(I18n.t("btn.savecid"));
         btnSaveCid.setMargin(new Insets(2, 5, 2, 5));
-        btnSaveCid.setToolTipText("Guardar el CID descargado en disco");
+        btnSaveCid.setToolTipText(I18n.t("btn.savecid.tip"));
         btnSaveCid.addActionListener(e -> guardarCid());
         row5.add(btnSaveCid);
         panel.add(row5);
@@ -1216,17 +1201,17 @@ public class IEDNavigatorApp extends JFrame {
     private void clearWatchlist() { monitorManager.clearWatchlist(); } // F24
 
     private void updateWatchlistLabel() {
-        lblWatchlistCount.setText("Watchlist: " + watchlist.size() + " nodos");
+        lblWatchlistCount.setText(I18n.t("watchlist.count", watchlist.size()));
     }
 
     // ─── SECTION: MONITOR PANEL ──────────────────────────────────────────────────────
     private JPanel createMonitorPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder("Activity Monitor (Drag & Drop)"));
+        panel.setBorder(BorderFactory.createTitledBorder(I18n.t("border.monitor")));
         panel.setMinimumSize(new Dimension(300, 200));
 
         // Tabla con mas columnas como IEDScout
-        String[] columns = {"Nombre", "FC", "Tipo", "Valor", "Estado"};
+        String[] columns = {I18n.t("col.name"), "FC", I18n.t("col.type"), I18n.t("col.value"), I18n.t("col.status")};
         monitorTableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -1264,7 +1249,7 @@ public class IEDNavigatorApp extends JFrame {
         dropHintPanel.setBackground(new Color(245, 250, 255));
         dropHintPanel.setBorder(BorderFactory.createDashedBorder(
             new Color(100, 150, 200), 2, 5, 3, true));
-        JLabel lblDropHint = new JLabel("<html><center>Arrastra nodos desde el arbol<br>para monitorear valores</center></html>");
+        JLabel lblDropHint = new JLabel(I18n.t("monitor.drophint"));
         lblDropHint.setForeground(new Color(100, 150, 200));
         lblDropHint.setHorizontalAlignment(SwingConstants.CENTER);
         dropHintPanel.add(lblDropHint, BorderLayout.CENTER);
@@ -1272,16 +1257,16 @@ public class IEDNavigatorApp extends JFrame {
 
         // Header fila 1: conteo + botones
         JPanel headerRow1 = new JPanel(new BorderLayout());
-        JLabel lblCount = new JLabel(" Items: 0");
+        JLabel lblCount = new JLabel(" " + I18n.t("monitor.items", 0));
         lblCount.setFont(lblCount.getFont().deriveFont(Font.BOLD));
         headerRow1.add(lblCount, BorderLayout.WEST);
 
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 2));
-        JButton btnRemove = new JButton("Quitar");
+        JButton btnRemove = new JButton(I18n.t("btn.remove"));
         btnRemove.setMargin(new Insets(2, 8, 2, 8));
         btnRemove.addActionListener(e -> removeSelectedFromMonitor());
         btnPanel.add(btnRemove);
-        JButton btnClear = new JButton("Limpiar");
+        JButton btnClear = new JButton(I18n.t("btn.clear"));
         btnClear.setMargin(new Insets(2, 8, 2, 8));
         btnClear.addActionListener(e -> clearMonitor());
         btnPanel.add(btnClear);
@@ -1291,14 +1276,14 @@ public class IEDNavigatorApp extends JFrame {
         JPanel headerRow2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
         headerRow2.add(new JLabel("FC:"));
         monitorFcFilter = new JComboBox<>(new String[]{
-            "Todos", "ST", "MX", "CF", "DC", "SP", "SV", "BL", "CO", "SE", "SG", "EX", "RP", "BR", "OR"
+            I18n.t("filter.all"), "ST", "MX", "CF", "DC", "SP", "SV", "BL", "CO", "SE", "SG", "EX", "RP", "BR", "OR"
         });
         monitorFcFilter.setPreferredSize(new Dimension(70, 22));
         monitorFcFilter.addActionListener(e -> applyMonitorFilter());
         headerRow2.add(monitorFcFilter);
-        headerRow2.add(new JLabel("  Nombre:"));
+        headerRow2.add(new JLabel("  " + I18n.t("col.name") + ":"));
         monitorNameFilter = new javax.swing.JTextField(14);
-        monitorNameFilter.setToolTipText("Filtrar por nombre (p.ej. MMXU, stVal)");
+        monitorNameFilter.setToolTipText(I18n.t("monitor.namefilter.tip"));
         monitorNameFilter.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
             public void removeUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
@@ -1307,7 +1292,7 @@ public class IEDNavigatorApp extends JFrame {
         headerRow2.add(monitorNameFilter);
         JButton btnClearFilter = new JButton("✕");
         btnClearFilter.setMargin(new Insets(1, 4, 1, 4));
-        btnClearFilter.setToolTipText("Limpiar filtros");
+        btnClearFilter.setToolTipText(I18n.t("monitor.clearfilter.tip"));
         btnClearFilter.addActionListener(e -> {
             monitorFcFilter.setSelectedIndex(0);
             monitorNameFilter.setText("");
@@ -1372,26 +1357,26 @@ public class IEDNavigatorApp extends JFrame {
     private void checkNativeLibrary() {
         try {
             String libPath = System.getProperty("jna.library.path");
-            log("JNA library path: " + (libPath != null ? libPath : "no configurado"));
+            log(I18n.t("log.app.jnapath", (libPath != null ? libPath : I18n.t("log.app.jnapath.notset"))));
             java.io.File dllFile = new java.io.File("lib/iec61850.dll");
             if (dllFile.exists()) {
-                log("DLL encontrada: " + dllFile.getAbsolutePath() + " (" + dllFile.length() + " bytes)");
+                log(I18n.t("log.app.dllfound", dllFile.getAbsolutePath(), dllFile.length()));
             } else {
-                log("ADVERTENCIA: lib/iec61850.dll no encontrada");
+                log(I18n.t("log.app.dllnotfound"));
             }
             nativeLibAvailable = NativeSVSubscriber.isNativeLibraryAvailable();
             if (nativeLibAvailable) {
-                log("libiec61850 nativa CARGADA - SV y GOOSE nativo habilitados");
+                log(I18n.t("log.app.nativeloaded"));
             } else {
-                log("libiec61850 NO pudo cargar - usando pcap4j para GOOSE");
-                log("Nota: SV (Sampled Values) requiere libiec61850");
+                log(I18n.t("log.app.nativefailed"));
+                log(I18n.t("log.app.svnote"));
             }
         } catch (UnsatisfiedLinkError e) {
             nativeLibAvailable = false;
-            log("Error cargando libiec61850: " + e.getMessage());
+            log(I18n.t("log.app.nativeloaderror", e.getMessage()));
         } catch (Exception e) {
             nativeLibAvailable = false;
-            log("Error verificando libiec61850: " + e.getMessage());
+            log(I18n.t("log.app.nativecheckerror", e.getMessage()));
         }
     }
 
@@ -1479,14 +1464,14 @@ public class IEDNavigatorApp extends JFrame {
 
             @Override
             public void onError(String reference, String error) {
-                log("ERROR: " + reference + " - " + error);
+                log(I18n.t("log.app.readerror", reference, error));
             }
 
             @Override
             public void onConnectionClosed(String reason) {
                 SwingUtilities.invokeLater(() -> {
                     handleDisconnect();
-                    log("Conexion cerrada: " + reason);
+                    log(I18n.t("log.app.connclosed", reason));
                 });
             }
         });
@@ -1499,21 +1484,21 @@ public class IEDNavigatorApp extends JFrame {
         // === Menu para modo CLIENTE ===
         treePopupMenu = new JPopupMenu();
 
-        JMenuItem miAddToWatchlist = new JMenuItem("Agregar a Watchlist");
+        JMenuItem miAddToWatchlist = new JMenuItem(I18n.t("ctx.addwatchlist"));
         miAddToWatchlist.addActionListener(e -> addSelectedToWatchlist());
         treePopupMenu.add(miAddToWatchlist);
 
-        JMenuItem miRemoveFromWatchlist = new JMenuItem("Quitar de Watchlist");
+        JMenuItem miRemoveFromWatchlist = new JMenuItem(I18n.t("ctx.removewatchlist"));
         miRemoveFromWatchlist.addActionListener(e -> removeSelectedFromWatchlist());
         treePopupMenu.add(miRemoveFromWatchlist);
 
         treePopupMenu.addSeparator();
 
-        JMenuItem miReadValue = new JMenuItem("Leer Valor");
+        JMenuItem miReadValue = new JMenuItem(I18n.t("ctx.readvalue"));
         miReadValue.addActionListener(e -> readSelectedNode());
         treePopupMenu.add(miReadValue);
 
-        JMenuItem miAddToMonitor = new JMenuItem("Agregar a Monitor");
+        JMenuItem miAddToMonitor = new JMenuItem(I18n.t("ctx.addmonitor"));
         miAddToMonitor.addActionListener(e -> {
             TreePath path = modelTree.getSelectionPath();
             if (path != null) {
@@ -1525,7 +1510,7 @@ public class IEDNavigatorApp extends JFrame {
         treePopupMenu.addSeparator();
 
         // FC=CO: Operar nodo de control (SBO o direct según ctlModel del IED)
-        JMenuItem miOperate = new JMenuItem("Operar... (FC=CO)");
+        JMenuItem miOperate = new JMenuItem(I18n.t("ctx.operate"));
         miOperate.setFont(miOperate.getFont().deriveFont(Font.BOLD));
         miOperate.setForeground(new Color(183, 28, 28));
         miOperate.addActionListener(e -> {
@@ -1535,7 +1520,7 @@ public class IEDNavigatorApp extends JFrame {
         treePopupMenu.add(miOperate);
 
         // FC=CO: Cancelar SELECT pendiente (solo para ctlModel SBO = 2 o 4)
-        JMenuItem miCancelSelect = new JMenuItem("Cancelar SELECT (SBO)");
+        JMenuItem miCancelSelect = new JMenuItem(I18n.t("ctx.cancelselect"));
         miCancelSelect.setForeground(new Color(120, 50, 150));
         miCancelSelect.addActionListener(e -> {
             FcModelNode operNode = getOperNodeForSelection();
@@ -1546,8 +1531,8 @@ public class IEDNavigatorApp extends JFrame {
         treePopupMenu.addSeparator();
 
         // FC=BL: Bloquear / Desbloquear valor del DO
-        JMenuItem miBlock   = new JMenuItem("Bloquear valor (blkEna=true)");
-        JMenuItem miUnblock = new JMenuItem("Desbloquear valor (blkEna=false)");
+        JMenuItem miBlock   = new JMenuItem(I18n.t("ctx.block"));
+        JMenuItem miUnblock = new JMenuItem(I18n.t("ctx.unblock"));
         miBlock.addActionListener(e   -> toggleBlocking(true));
         miUnblock.addActionListener(e -> toggleBlocking(false));
         treePopupMenu.add(miBlock);
@@ -1570,11 +1555,11 @@ public class IEDNavigatorApp extends JFrame {
         });
 
         treePopupMenu.addSeparator();
-        JMenuItem miInfo = new JMenuItem("❓ ¿Qué es esto? (IEC 61850)");
+        JMenuItem miInfo = new JMenuItem("❓ " + I18n.t("ctx.whatis"));
         miInfo.setFont(miInfo.getFont().deriveFont(Font.BOLD));
         miInfo.addActionListener(e -> showDictionaryForSelectedNode());
         treePopupMenu.add(miInfo);
-        JMenuItem miLegendTree = new JMenuItem("📖 Leyenda de íconos y colores...");
+        JMenuItem miLegendTree = new JMenuItem("📖 " + I18n.t("menu.help.legend"));
         miLegendTree.addActionListener(e -> showLegendDialog());
         treePopupMenu.add(miLegendTree);
 
@@ -1619,61 +1604,61 @@ public class IEDNavigatorApp extends JFrame {
         }
 
         if (isBoolean) {
-            JMenuItem miTrue = new JMenuItem("Establecer TRUE");
+            JMenuItem miTrue = new JMenuItem(I18n.t("srv.set", "TRUE"));
             miTrue.addActionListener(e -> setSelectedNodeValue("true"));
             serverPopupMenu.add(miTrue);
 
-            JMenuItem miFalse = new JMenuItem("Establecer FALSE");
+            JMenuItem miFalse = new JMenuItem(I18n.t("srv.set", "FALSE"));
             miFalse.addActionListener(e -> setSelectedNodeValue("false"));
             serverPopupMenu.add(miFalse);
         } else if (isDbpos) {
-            JMenuItem miOn = new JMenuItem("Establecer ON (cerrado)");
+            JMenuItem miOn = new JMenuItem(I18n.t("srv.set.on"));
             miOn.addActionListener(e -> setSelectedNodeValue("on"));
             serverPopupMenu.add(miOn);
 
-            JMenuItem miOff = new JMenuItem("Establecer OFF (abierto)");
+            JMenuItem miOff = new JMenuItem(I18n.t("srv.set.off"));
             miOff.addActionListener(e -> setSelectedNodeValue("off"));
             serverPopupMenu.add(miOff);
 
-            JMenuItem miInter = new JMenuItem("Establecer INTERMEDIATE");
+            JMenuItem miInter = new JMenuItem(I18n.t("srv.set", "INTERMEDIATE"));
             miInter.addActionListener(e -> setSelectedNodeValue("intermediate"));
             serverPopupMenu.add(miInter);
 
-            JMenuItem miBad = new JMenuItem("Establecer BAD_STATE");
+            JMenuItem miBad = new JMenuItem(I18n.t("srv.set", "BAD_STATE"));
             miBad.addActionListener(e -> setSelectedNodeValue("bad"));
             serverPopupMenu.add(miBad);
         } else if (isTapCmd) {
             for (String cmd : new String[]{"STOP", "LOWER", "HIGHER", "RESERVED"}) {
-                JMenuItem mi = new JMenuItem("Establecer " + cmd);
+                JMenuItem mi = new JMenuItem(I18n.t("srv.set", cmd));
                 mi.addActionListener(e -> setSelectedNodeValue(cmd.toLowerCase()));
                 serverPopupMenu.add(mi);
             }
         } else if (isEnum) {
             // Enum: show dropdown with enum values from SCL DataTypeTemplates
-            JMenuItem miEnum = new JMenuItem("Establecer valor (enum)...");
+            JMenuItem miEnum = new JMenuItem(I18n.t("srv.set.enum"));
             miEnum.addActionListener(e -> setSelectedNodeCustomValue());
             serverPopupMenu.add(miEnum);
         } else {
             // Generic: show custom value dialog
-            JMenuItem miSet = new JMenuItem("Establecer valor...");
+            JMenuItem miSet = new JMenuItem(I18n.t("srv.set.value"));
             miSet.addActionListener(e -> setSelectedNodeCustomValue());
             serverPopupMenu.add(miSet);
         }
 
         serverPopupMenu.addSeparator();
 
-        JMenuItem miSetCustom = new JMenuItem("Valor personalizado...");
+        JMenuItem miSetCustom = new JMenuItem(I18n.t("ctx.customvalue"));
         miSetCustom.addActionListener(e -> setSelectedNodeCustomValue());
         serverPopupMenu.add(miSetCustom);
 
         serverPopupMenu.addSeparator();
 
-        JMenuItem miPublishGoose = new JMenuItem("Publicar GOOSE (cambio de estado)");
+        JMenuItem miPublishGoose = new JMenuItem(I18n.t("srv.publishgoose"));
         miPublishGoose.addActionListener(e -> publishGooseFromSelection());
         serverPopupMenu.add(miPublishGoose);
 
         serverPopupMenu.addSeparator();
-        JMenuItem miInfoSrv = new JMenuItem("❓ ¿Qué es esto? (IEC 61850)");
+        JMenuItem miInfoSrv = new JMenuItem("❓ " + I18n.t("ctx.whatis"));
         miInfoSrv.setFont(miInfoSrv.getFont().deriveFont(Font.BOLD));
         miInfoSrv.addActionListener(e -> showDictionaryForSelectedNode());
         serverPopupMenu.add(miInfoSrv);
@@ -1695,7 +1680,7 @@ public class IEDNavigatorApp extends JFrame {
             NodeInfo info = (NodeInfo) userObj;
             if ("FCDA".equals(info.prefix)) {
                 JPopupMenu fcdaPopup = new JPopupMenu();
-                JMenuItem miNavigate = new JMenuItem("Ver en modelo de datos");
+                JMenuItem miNavigate = new JMenuItem(I18n.t("ctx.viewinmodel"));
                 miNavigate.addActionListener(ev -> navigateToFcdaInModel(info.name));
                 fcdaPopup.add(miNavigate);
 
@@ -1705,12 +1690,12 @@ public class IEDNavigatorApp extends JFrame {
                     GoosePublisher.DataValue.Type fcdaType = inferDataType(info.name);
                     String[][] opts;
                     if (fcdaType == GoosePublisher.DataValue.Type.BOOLEAN) {
-                        opts = new String[][]{{"Establecer TRUE", "true"}, {"Establecer FALSE", "false"}};
+                        opts = new String[][]{{I18n.t("srv.set", "TRUE"), "true"}, {I18n.t("srv.set", "FALSE"), "false"}};
                     } else if (fcdaType == GoosePublisher.DataValue.Type.DBPOS) {
-                        opts = new String[][]{{"Establecer ON", "on"}, {"Establecer OFF", "off"},
-                            {"Establecer INTERMEDIATE", "intermediate"}, {"Establecer BAD", "bad"}};
+                        opts = new String[][]{{I18n.t("srv.set", "ON"), "on"}, {I18n.t("srv.set", "OFF"), "off"},
+                            {I18n.t("srv.set", "INTERMEDIATE"), "intermediate"}, {I18n.t("srv.set", "BAD"), "bad"}};
                     } else {
-                        opts = new String[][]{{"Establecer TRUE", "true"}, {"Establecer FALSE", "false"}};
+                        opts = new String[][]{{I18n.t("srv.set", "TRUE"), "true"}, {I18n.t("srv.set", "FALSE"), "false"}};
                     }
                     for (String[] opt : opts) {
                         JMenuItem mi = new JMenuItem(opt[0]);
@@ -1777,19 +1762,19 @@ public class IEDNavigatorApp extends JFrame {
     private void applyServerValue(String ref, String value) {
         boolean success = server.setDataValue(ref, value);
         if (success) {
-            log("SET: " + formatReference(ref) + " = " + value);
+            log(I18n.t("log.app.set", formatReference(ref), value));
             updateSingleNodeInTree(ref);
             updateServerMonitorValues();
             GoosePublisher gp = goosePanel != null ? goosePanel.getGoosePublisher() : null;
             if (gp != null && gp.isPublishing() && updateGoosePublisherValues()) {
                 gp.publishStateChange();
-                logGoose("GOOSE publicado: " + formatReference(ref) + " = " + value);
+                logGoose(I18n.t("log.app.goosepub", formatReference(ref), value));
             }
             if (goosePanel != null && !goosePanel.getActivePublishers().isEmpty()) {
                 propagateValueToPublishers(ref, value);
             }
         } else {
-            log("Error estableciendo valor: nodo no encontrado en el modelo (" + ref + ")");
+            log(I18n.t("log.app.setvalueerror", ref));
         }
     }
 
@@ -1888,12 +1873,12 @@ public class IEDNavigatorApp extends JFrame {
                 } else {
                     // No es enum conocido — input numérico
                     newValue = JOptionPane.showInputDialog(this,
-                        "Nuevo valor para " + info.name + " (entero):", String.valueOf(currentOrd));
+                        I18n.t("dlg.newvalue.int", info.name), String.valueOf(currentOrd));
                 }
             } else {
                 // Otros tipos: usar input de texto
                 newValue = JOptionPane.showInputDialog(this,
-                    "Nuevo valor para " + info.name + ":",
+                    I18n.t("dlg.newvalue", info.name),
                     currentValue);
             }
 
@@ -2006,15 +1991,14 @@ public class IEDNavigatorApp extends JFrame {
         panel.add(new JLabel("<html><b>" + ref + "</b></html>"), g);
 
         g.gridy = 1;
-        JLabel lblModel = new JLabel("Modelo de control: " + ctlModelName);
+        JLabel lblModel = new JLabel(I18n.t("ctl.model") + " " + ctlModelName);
         lblModel.setForeground(isSbo ? new Color(183, 28, 28) : new Color(0, 100, 0));
         panel.add(lblModel, g);
 
         g.gridy = 2;
         JLabel lblSboNote = new JLabel(isSbo
-            ? "<html><i>SBO en 2 pasos: <b>Seleccionar (SBOw)</b> reserva el nodo; luego "
-              + "<b>Ejecutar</b> o <b>Cancelar</b> mientras corre el timeout.</i></html>"
-            : "<html><i>Control directo: se ejecuta con <b>Ejecutar</b> (sin reserva previa).</i></html>");
+            ? I18n.t("ctl.note.sbo")
+            : I18n.t("ctl.note.direct"));
         lblSboNote.setFont(lblSboNote.getFont().deriveFont(Font.ITALIC, 11f));
         panel.add(lblSboNote, g);
 
@@ -2025,11 +2009,11 @@ public class IEDNavigatorApp extends JFrame {
         final String[] selectedValue = {binary ? closeVal : null};
 
         g.gridy = 3; g.gridx = 0;
-        panel.add(new JLabel("Valor:"), g);
+        panel.add(new JLabel(I18n.t("lbl.value")), g);
         g.gridx = 1;
         if (binary) {
-            JToggleButton btnOpen  = new JToggleButton("Abrir (OFF)");
-            JToggleButton btnClose = new JToggleButton("Cerrar (ON)");
+            JToggleButton btnOpen  = new JToggleButton(I18n.t("ctl.open"));
+            JToggleButton btnClose = new JToggleButton(I18n.t("ctl.close"));
             ButtonGroup bgVal = new ButtonGroup();
             bgVal.add(btnOpen); bgVal.add(btnClose);
             btnClose.setSelected(true);
@@ -2058,34 +2042,27 @@ public class IEDNavigatorApp extends JFrame {
         }
 
         g.gridy = 4; g.gridx = 0; g.gridwidth = 2;
-        final JCheckBox cbTest = new JCheckBox(
-            "Modo Test — el IED registra el evento pero NO actúa en hardware");
+        final JCheckBox cbTest = new JCheckBox(I18n.t("ctl.test"));
         cbTest.setForeground(new Color(150, 70, 0));
         panel.add(cbTest, g); inputs.add(cbTest);
 
         g.gridy = 5;
-        JLabel lblTestWarn = new JLabel("<html><div style='width:430px;color:#966400;'>"
-            + "⚠ Con <b>Test</b> activado, si la Logical Node está en modo <b>on</b> el IED "
-            + "rechaza el comando con <b>Blocked-by-Mode</b> (addCause 8). Para una prueba "
-            + "<i>simulada</i>, poné antes la LN en modo <b>test</b> (Mod=test); para una "
-            + "maniobra <i>real</i>, dejá Test <b>desmarcado</b>.</div></html>");
+        JLabel lblTestWarn = new JLabel(I18n.t("ctl.test.warn"));
         lblTestWarn.setFont(lblTestWarn.getFont().deriveFont(Font.PLAIN, 11f));
         panel.add(lblTestWarn, g);
 
         g.gridy = 6;
-        final JCheckBox cbSynchro = new JCheckBox(
-            "synchroChk — verificar sincronismo (tensión, ángulo, frecuencia)");
-        cbSynchro.setToolTipText("Check.synchroChk: el IED verifica sincronismo antes de operar");
+        final JCheckBox cbSynchro = new JCheckBox(I18n.t("ctl.synchro"));
+        cbSynchro.setToolTipText(I18n.t("ctl.synchro.tip"));
         panel.add(cbSynchro, g); inputs.add(cbSynchro);
 
         g.gridy = 7;
-        final JCheckBox cbInterlock = new JCheckBox(
-            "interlkChk — verificar enclavamiento lógico del IED");
-        cbInterlock.setToolTipText("Check.interlkChk: el IED verifica enclavamientos antes de operar");
+        final JCheckBox cbInterlock = new JCheckBox(I18n.t("ctl.interlock"));
+        cbInterlock.setToolTipText(I18n.t("ctl.interlock.tip"));
         panel.add(cbInterlock, g); inputs.add(cbInterlock);
 
         g.gridy = 8; g.gridwidth = 1; g.gridx = 0;
-        panel.add(new JLabel("Operador (orIdent):"), g);
+        panel.add(new JLabel(I18n.t("lbl.orident")), g);
         g.gridx = 1;
         final JTextField tfOrIdent = new JTextField("IEDNavigator", 14);
         panel.add(tfOrIdent, g); inputs.add(tfOrIdent);
@@ -2093,7 +2070,7 @@ public class IEDNavigatorApp extends JFrame {
         // Indicador de estado del SBOw (se colorea y muestra la cuenta regresiva)
         g.gridy = 9; g.gridx = 0; g.gridwidth = 2;
         final JLabel sbowInd = new JLabel(isSbo
-            ? "  SBOw: sin reservar" : "  Control directo (sin reserva SBO)");
+            ? I18n.t("ctl.sbo.idle") : "  " + I18n.t("ctl.direct.norsv"));
         sbowInd.setOpaque(true);
         sbowInd.setBackground(new Color(224, 224, 224));
         sbowInd.setForeground(Color.DARK_GRAY);
@@ -2102,21 +2079,17 @@ public class IEDNavigatorApp extends JFrame {
         panel.add(sbowInd, g);
 
         g.gridy = 10;
-        JLabel lblDisclaimer = new JLabel("<html><div style='width:440px;color:#B71C1C;'>"
-            + "⚠ <b>Herramienta de uso exclusivamente educativo.</b> No apta para pruebas "
-            + "FAT/SAT, comisionamiento ni maniobras en instalaciones en servicio. El "
-            + "desarrollador no garantiza la ejecución ni el resultado de los comandos; "
-            + "el uso es bajo exclusiva responsabilidad del usuario.</div></html>");
+        JLabel lblDisclaimer = new JLabel(I18n.t("ctl.disclaimer"));
         lblDisclaimer.setFont(lblDisclaimer.getFont().deriveFont(Font.PLAIN, 11f));
         panel.add(lblDisclaimer, g);
 
         // ── Diálogo + botonera ───────────────────────────────────────────────────
         final JDialog dlg = new JDialog(this,
-            isSbo ? "Operar nodo — SBO (2 pasos)" : "Operar nodo — Directo", true);
-        final JButton btnSelect    = new JButton("Seleccionar (SBOw)");
-        final JButton btnExec       = new JButton("Ejecutar (OPER)");
-        final JButton btnCancelSel = new JButton("Cancelar SELECT");
-        final JButton btnClose      = new JButton("Cerrar");
+            isSbo ? I18n.t("ctl.title.sbo") : I18n.t("ctl.title.direct"), true);
+        final JButton btnSelect    = new JButton(I18n.t("ctl.select"));
+        final JButton btnExec       = new JButton(I18n.t("ctl.execute"));
+        final JButton btnCancelSel = new JButton(I18n.t("ctl.cancel"));
+        final JButton btnClose      = new JButton(I18n.t("btn.close"));
 
         final boolean[] busy = {false};      // hay una operación MMS en vuelo
         final boolean[] reserved = {false};  // hay una selección SBOw vigente
@@ -2151,7 +2124,7 @@ public class IEDNavigatorApp extends JFrame {
                     client.clearPendingSelect();
                     sbowInd.setBackground(new Color(189, 189, 189));
                     sbowInd.setForeground(Color.BLACK);
-                    sbowInd.setText("  SBOw: SELECT expiró — vuelva a seleccionar");
+                    sbowInd.setText(I18n.t("ctl.sbo.expired"));
                     refreshButtons.run();
                     return;
                 }
@@ -2159,7 +2132,7 @@ public class IEDNavigatorApp extends JFrame {
                 sbowInd.setBackground(warn ? new Color(229, 57, 53) : new Color(255, 171, 64));
                 sbowInd.setForeground(warn ? Color.WHITE : new Color(60, 30, 0));
                 sbowInd.setText(String.format(
-                    "  ● SBOw RESERVADO — Ejecutar o Cancelar   (%.1f s)", rem / 1000.0));
+                    I18n.t("ctl.sbo.reserved"), rem / 1000.0));
             });
             timer[0].setInitialDelay(0);
             timer[0].start();
@@ -2175,7 +2148,7 @@ public class IEDNavigatorApp extends JFrame {
             busy[0] = true; refreshButtons.run();
             sbowInd.setBackground(new Color(255, 224, 130));
             sbowInd.setForeground(new Color(60, 30, 0));
-            sbowInd.setText("  Enviando SELECT (SBOw)...");
+            sbowInd.setText(I18n.t("ctl.sbo.sending"));
             backgroundExecutor.submit(() -> {
                 IEC61850Client.ControlResult cr;
                 int sboTo = client.getSboTimeoutMs(operNode);
@@ -2187,10 +2160,10 @@ public class IEDNavigatorApp extends JFrame {
                         busy[0] = false; reserved[0] = false; refreshButtons.run();
                         sbowInd.setBackground(new Color(224, 224, 224));
                         sbowInd.setForeground(Color.DARK_GRAY);
-                        sbowInd.setText("  SBOw: sin reservar");
-                        log("[SELECT EXCEPTION] " + ref + " — " + em);
-                        JOptionPane.showMessageDialog(dlg, "Error de comunicación:\n" + em,
-                            "Error de SELECT", JOptionPane.ERROR_MESSAGE);
+                        sbowInd.setText(I18n.t("ctl.sbo.idle"));
+                        log(I18n.t("log.app.selectexception", ref, em));
+                        JOptionPane.showMessageDialog(dlg, I18n.t("err.comm") + "\n" + em,
+                            I18n.t("err.select.title"), JOptionPane.ERROR_MESSAGE);
                     });
                     return;
                 }
@@ -2200,20 +2173,20 @@ public class IEDNavigatorApp extends JFrame {
                     busy[0] = false;
                     if (fcr.success) {
                         reserved[0] = true;
-                        log("[SELECT OK] " + ref + " reservado (SBOw) ctlVal=" + ctlVal
-                            + " — timeout " + (fto / 1000) + "s");
+                        log(I18n.t("log.app.selectok", ref, ctlVal, (fto / 1000)));
                         startCountdown.run();
                     } else {
                         reserved[0] = false;
                         sbowInd.setBackground(new Color(189, 189, 189));
                         sbowInd.setForeground(Color.BLACK);
-                        sbowInd.setText("  SBOw: SELECT rechazado");
-                        log("[SELECT ERROR] " + ref + " — " + fcr.error
-                            + (fcr.lastApplError != null ? " | " + fcr.lastApplError : ""));
+                        sbowInd.setText(I18n.t("ctl.sbo.rejected"));
+                        log(I18n.t("log.app.selecterror", ref, fcr.error,
+                            (fcr.lastApplError != null ? " | " + fcr.lastApplError : "")));
                         JOptionPane.showMessageDialog(dlg,
-                            "SELECT rechazado por el IED\n\n  Nodo: " + ref + "\n  Error: " + fcr.error
+                            I18n.t("ctl.select.rejected.msg") + "\n\n  " + I18n.t("ctl.msg.node") + ": " + ref
+                            + "\n  " + I18n.t("ctl.msg.error") + ": " + fcr.error
                             + (fcr.lastApplError != null ? "\n  LastApplError: " + fcr.lastApplError : ""),
-                            "SELECT rechazado", JOptionPane.ERROR_MESSAGE);
+                            I18n.t("ctl.select.rejected"), JOptionPane.ERROR_MESSAGE);
                     }
                     refreshButtons.run();
                 });
@@ -2224,7 +2197,7 @@ public class IEDNavigatorApp extends JFrame {
         btnExec.addActionListener(e -> {
             final String ctlVal = selectedValue[0] != null ? selectedValue[0].trim() : "";
             if (ctlVal.isEmpty()) {
-                JOptionPane.showMessageDialog(dlg, "Ingrese un valor.", "Valor requerido",
+                JOptionPane.showMessageDialog(dlg, I18n.t("ctl.value.required"), I18n.t("ctl.value.required.title"),
                     JOptionPane.WARNING_MESSAGE);
                 return;
             }
@@ -2243,9 +2216,9 @@ public class IEDNavigatorApp extends JFrame {
                     SwingUtilities.invokeLater(() -> {
                         busy[0] = false; reserved[0] = false; stopTimer.run();
                         client.clearPendingSelect(); refreshButtons.run();
-                        log("[CONTROL EXCEPTION] " + ref + " — " + em);
-                        JOptionPane.showMessageDialog(dlg, "Error de comunicación:\n" + em,
-                            "Error de control", JOptionPane.ERROR_MESSAGE);
+                        log(I18n.t("log.app.controlexception", ref, em));
+                        JOptionPane.showMessageDialog(dlg, I18n.t("err.comm") + "\n" + em,
+                            I18n.t("err.control.title"), JOptionPane.ERROR_MESSAGE);
                     });
                     return;
                 }
@@ -2259,20 +2232,18 @@ public class IEDNavigatorApp extends JFrame {
                         client.clearPendingSelect(); refreshButtons.run();
                         sbowInd.setBackground(new Color(189, 189, 189));
                         sbowInd.setForeground(Color.BLACK);
-                        sbowInd.setText("  " + (isSbo ? "OPERATE rechazado (reserva liberada)" : "OPERATE rechazado"));
-                        StringBuilder msg = new StringBuilder("OPERATE rechazado por el IED\n\n");
-                        msg.append("  Nodo: ").append(ref).append("\n");
-                        msg.append("  Modelo: ").append(fcr.ctlModelName).append("\n");
-                        msg.append("  Error: ").append(fcr.error);
+                        sbowInd.setText("  " + (isSbo ? I18n.t("ctl.oper.rejected.freed") : I18n.t("ctl.oper.rejected")));
+                        StringBuilder msg = new StringBuilder(I18n.t("ctl.oper.rejected.msg") + "\n\n");
+                        msg.append("  ").append(I18n.t("ctl.msg.node")).append(": ").append(ref).append("\n");
+                        msg.append("  ").append(I18n.t("ctl.msg.model")).append(": ").append(fcr.ctlModelName).append("\n");
+                        msg.append("  ").append(I18n.t("ctl.msg.error")).append(": ").append(fcr.error);
                         if (fcr.lastApplError != null) msg.append("\n  LastApplError: ").append(fcr.lastApplError);
                         if (testFlag) {
-                            msg.append("\n\n  Sugerencia: operó con Modo Test activado. Si la LN está en "
-                                + "modo \"on\", el IED lo rechaza (Blocked-by-Mode). Para prueba simulada "
-                                + "ponga la LN en modo test (Mod=test); para maniobra real desmarque Test.");
+                            msg.append("\n\n  ").append(I18n.t("ctl.fb.testhint"));
                         }
-                        log("[CONTROL ERROR] " + ref + " — " + fcr.error
-                            + (fcr.lastApplError != null ? " | " + fcr.lastApplError : ""));
-                        JOptionPane.showMessageDialog(dlg, msg.toString(), "Control rechazado",
+                        log(I18n.t("log.app.controlerror", ref, fcr.error,
+                            (fcr.lastApplError != null ? " | " + fcr.lastApplError : "")));
+                        JOptionPane.showMessageDialog(dlg, msg.toString(), I18n.t("ctl.rejected.title"),
                             JOptionPane.ERROR_MESSAGE);
                     });
                 }
@@ -2286,16 +2257,16 @@ public class IEDNavigatorApp extends JFrame {
             backgroundExecutor.submit(() -> {
                 IEC61850Client.ControlResult cr = null;
                 try { cr = client.cancelControl(operNode, orIdent); }
-                catch (Exception ex) { log("[CANCEL EXCEPTION] " + ref + " — " + ex.getMessage()); }
+                catch (Exception ex) { log(I18n.t("log.app.cancelexception", ref, ex.getMessage())); }
                 final IEC61850Client.ControlResult fcr = cr;
                 SwingUtilities.invokeLater(() -> {
                     busy[0] = false; reserved[0] = false; stopTimer.run();
                     client.clearPendingSelect();
                     sbowInd.setBackground(new Color(224, 224, 224));
                     sbowInd.setForeground(Color.DARK_GRAY);
-                    sbowInd.setText("  SBOw: SELECT cancelado");
-                    if (fcr != null && fcr.success) log("[CANCEL OK] " + ref + " — SELECT liberado");
-                    else log("[CANCEL ERROR] " + ref + (fcr != null ? " — " + fcr.error : ""));
+                    sbowInd.setText(I18n.t("ctl.sbo.cancelled"));
+                    if (fcr != null && fcr.success) log(I18n.t("log.app.cancelok", ref));
+                    else log(I18n.t("log.app.cancelerror2", ref, (fcr != null ? " — " + fcr.error : "")));
                     refreshButtons.run();
                 });
             });
@@ -2344,7 +2315,7 @@ public class IEDNavigatorApp extends JFrame {
                                      boolean isSbo, IEC61850Client.ControlResult cr) {
         IEC61850Client.FeedbackResult fb = null;
         if (cr.success && !testFlag) {
-            log("[FEEDBACK] Comando aceptado. Verificando posición (stVal) de " + ref + "...");
+            log(I18n.t("log.app.feedbackchecking", ref));
             fb = client.verifyControlFeedback(operNode, ctlVal, 10000);
         }
         final IEC61850Client.FeedbackResult fbf = fb;
@@ -2358,60 +2329,53 @@ public class IEDNavigatorApp extends JFrame {
                 String fbInfo, fbLog, dlgTitle;
                 int dlgType;
                 if (testFlag) {
-                    fbInfo = "\n\nModo Test: sin verificación de posición "
-                        + "(el IED registra el comando pero no actúa en el proceso).";
+                    fbInfo = "\n\n" + I18n.t("ctl.fb.test");
                     fbLog = " [TEST, sin verificación]";
-                    dlgTitle = "Comando aceptado (Test)";
+                    dlgTitle = I18n.t("ctl.res.accepted.test");
                     dlgType = JOptionPane.INFORMATION_MESSAGE;
                 } else if (fbf != null && fbf.verifiable && fbf.confirmed) {
                     String secs = String.format("%.1f", fbf.elapsedMs / 1000.0);
-                    fbInfo = "\n\nPosición CONFIRMADA: stVal = " + fbf.observed
-                        + " (verificado por lectura en " + secs + " s)";
+                    fbInfo = "\n\n" + I18n.t("ctl.fb.confirmed", fbf.observed, secs);
                     fbLog = " | posición confirmada: stVal=" + fbf.observed + " en " + secs + "s";
-                    dlgTitle = "Maniobra confirmada";
+                    dlgTitle = I18n.t("ctl.res.confirmed");
                     dlgType = JOptionPane.INFORMATION_MESSAGE;
                 } else if (fbf != null && fbf.verifiable) {
                     String secs = String.format("%.0f", fbf.elapsedMs / 1000.0);
-                    fbInfo = "\n\n⚠ SIN confirmación de posición tras " + secs + " s.\n"
-                        + "Último stVal leído: " + fbf.observed + "\n"
-                        + "El comando fue aceptado pero el equipo no reportó el cambio.\n"
-                        + "Verifique el interruptor y la señalización local.";
+                    fbInfo = "\n\n" + I18n.t("ctl.fb.noconf", secs, fbf.observed);
                     fbLog = " | SIN confirmación de posición (último stVal=" + fbf.observed + ")";
-                    dlgTitle = "Comando aceptado — sin confirmación";
+                    dlgTitle = I18n.t("ctl.res.accepted.noconf");
                     dlgType = JOptionPane.WARNING_MESSAGE;
                 } else {
-                    fbInfo = "\n\nNota: la aceptación MMS no confirma la maniobra física\n"
-                        + "y este DO no expone stVal on/off verificable.\n"
-                        + "Verifique la posición real del equipo.";
+                    fbInfo = "\n\n" + I18n.t("ctl.fb.noverif");
                     fbLog = " (aceptado; sin stVal verificable)";
-                    dlgTitle = "Comando aceptado";
+                    dlgTitle = I18n.t("ctl.res.accepted");
                     dlgType = JOptionPane.INFORMATION_MESSAGE;
                 }
 
-                String msg = "Comando ACEPTADO por el IED\n"
-                    + "  Nodo: " + ref + "\n"
-                    + "  Valor: " + ctlVal + "\n"
-                    + "  Modelo: " + cr.ctlModelName
+                String msg = I18n.t("ctl.msg.accepted") + "\n"
+                    + "  " + I18n.t("ctl.msg.node") + ": " + ref + "\n"
+                    + "  " + I18n.t("ctl.msg.value") + ": " + ctlVal + "\n"
+                    + "  " + I18n.t("ctl.msg.model") + ": " + cr.ctlModelName
                     + (isSbo ? " (SELECT → OPERATE)" : "")
-                    + (testFlag ? "\n  [MODO TEST activado]" : "")
+                    + (testFlag ? "\n  " + I18n.t("ctl.msg.testmode") : "")
                     + checkInfo + fbInfo;
-                log("[CONTROL OK] " + ref + " = " + ctlVal
-                    + (testFlag ? " [TEST]" : "")
-                    + (synchroCheck ? " [SYNCHRO]" : "")
-                    + (interlockCheck ? " [INTERLOCK]" : "")
-                    + " via " + cr.ctlModelName + fbLog);
+                log(I18n.t("log.app.controlok", ref, ctlVal,
+                    (testFlag ? " [TEST]" : ""),
+                    (synchroCheck ? " [SYNCHRO]" : ""),
+                    (interlockCheck ? " [INTERLOCK]" : ""),
+                    cr.ctlModelName, fbLog));
                 JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg, dlgTitle, dlgType);
                 updateSingleNodeInTree(ref.substring(0, ref.lastIndexOf('.')));
             } else {
-                StringBuilder msg = new StringBuilder("OPERATE rechazado por el IED\n\n");
-                msg.append("  Nodo: ").append(ref).append("\n");
-                msg.append("  Modelo: ").append(cr.ctlModelName).append("\n");
-                msg.append("  Error: ").append(cr.error);
+                StringBuilder msg = new StringBuilder(I18n.t("ctl.oper.rejected.msg") + "\n\n");
+                msg.append("  ").append(I18n.t("ctl.msg.node")).append(": ").append(ref).append("\n");
+                msg.append("  ").append(I18n.t("ctl.msg.model")).append(": ").append(cr.ctlModelName).append("\n");
+                msg.append("  ").append(I18n.t("ctl.msg.error")).append(": ").append(cr.error);
                 if (cr.lastApplError != null) msg.append("\n  LastApplError: ").append(cr.lastApplError);
-                log("[CONTROL ERROR] " + ref + " — " + cr.error
-                    + (cr.lastApplError != null ? " | " + cr.lastApplError : ""));
+                log(I18n.t("log.app.controlerror", ref, cr.error,
+                    (cr.lastApplError != null ? " | " + cr.lastApplError : "")));
                 JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg.toString(),
-                    "Control rechazado", JOptionPane.ERROR_MESSAGE);
+                    I18n.t("ctl.rejected.title"), JOptionPane.ERROR_MESSAGE);
             }
         });
     }
@@ -2438,22 +2402,21 @@ public class IEDNavigatorApp extends JFrame {
         panel.add(new JLabel("<html><b>" + ref + "</b></html>"), g);
 
         g.gridy = 1;
-        JLabel lblModel = new JLabel("Modelo de control: " + ctlModelName);
+        JLabel lblModel = new JLabel(I18n.t("ctl.model") + " " + ctlModelName);
         lblModel.setForeground(new Color(120, 50, 150));
         panel.add(lblModel, g);
 
         g.gridy = 2;
-        panel.add(new JLabel(
-            "<html><i>Envía CANCEL al IED para liberar el SELECT pendiente.</i></html>"), g);
+        panel.add(new JLabel(I18n.t("ctl.cancel.note")), g);
 
         g.gridy = 3; g.gridwidth = 1; g.gridx = 0;
-        panel.add(new JLabel("Operador (orIdent):"), g);
+        panel.add(new JLabel(I18n.t("lbl.orident")), g);
         g.gridx = 1;
         JTextField tfOrIdent = new JTextField("IEDNavigator", 14);
         panel.add(tfOrIdent, g);
 
         int result = JOptionPane.showConfirmDialog(this, panel,
-            "Cancelar SELECT (SBO)", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+            I18n.t("ctx.cancelselect"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
         if (result != JOptionPane.OK_OPTION) return;
 
         final String orIdent = tfOrIdent.getText().trim();
@@ -2462,27 +2425,27 @@ public class IEDNavigatorApp extends JFrame {
                 IEC61850Client.ControlResult cr = client.cancelControl(operNode, orIdent);
                 SwingUtilities.invokeLater(() -> {
                     if (cr.success) {
-                        log("[CANCEL OK] " + ref + " — SELECT liberado via " + cr.ctlModelName);
+                        log(I18n.t("log.app.cancelokvia", ref, cr.ctlModelName));
                         JOptionPane.showMessageDialog(IEDNavigatorApp.this,
-                            "CANCEL enviado correctamente.\nEl SELECT en el IED ha sido liberado.\n\nNodo: " + ref,
-                            "Cancel exitoso", JOptionPane.INFORMATION_MESSAGE);
+                            I18n.t("ctl.cancel.ok.msg") + "\n\n" + I18n.t("ctl.msg.node") + ": " + ref,
+                            I18n.t("ctl.cancel.ok"), JOptionPane.INFORMATION_MESSAGE);
                     } else {
-                        StringBuilder msg = new StringBuilder("CANCEL rechazado por el IED\n\n");
-                        msg.append("  Nodo: ").append(ref).append("\n");
-                        msg.append("  Error: ").append(cr.error);
+                        StringBuilder msg = new StringBuilder(I18n.t("ctl.cancel.rejected.msg") + "\n\n");
+                        msg.append("  ").append(I18n.t("ctl.msg.node")).append(": ").append(ref).append("\n");
+                        msg.append("  ").append(I18n.t("ctl.msg.error")).append(": ").append(cr.error);
                         if (cr.lastApplError != null)
                             msg.append("\n  LastApplError: ").append(cr.lastApplError);
-                        log("[CANCEL ERROR] " + ref + " — " + cr.error);
+                        log(I18n.t("log.app.cancelerror", ref, cr.error));
                         JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg.toString(),
-                            "Cancel rechazado", JOptionPane.ERROR_MESSAGE);
+                            I18n.t("ctl.cancel.rejected"), JOptionPane.ERROR_MESSAGE);
                     }
                 });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
-                    log("[CANCEL EXCEPTION] " + ref + " — " + ex.getMessage());
+                    log(I18n.t("log.app.cancelexception", ref, ex.getMessage()));
                     JOptionPane.showMessageDialog(IEDNavigatorApp.this,
-                        "Error de comunicación:\n" + ex.getMessage(),
-                        "Error de cancel", JOptionPane.ERROR_MESSAGE);
+                        I18n.t("err.comm") + "\n" + ex.getMessage(),
+                        I18n.t("err.cancel.title"), JOptionPane.ERROR_MESSAGE);
                 });
             }
         });
@@ -2495,17 +2458,17 @@ public class IEDNavigatorApp extends JFrame {
         try {
             port = Integer.parseInt(tfServerPort.getText().trim());
         } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Puerto invalido.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18n.t("err.port.invalid"), I18n.t("err.title"), JOptionPane.ERROR_MESSAGE);
             return;
         }
         btnCheckPort.setEnabled(false);
-        btnCheckPort.setText("Verificando...");
+        btnCheckPort.setText(I18n.t("port.checking"));
         final int p = port;
         new Thread(() -> {
             String result = diagnosePort(p);
             SwingUtilities.invokeLater(() -> {
                 btnCheckPort.setEnabled(true);
-                btnCheckPort.setText("Verificar Puerto");
+                btnCheckPort.setText(I18n.t("port.check"));
                 showPortDiagnosisDialog(p, result);
             });
         }, "port-check").start();
@@ -2514,37 +2477,23 @@ public class IEDNavigatorApp extends JFrame {
     private String diagnosePort(int port) {
         // Intentar abrir el puerto: si funciona => libre, si BindException => ocupado o sin permisos
         try (ServerSocket ss = new ServerSocket(port)) {
-            return "RESULTADO: PUERTO LIBRE\n\n"
-                + "El puerto " + port + " esta disponible para escuchar.\n"
-                + "El servidor IED deberia poder iniciarse normalmente.\n\n"
-                + "Si el servidor aun no inicia, posibles causas:\n"
-                + "  - Archivo SCL no cargado o con errores de parsing\n"
-                + "  - Excepcion interna de iec61850bean (ver consola)\n"
-                + "  - El puerto se ocupo entre esta verificacion y el inicio\n";
+            return I18n.t("port.res.free") + "\n\n"
+                + I18n.t("port.res.free.body", String.valueOf(port)) + "\n";
         } catch (BindException be) {
             String msg = be.getMessage() != null ? be.getMessage().toLowerCase() : "";
             if (msg.contains("permission") || msg.contains("access is denied")
                     || msg.contains("acceso denegado") || msg.contains("errno=13")) {
-                return "RESULTADO: PERMISO DENEGADO\n\n"
-                    + "El SO rechazo el intento de usar el puerto " + port + ".\n"
-                    + "Los puertos menores a 1024 requieren privilegios elevados.\n\n"
-                    + "SOLUCION en Windows:\n"
-                    + "  Ejecutar IED Navigator como Administrador\n"
-                    + "  (clic derecho en IEDNavigator.bat > Ejecutar como administrador)\n\n"
-                    + "SOLUCION en Linux:\n"
-                    + "  sudo iednavigator\n"
-                    + "  o instalar authbind: sudo apt install authbind\n\n"
-                    + "ALTERNATIVA (sin privilegios):\n"
-                    + "  Usar puerto 10102 en el campo Puerto del panel Servidor\n";
+                return I18n.t("port.res.denied") + "\n\n"
+                    + I18n.t("port.res.denied.body", String.valueOf(port)) + "\n";
             }
             // Puerto ocupado
-            return "RESULTADO: PUERTO EN USO\n\n"
-                + "El puerto " + port + " ya esta siendo utilizado por otro proceso.\n\n"
+            return I18n.t("port.res.inuse") + "\n\n"
+                + I18n.t("port.res.inuse.body", String.valueOf(port)) + "\n\n"
                 + getPortOwnerInfo(port);
         } catch (Exception e) {
-            return "RESULTADO: ERROR INESPERADO\n\n"
-                + "No se pudo verificar el puerto " + port + ".\n"
-                + "Excepcion: " + e.getClass().getSimpleName() + ": " + e.getMessage() + "\n";
+            return I18n.t("port.res.unexpected") + "\n\n"
+                + I18n.t("port.res.unexpected.body", String.valueOf(port),
+                    e.getClass().getSimpleName() + ": " + e.getMessage()) + "\n";
         }
     }
 
@@ -2568,7 +2517,7 @@ public class IEDNavigatorApp extends JFrame {
                         matching.append(line.trim()).append("\n");
                 }
                 if (matching.length() > 0) {
-                    sb.append("Proceso encontrado (netstat -ano):\n").append(matching);
+                    sb.append(I18n.t("port.owner.found")).append("\n").append(matching);
                     // Extraer PID (ultima columna) y consultar nombre
                     for (String line : matching.toString().split("\n")) {
                         String[] parts = line.trim().split("\\s+");
@@ -2580,8 +2529,7 @@ public class IEDNavigatorApp extends JFrame {
                         }
                     }
                 } else {
-                    sb.append("netstat no encontro un proceso LISTENING en :").append(port).append("\n");
-                    sb.append("(el proceso pudo liberarse justo despues de la prueba)\n");
+                    sb.append(I18n.t("port.owner.notfound", String.valueOf(port))).append("\n");
                 }
             } else {
                 sb.append("Resultado de ss -tlnp:\n");
@@ -2600,17 +2548,15 @@ public class IEDNavigatorApp extends JFrame {
                 } catch (Exception ignored) {}
             }
         } catch (Exception e) {
-            sb.append("No se pudo ejecutar netstat/ss: ").append(e.getMessage()).append("\n");
+            sb.append(I18n.t("port.owner.execfail")).append(" ").append(e.getMessage()).append("\n");
         }
 
-        sb.append("\nACCION RECOMENDADA:\n");
-        sb.append("  Detener el proceso que usa el puerto ").append(port).append("\n");
-        sb.append("  o cambiar el puerto del servidor a uno libre (ej: 10102)\n");
+        sb.append("\n").append(I18n.t("port.action", String.valueOf(port))).append("\n");
         if (isWindows) {
-            sb.append("\nVerificacion manual:\n");
+            sb.append("\n").append(I18n.t("port.manual")).append("\n");
             sb.append("  netstat -ano | findstr \":").append(port).append("\"\n");
         } else {
-            sb.append("\nVerificacion manual:\n");
+            sb.append("\n").append(I18n.t("port.manual")).append("\n");
             sb.append("  ss -tlnp sport = :").append(port).append("\n");
             sb.append("  sudo fuser ").append(port).append("/tcp\n");
         }
@@ -2640,16 +2586,16 @@ public class IEDNavigatorApp extends JFrame {
         ta.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
         Color borderColor;
-        if (result.startsWith("RESULTADO: PUERTO LIBRE"))    borderColor = new Color(0, 140, 0);
-        else if (result.startsWith("RESULTADO: PERMISO"))    borderColor = new Color(200, 100, 0);
-        else if (result.startsWith("RESULTADO: PUERTO EN"))  borderColor = new Color(190, 0, 0);
-        else                                                  borderColor = new Color(120, 0, 160);
+        if (result.startsWith(I18n.t("port.res.free")))         borderColor = new Color(0, 140, 0);
+        else if (result.startsWith(I18n.t("port.res.denied")))  borderColor = new Color(200, 100, 0);
+        else if (result.startsWith(I18n.t("port.res.inuse")))   borderColor = new Color(190, 0, 0);
+        else                                                     borderColor = new Color(120, 0, 160);
 
         JScrollPane sp = new JScrollPane(ta);
         sp.setPreferredSize(new java.awt.Dimension(500, 300));
         sp.setBorder(BorderFactory.createLineBorder(borderColor, 2));
 
-        JDialog dlg = new JDialog(this, "Diagnostico  —  Puerto " + port, true);
+        JDialog dlg = new JDialog(this, I18n.t("port.diag.title") + " " + port, true);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dlg.add(sp);
         dlg.pack();
@@ -2662,7 +2608,7 @@ public class IEDNavigatorApp extends JFrame {
         try {
             port = Integer.parseInt(tfServerPort.getText().trim());
         } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Puerto invalido.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18n.t("err.port.invalid"), I18n.t("err.title"), JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -2672,32 +2618,29 @@ public class IEDNavigatorApp extends JFrame {
 
         if (found.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "No se encontro ningun proceso usando el puerto " + port + ".\n" +
-                    "Puede que el puerto ya este libre o no se pudo identificar el proceso.",
-                    "Puerto " + port + " — Sin proceso identificado",
+                    I18n.t("port.release.none.msg", String.valueOf(port)),
+                    I18n.t("port.release.none.title", String.valueOf(port)),
                     JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
         // Construir mensaje de confirmacion
         StringBuilder msg = new StringBuilder();
-        msg.append("Se va a TERMINAR el siguiente proceso:\n\n");
+        msg.append(I18n.t("port.release.confirm.hdr")).append("\n\n");
         for (String[] entry : found) {
             msg.append("  PID ").append(entry[0]);
             if (!entry[1].isEmpty()) msg.append("  (").append(entry[1]).append(")");
             msg.append("\n");
         }
-        msg.append("\nEsto liberara el puerto ").append(port).append(".\n");
-        msg.append("Continuacion requiere confirmacion.\n\n");
-        msg.append("ATENCION: Terminar un proceso del sistema puede causar inestabilidad.");
+        msg.append("\n").append(I18n.t("port.release.confirm.tail", String.valueOf(port)));
 
         int confirm = JOptionPane.showConfirmDialog(this, msg.toString(),
-                "Liberar Puerto " + port, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                I18n.t("port.release.title") + " " + port, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm != JOptionPane.YES_OPTION) return;
 
         // Ejecutar kill en background
         btnReleasePort.setEnabled(false);
-        btnReleasePort.setText("Liberando...");
+        btnReleasePort.setText(I18n.t("port.releasing"));
         final int finalPort = port;
         final boolean finalWin = isWindows;
         final java.util.List<String[]> finalFound = found;
@@ -2718,31 +2661,32 @@ public class IEDNavigatorApp extends JFrame {
                     if (code == 0) {
                         result.append("OK  PID ").append(pid);
                         if (!name.isEmpty()) result.append(" (").append(name).append(")");
-                        result.append(" terminado\n");
+                        result.append(" ").append(I18n.t("port.release.terminated")).append("\n");
                     } else {
                         result.append("ERROR  PID ").append(pid).append(": ").append(out).append("\n");
-                        if (finalWin) result.append("  (Intente ejecutar IED Navigator como Administrador)\n");
-                        else result.append("  (Intente con sudo)\n");
+                        if (finalWin) result.append("  ").append(I18n.t("port.release.tryadmin")).append("\n");
+                        else result.append("  ").append(I18n.t("port.release.trysudo")).append("\n");
                     }
                 } catch (Exception ex) {
-                    result.append("EXCEPCION al terminar PID ").append(pid).append(": ").append(ex.getMessage()).append("\n");
+                    result.append(I18n.t("port.release.exc")).append(" ").append(pid).append(": ").append(ex.getMessage()).append("\n");
                 }
             }
 
             // Verificar si el puerto quedo libre
             boolean libre = false;
             try (ServerSocket ss = new ServerSocket(finalPort)) { libre = true; } catch (Exception ignored) {}
-            result.append("\nEstado del puerto ").append(finalPort).append(": ")
-                  .append(libre ? "LIBRE" : "AUN EN USO").append("\n");
+            result.append("\n").append(I18n.t("port.status")).append(" ").append(finalPort).append(": ")
+                  .append(libre ? I18n.t("port.free") : I18n.t("port.stillused")).append("\n");
 
             final String finalResult = result.toString();
             final boolean finalLibre = libre;
             SwingUtilities.invokeLater(() -> {
                 btnReleasePort.setEnabled(true);
-                btnReleasePort.setText("Liberar Puerto");
+                btnReleasePort.setText(I18n.t("port.release"));
                 JOptionPane.showMessageDialog(this,
                         finalResult,
-                        "Liberar Puerto " + finalPort + " — " + (finalLibre ? "Exito" : "Revisar"),
+                        I18n.t("port.release.title") + " " + finalPort + " — "
+                            + (finalLibre ? I18n.t("port.success") : I18n.t("port.review")),
                         finalLibre ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
             });
         }, "port-release").start();
@@ -2798,7 +2742,7 @@ public class IEDNavigatorApp extends JFrame {
                 }
             }
         } catch (Exception e) {
-            log("Error buscando proceso en puerto " + port + ": " + e.getMessage());
+            log(I18n.t("log.app.findportprocerror", port, e.getMessage()));
         }
         return result;
     }
@@ -2811,7 +2755,7 @@ public class IEDNavigatorApp extends JFrame {
      */
     private void updateIedDisplay(String infoText) {
         if (infoText == null || infoText.isBlank()) {
-            lblIedDisplay.setText("  Sin equipo  ");
+            lblIedDisplay.setText("  " + I18n.t("status.nodevice") + "  ");
             lblIedDisplay.setForeground(new Color(120, 120, 140));
             return;
         }
@@ -2848,14 +2792,14 @@ public class IEDNavigatorApp extends JFrame {
             lblIedDisplay.setText(html);
             lblIedDisplay.setForeground(new Color(15, 55, 120));
         } else {
-            lblIedDisplay.setText("  Sin equipo  ");
+            lblIedDisplay.setText("  " + I18n.t("status.nodevice") + "  ");
             lblIedDisplay.setForeground(new Color(120, 120, 140));
         }
     }
 
     private void updateConnectionInfo(String host, int port) {
         if (host == null || host.isEmpty() || port == 0) {
-            lblConnectionInfo.setText("Sin conexion");
+            lblConnectionInfo.setText(I18n.t("status.noconn"));
             lblConnectionInfo.setForeground(Color.GRAY);
         } else {
             lblConnectionInfo.setText(host + ":" + port);
@@ -2866,8 +2810,7 @@ public class IEDNavigatorApp extends JFrame {
     private int showIEDSelectionDialog(List<String> ieds, String fileName) {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        JLabel lblInfo = new JLabel("<html>El archivo <b>" + fileName + "</b> contiene " +
-            ieds.size() + " IEDs.<br>Seleccione cu\u00e1l desea simular:</html>");
+        JLabel lblInfo = new JLabel(I18n.t("ied.select.msg", fileName, String.valueOf(ieds.size())));
         panel.add(lblInfo, BorderLayout.NORTH);
         DefaultListModel<String> listModel = new DefaultListModel<>();
         for (int i = 0; i < ieds.size(); i++) {
@@ -2894,7 +2837,7 @@ public class IEDNavigatorApp extends JFrame {
             }
         });
         int result = JOptionPane.showConfirmDialog(this, panel,
-            "Seleccionar IED", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            I18n.t("ied.select.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (doubleClickIndex[0] >= 0) {
             return doubleClickIndex[0];
         }
@@ -3020,15 +2963,15 @@ public class IEDNavigatorApp extends JFrame {
 
     private void displayServerModel() {
         ServerModel model = server.getServerModel();
-        if (model == null) { log("ERROR: ServerModel es null"); return; }
-        log("ServerModel tiene " + model.getChildren().size() + " LDs");
+        if (model == null) { log(I18n.t("log.app.servermodelnull")); return; }
+        log(I18n.t("log.app.servermodellds", model.getChildren().size()));
         buildTree(model);
     }
 
     private void displayClientModel() {
         ServerModel model = client.getServerModel();
-        if (model == null) { log("ERROR: Cliente ServerModel es null"); return; }
-        log("Cliente ServerModel tiene " + model.getChildren().size() + " LDs");
+        if (model == null) { log(I18n.t("log.app.clientmodelnull")); return; }
+        log(I18n.t("log.app.clientmodellds", model.getChildren().size()));
         buildTree(model);
     }
 
@@ -3120,7 +3063,7 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("TableHeader.height", 26);
         UIManager.put("TableHeader.showTrailingVerticalLine", true);
         UIManager.put("TableHeader.separatorColor", new Color(0xDDDDDD));
-        UIManager.put("TableHeader.font", new Font("Segoe UI", Font.BOLD, 12));
+        UIManager.put("TableHeader.font", new Font("Dialog", Font.BOLD, 12));
 
         UIManager.put("Tree.rowHeight", 22);
         UIManager.put("Tree.selectionArc", 8);
@@ -3130,7 +3073,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // ── 3. Detalles de pulido ─────────────────────────────────────────
         // Fuente base con buen rendering en Windows
-        UIManager.put("defaultFont", new Font("Segoe UI", Font.PLAIN, 13));
+        UIManager.put("defaultFont", new Font("Dialog", Font.PLAIN, 13));
         // TitledBorders más sutiles
         UIManager.put("TitledBorder.titleColor", new Color(0x546E7A));
         // Toolbars con algo de aire
@@ -3161,7 +3104,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Pestaña activa: texto en azul + negrita para reforzar el subrayado
         UIManager.put("TabbedPane.selectedForeground", accent);
-        UIManager.put("TabbedPane.font", new Font("Segoe UI", Font.PLAIN, 13));
+        UIManager.put("TabbedPane.font", new Font("Dialog", Font.PLAIN, 13));
         UIManager.put("TabbedPane.tabHeight", 30);
 
         // Selección de tabla/árbol en azul suave con texto negro (no invierte color)
@@ -3183,14 +3126,14 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("SplitPaneDivider.gripColor", new Color(0xB0BEC5));
 
         // TitledBorder con fuente más chica y semibold (look de sección)
-        UIManager.put("TitledBorder.font", new Font("Segoe UI", Font.BOLD, 12));
+        UIManager.put("TitledBorder.font", new Font("Dialog", Font.BOLD, 12));
 
         // ── 5. Barra de título moderna (decoraciones FlatLaf, estilo VS Code) ──
         // Menú embebido en la barra de título + fondo unificado con la ventana
         UIManager.put("TitlePane.unifiedBackground", true);
         UIManager.put("TitlePane.menuBarEmbedded", true);
         UIManager.put("TitlePane.titleMargins", new Insets(4, 8, 4, 8));
-        UIManager.put("TitlePane.font", new Font("Segoe UI", Font.BOLD, 13));
+        UIManager.put("TitlePane.font", new Font("Dialog", Font.BOLD, 13));
         UIManager.put("TitlePane.foreground", new Color(0x37474F));
         // Para revertir a la barra de título clásica de Windows: comentar las
         // dos líneas setDefaultLookAndFeelDecorated(true) en main().
