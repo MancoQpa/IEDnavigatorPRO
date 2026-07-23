@@ -44,31 +44,30 @@ class SclComparePanel {
         gc.insets = new Insets(2, 4, 2, 4);
         gc.anchor = GridBagConstraints.WEST;
 
-        JButton btnFileA = new JButton("Archivo A...");
+        JButton btnFileA = new JButton(I18n.t("sclcmp.filea"));
         btnFileA.addActionListener(e -> {
             File f = chooseFile();
             if (f != null) { fileA = f; lblFileA.setText(f.getName()); }
         });
-        JButton btnFileB = new JButton("Archivo B...");
+        JButton btnFileB = new JButton(I18n.t("sclcmp.fileb"));
         btnFileB.addActionListener(e -> {
             File f = chooseFile();
             if (f != null) { fileB = f; lblFileB.setText(f.getName()); }
         });
-        lblFileA = new JLabel("(sin seleccionar)");
-        lblFileB = new JLabel("(sin seleccionar)");
-        JButton btnCompare = new JButton("Comparar");
+        lblFileA = new JLabel(I18n.t("sclcmp.none"));
+        lblFileB = new JLabel(I18n.t("sclcmp.none"));
+        JButton btnCompare = new JButton(I18n.t("sclcmp.compare"));
         btnCompare.addActionListener(e -> runCompare());
-        JButton btnExport = new JButton("Exportar CSV");
+        JButton btnExport = new JButton(I18n.t("btn.exportcsv"));
         btnExport.addActionListener(e -> exportCsv());
 
         categoryFilter = new JComboBox<>();
-        categoryFilter.addItem("Todas las categorías");
+        categoryFilter.addItem(I18n.t("sclcmp.allcategories"));
         for (String c : SclCompare.CATEGORIES) categoryFilter.addItem(c);
         categoryFilter.addActionListener(e -> applyFilter());
 
-        chkIgnoreName = new JCheckBox("Ignorar nombre de IED");
-        chkIgnoreName.setToolTipText("Compara por posición (IED#1, IED#2...) en lugar de por nombre. "
-            + "Útil cuando solo cambió el nombre del IED entre revisiones.");
+        chkIgnoreName = new JCheckBox(I18n.t("sclcmp.ignorename"));
+        chkIgnoreName.setToolTipText(I18n.t("sclcmp.bypos.tip"));
 
         gc.gridx = 0; gc.gridy = 0; top.add(btnFileA, gc);
         gc.gridx = 1; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL; top.add(lblFileA, gc);
@@ -114,7 +113,7 @@ class SclComparePanel {
 
         panel.add(new JScrollPane(diffTable), BorderLayout.CENTER);
 
-        lblSummary = new JLabel("Seleccione dos archivos SCL y pulse Comparar");
+        lblSummary = new JLabel(I18n.t("sclcmp.hint"));
         panel.add(lblSummary, BorderLayout.SOUTH);
 
         return panel;
@@ -130,8 +129,8 @@ class SclComparePanel {
 
     private void runCompare() {
         if (fileA == null || fileB == null) {
-            JOptionPane.showMessageDialog(parent, "Seleccione ambos archivos (A y B)",
-                "Comparar SCL", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(parent, I18n.t("sclcmp.selectboth"),
+                I18n.t("tab.sclcmp"), JOptionPane.WARNING_MESSAGE);
             return;
         }
         try {
@@ -163,8 +162,8 @@ class SclComparePanel {
             }
         } catch (Exception ex) {
             log.accept("[CompararSCL] ERROR: " + ex.getMessage());
-            JOptionPane.showMessageDialog(parent, "Error comparando archivos:\n" + ex.getMessage(),
-                "Comparar SCL", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(parent, I18n.t("sclcmp.err.compare") + "\n" + ex.getMessage(),
+                I18n.t("tab.sclcmp"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -179,7 +178,7 @@ class SclComparePanel {
 
     private void exportCsv() {
         if (lastDiffs == null || lastDiffs.isEmpty()) {
-            JOptionPane.showMessageDialog(parent, "No hay diferencias que exportar");
+            JOptionPane.showMessageDialog(parent, I18n.t("sclcmp.nodiff"));
             return;
         }
         JFileChooser fc = new JFileChooser();
@@ -193,7 +192,7 @@ class SclComparePanel {
             }
             log.accept("[CompararSCL] Exportado: " + fc.getSelectedFile().getAbsolutePath());
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(parent, "Error exportando: " + ex.getMessage());
+            JOptionPane.showMessageDialog(parent, I18n.t("err.export") + " " + ex.getMessage());
         }
     }
 

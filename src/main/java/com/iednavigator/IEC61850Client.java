@@ -42,6 +42,10 @@ public class IEC61850Client implements ClientEventListener {
     // Contador de ctlNum — se incrementa en cada operación de control (IEC 61850-7-3 §20.2)
     private int ctlNumCounter = 0;
 
+    // Selección SBO pendiente (flujo manual de dos pasos: SELECT → EXECUTE desde el diálogo).
+    // Guarda el ctlNum reservado y el valor comandado para que el OPERATE coincida con el SBOw.
+    private PendingSelect pendingSelect;
+
     public interface ValueChangeListener {
         void onValueChanged(String reference, String value, String type);
         void onError(String reference, String error);
@@ -1733,12 +1737,20 @@ public class IEC61850Client implements ClientEventListener {
                 "Nodo Cancel no encontrado en el modelo del IED", null);
         }
 
-        // Poblar Cancel: origin + ctlNum + T; sin ctlVal (Cancel no altera el proceso)
-        fillControlStructure(cancelNode, false, orIdent);
+        // Poblar Cancel: origin + ctlNum + T; sin ctlVal (Cancel no altera el proceso).
+        // Si hay una selección pendiente de este nodo (enhanced SBO), el CANCEL debe llevar
+        // el MISMO ctlNum del SELECT (IEC 61850-7-2 §20.8); si no, se autoincrementa.
+        PendingSelect ps = pendingSelect;
+        if (ps != null && ps.operNode == operNode && ps.ctlNum >= 0) {
+            fillControlStructure(cancelNode, ps.testFlag, orIdent, false, false, ps.ctlNum);
+        } else {
+            fillControlStructure(cancelNode, false, orIdent);
+        }
 
         try {
             association.setDataValues(cancelNode);
             System.out.println("[SBO] CANCEL enviado: " + operNode.getReference());
+            if (ps != null && ps.operNode == operNode) pendingSelect = null;
             return ControlResult.ok(ctlModel, ctlModelName);
         } catch (ServiceError e) {
             String lastErr = readLastApplError(operNode);
@@ -1888,6 +1900,186 @@ public class IEC61850Client implements ClientEventListener {
     public ControlResult operateControl(FcModelNode operNode, String ctlValStr,
                                          boolean testFlag, String orIdent) throws IOException {
         return operateControl(operNode, ctlValStr, testFlag, orIdent, false, false);
+    }
+
+    // ==================== SBO MANUAL EN DOS PASOS (SELECT / EXECUTE) ====================
+
+    /**
+     * Estado de una selección SBO pendiente iniciada desde el diálogo (SELECT manual).
+     * Conserva el ctlNum reservado y todos los campos del comando para que el OPERATE
+     * posterior coincida exactamente con el SBOw (exigencia del enhanced SBO).
+     */
+    public static class PendingSelect {
+        public final FcModelNode operNode;
+        public final int ctlModel;
+        public final int ctlNum;          // -1 en SBO normal (beanit maneja el ctlNum del Oper)
+        public final String ctlVal;
+        public final boolean testFlag, synchroCheck, interlockCheck;
+        public final String orIdent;
+        public final long deadlineMs;     // instante de expiración = ahora + sboTimeout
+
+        PendingSelect(FcModelNode operNode, int ctlModel, int ctlNum, String ctlVal,
+                      boolean testFlag, boolean synchroCheck, boolean interlockCheck,
+                      String orIdent, long deadlineMs) {
+            this.operNode = operNode; this.ctlModel = ctlModel; this.ctlNum = ctlNum;
+            this.ctlVal = ctlVal; this.testFlag = testFlag; this.synchroCheck = synchroCheck;
+            this.interlockCheck = interlockCheck; this.orIdent = orIdent; this.deadlineMs = deadlineMs;
+        }
+        public boolean isExpired() { return System.currentTimeMillis() > deadlineMs; }
+        public long remainingMs()  { return Math.max(0, deadlineMs - System.currentTimeMillis()); }
+    }
+
+    public PendingSelect getPendingSelect() { return pendingSelect; }
+    public void clearPendingSelect() { pendingSelect = null; }
+
+    /**
+     * Lee el sboTimeout [CF] del DO de control (ms) para dimensionar la cuenta regresiva.
+     * Si el modelo no lo expone o no se puede leer, retorna el default (30000 ms).
+     */
+    public int getSboTimeoutMs(FcModelNode operNode) {
+        final int DEFAULT = 30000;
+        if (serverModel == null || association == null) return DEFAULT;
+        try {
+            String operRef = operNode.getReference().toString();
+            int lastDot = operRef.lastIndexOf('.');
+            if (lastDot < 0) return DEFAULT;
+            String doRef = operRef.substring(0, lastDot);
+            for (Fc fc : new Fc[]{Fc.CF, Fc.SP}) {
+                ModelNode doNode = serverModel.findModelNode(doRef, fc);
+                ModelNode to = (doNode != null) ? doNode.getChild("sboTimeout") : null;
+                if (to instanceof FcModelNode) {
+                    try { association.getDataValues((FcModelNode) to); } catch (Exception ignore) {}
+                    String v = formatValue(to);
+                    if (v != null) {
+                        try {
+                            long ms = Long.parseLong(v.replaceAll("[^0-9]", ""));
+                            if (ms > 0) return (int) Math.min(ms, 600000);
+                        } catch (NumberFormatException ignore) {}
+                    }
+                }
+            }
+        } catch (Exception ignore) {}
+        return DEFAULT;
+    }
+
+    /**
+     * Paso 1 del SBO manual: SELECT (reserva el objeto de control en el IED) sin operar aún.
+     *   ctlModel 4 → SELECT-WITH-VALUE: escribe SBOw con ctlNum nuevo (se guarda para el OPERATE).
+     *   ctlModel 2 → association.select() (lee el atributo SBO); el valor se prepara en Oper.
+     * Solo aplica a modelos SBO (2/4). Guarda el estado en pendingSelect con su deadline.
+     */
+    public ControlResult selectControl(FcModelNode operNode, String ctlValStr, boolean testFlag,
+                                        String orIdent, boolean synchroCheck, boolean interlockCheck,
+                                        int sboTimeoutMs) throws IOException {
+        if (!isConnected()) throw new IOException("Not connected");
+        int ctlModel = getCtlModelValue(operNode);
+        String ctlModelName = CTL_MODEL_MAP.getOrDefault(ctlModel, "unknown(" + ctlModel + ")");
+
+        if (ctlModel != 2 && ctlModel != 4) {
+            return ControlResult.fail(ctlModel, ctlModelName,
+                "SELECT solo aplica a ctlModel SBO (2 o 4); este nodo es: " + ctlModelName, null);
+        }
+
+        FcModelNode controlDo = (operNode.getParent() instanceof FcModelNode)
+            ? (FcModelNode) operNode.getParent() : operNode;
+        long deadline = System.currentTimeMillis() + Math.max(1000, sboTimeoutMs);
+
+        if (ctlModel == 4) {
+            ModelNode sbowNode = controlDo.getChild("SBOw");
+            if (!(sbowNode instanceof FcModelNode)) {
+                return ControlResult.fail(4, ctlModelName,
+                    "Nodo SBOw no encontrado: el modelo no expone select-with-value", null);
+            }
+            FcModelNode sbow = (FcModelNode) sbowNode;
+            ctlNumCounter = (ctlNumCounter + 1) & 0xFF;
+            int ctlNum = ctlNumCounter;
+            setOperCtlVal(sbow, ctlValStr);
+            fillControlStructure(sbow, testFlag, orIdent, synchroCheck, interlockCheck, ctlNum);
+            try {
+                System.out.println("[SBOe] SELECT-WITH-VALUE (SBOw ctlNum=" + ctlNum + ") → " + sbow.getReference());
+                association.setDataValues(sbow);
+            } catch (ServiceError e) {
+                String lastErr = readLastApplError(operNode);
+                return ControlResult.fail(4, ctlModelName,
+                    "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), lastErr);
+            }
+            pendingSelect = new PendingSelect(operNode, 4, ctlNum, ctlValStr, testFlag,
+                synchroCheck, interlockCheck, orIdent, deadline);
+            return ControlResult.ok(4, ctlModelName);
+        } else { // ctlModel 2 (SBO normal)
+            setOperCtlVal(operNode, ctlValStr);
+            fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck);
+            try {
+                System.out.println("[SBO] SELECT → " + operNode.getReference());
+                boolean selected = association.select(controlDo);
+                if (!selected) {
+                    String lastErr = readLastApplError(operNode);
+                    return ControlResult.fail(2, ctlModelName, "SELECT rechazado por el IED", lastErr);
+                }
+            } catch (ServiceError e) {
+                String lastErr = readLastApplError(operNode);
+                return ControlResult.fail(2, ctlModelName,
+                    "SELECT ServiceError: " + e.getErrorCode(), lastErr);
+            }
+            pendingSelect = new PendingSelect(operNode, 2, -1, ctlValStr, testFlag,
+                synchroCheck, interlockCheck, orIdent, deadline);
+            return ControlResult.ok(2, ctlModelName);
+        }
+    }
+
+    /**
+     * Paso 2 del SBO manual: EXECUTE (OPERATE) usando la selección pendiente.
+     * Exige un pendingSelect vigente (no expirado) para el mismo nodo; usa el ctlNum y el
+     * valor guardados en el SELECT para que Oper coincida con el SBOw. Limpia el estado al terminar.
+     */
+    public ControlResult executeControl(FcModelNode operNode) throws IOException {
+        if (!isConnected()) throw new IOException("Not connected");
+        int ctlModel = getCtlModelValue(operNode);
+        String ctlModelName = CTL_MODEL_MAP.getOrDefault(ctlModel, "unknown(" + ctlModel + ")");
+
+        PendingSelect ps = pendingSelect;
+        if (ps == null || ps.operNode != operNode) {
+            return ControlResult.fail(ctlModel, ctlModelName,
+                "No hay un SELECT activo para este nodo. Presione Seleccionar (SBOw) primero.", null);
+        }
+        if (ps.isExpired()) {
+            pendingSelect = null;
+            return ControlResult.fail(ctlModel, ctlModelName,
+                "El SELECT expiró (SBO timeout). Vuelva a seleccionar.", null);
+        }
+
+        FcModelNode controlDo = (operNode.getParent() instanceof FcModelNode)
+            ? (FcModelNode) operNode.getParent() : operNode;
+
+        if (ps.ctlModel == 4) {
+            setOperCtlVal(operNode, ps.ctlVal);
+            fillControlStructure(operNode, ps.testFlag, ps.orIdent, ps.synchroCheck, ps.interlockCheck, ps.ctlNum);
+            try {
+                association.setDataValues(operNode);
+                System.out.println("[OK] OPERATE (enhanced, 2-pasos) ejecutado: " + operNode.getReference()
+                    + " = " + ps.ctlVal + (ps.testFlag ? " [TEST]" : ""));
+                pendingSelect = null;
+                return ControlResult.ok(4, ctlModelName);
+            } catch (ServiceError e) {
+                String lastErr = readLastApplError(operNode);
+                pendingSelect = null;
+                return ControlResult.fail(4, ctlModelName, "ServiceError: " + e.getErrorCode(), lastErr);
+            }
+        } else { // ctlModel 2
+            setOperCtlVal(operNode, ps.ctlVal);
+            fillControlStructure(operNode, ps.testFlag, ps.orIdent, ps.synchroCheck, ps.interlockCheck);
+            try {
+                association.operate(controlDo);
+                System.out.println("[OK] OPERATE (SBO, 2-pasos) ejecutado: " + operNode.getReference()
+                    + " = " + ps.ctlVal + (ps.testFlag ? " [TEST]" : ""));
+                pendingSelect = null;
+                return ControlResult.ok(2, ctlModelName);
+            } catch (ServiceError e) {
+                String lastErr = readLastApplError(operNode);
+                pendingSelect = null;
+                return ControlResult.fail(2, ctlModelName, "ServiceError: " + e.getErrorCode(), lastErr);
+            }
+        }
     }
 
     /**

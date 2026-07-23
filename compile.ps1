@@ -32,7 +32,9 @@ $jars = Get-ChildItem -Path $LIBDIR -Filter '*.jar' | ForEach-Object { $_.FullNa
 $CP = $jars -join ';'
 
 # Collect .java files from com.iednavigator only (com.iedexplorer is the old renamed package)
-$sources = Get-ChildItem -Path "$SRCDIR\com\iednavigator" -Recurse -Filter '*.java' | ForEach-Object { $_.FullName }
+# Se excluye bridge\: era para el frontend Tauri (descartado); requiere Javalin/Jackson que no estan en lib\
+$sources = Get-ChildItem -Path "$SRCDIR\com\iednavigator" -Recurse -Filter '*.java' |
+    Where-Object { $_.FullName -notmatch '\\bridge\\' } | ForEach-Object { $_.FullName }
 
 Write-Host "Compiling Java files..."
 Write-Host "JAVA_HOME: $env:JAVA_HOME"

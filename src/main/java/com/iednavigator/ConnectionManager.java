@@ -123,11 +123,11 @@ class ConnectionManager {
         // Si estamos conectados como cliente, desconectar primero
         if (ctx.isConnected() && ctx.getClient() != null) {
             disconnect();
-            ctx.log("Cliente desconectado al cambiar a modo Servidor");
+            ctx.log(I18n.t("log.cm.clientdisc.tomodesrv"));
         }
         ctx.switchUiToServerMode();
         ctx.clearModel();
-        ctx.updateStatus(false, "Modo Servidor");
+        ctx.updateStatus(false, I18n.t("status.mode.server"));
     }
 
     void switchToClientMode() {
@@ -136,11 +136,11 @@ class ConnectionManager {
             ctx.getServer().stop();
             ctx.setServerRunning(false);
             ctx.setBtnStartStopText("Iniciar Simulacion");
-            ctx.log("Servidor detenido al cambiar a modo Cliente");
+            ctx.log(I18n.t("log.cm.srvstop.tomodecli"));
         }
         ctx.switchUiToClientMode();
         ctx.clearModel();
-        ctx.updateStatus(false, "Modo Cliente");
+        ctx.updateStatus(false, I18n.t("status.mode.client"));
     }
 
     /**
@@ -153,7 +153,7 @@ class ConnectionManager {
             return;
         }
 
-        ctx.log("Buscando archivos SCL/CID en el IED...");
+        ctx.log(I18n.t("log.cm.searchingscl"));
 
         ctx.backgroundExecutor().submit(() -> {
             try {
@@ -162,17 +162,17 @@ class ConnectionManager {
 
                 if (sclFiles.isEmpty()) {
                     // Intentar listar directorio raiz para ver que hay
-                    ctx.log("No se encontraron archivos SCL. Listando directorio raiz...");
+                    ctx.log(I18n.t("log.cm.noscl.listingroot"));
                     try {
                         List<FileInformation> rootFiles = ctx.getClient().listFiles("");
                         if (rootFiles != null && !rootFiles.isEmpty()) {
-                            ctx.log("Archivos en el IED:");
+                            ctx.log(I18n.t("log.cm.filesinied"));
                             for (FileInformation fi : rootFiles) {
-                                ctx.log("  - " + fi.getFilename() + " (" + fi.getFileSize() + " bytes)");
+                                ctx.log(I18n.t("log.cm.fileentry", fi.getFilename(), fi.getFileSize()));
                             }
                         }
                     } catch (Exception e) {
-                        ctx.log("No se pudo listar archivos: " + e.getMessage());
+                        ctx.log(I18n.t("log.cm.listfileserror", e.getMessage()));
                     }
 
                     SwingUtilities.invokeLater(() -> {
@@ -202,12 +202,12 @@ class ConnectionManager {
 
                     selectedFile = selected[0];
                     if (selectedFile == null) {
-                        ctx.log("Descarga cancelada");
+                        ctx.log(I18n.t("log.cm.downloadcancelled"));
                         return;
                     }
                 }
 
-                ctx.log("Descargando: " + selectedFile);
+                ctx.log(I18n.t("log.cm.downloading", selectedFile));
 
                 // Descargar el archivo
                 downloadedCidData = ctx.getClient().downloadFile(selectedFile);
@@ -217,7 +217,7 @@ class ConnectionManager {
                 int lastSlash = selectedFile.lastIndexOf('/');
                 String filename = lastSlash >= 0 ? selectedFile.substring(lastSlash + 1) : selectedFile;
 
-                ctx.log("CID descargado: " + filename + " (" + downloadedCidData.length + " bytes)");
+                ctx.log(I18n.t("log.cm.ciddownloaded", filename, downloadedCidData.length));
 
                 // Parsear GoCBs del CID descargado
                 try {
@@ -241,11 +241,11 @@ class ConnectionManager {
                     });
 
                 } catch (Exception parseEx) {
-                    ctx.log("Error parseando CID: " + parseEx.getMessage());
+                    ctx.log(I18n.t("log.cm.cidparseerror", parseEx.getMessage()));
                 }
 
             } catch (Exception e) {
-                ctx.log("Error obteniendo CID: " + e.getMessage());
+                ctx.log(I18n.t("log.cm.cidgeterror", e.getMessage()));
                 e.printStackTrace();
                 SwingUtilities.invokeLater(() -> {
                     JOptionPane.showMessageDialog(ctx.parentWindow(),
@@ -263,7 +263,7 @@ class ConnectionManager {
     private void autoDownloadCid() {
         if (!ctx.isConnected() || ctx.getClient() == null) return;
 
-        ctx.log("Buscando CID en el IED para obtener GoCBs...");
+        ctx.log(I18n.t("log.cm.searchingcid.forgocb"));
 
         ctx.backgroundExecutor().submit(() -> {
             try {
@@ -271,8 +271,8 @@ class ConnectionManager {
                 List<String> sclFiles = ctx.getClient().findSclFiles();
 
                 if (sclFiles.isEmpty()) {
-                    ctx.log("No se encontro CID en el IED - GoCBs no disponibles via SCL");
-                    ctx.log("Nota: Para ver GoCBs, cargue manualmente un archivo SCL (Archivo -> Cargar SCL/CID)");
+                    ctx.log(I18n.t("log.cm.nocid.nogocb"));
+                    ctx.log(I18n.t("log.cm.notemanualscl"));
                     return;
                 }
 
@@ -288,7 +288,7 @@ class ConnectionManager {
                     selectedFile = sclFiles.get(0);
                 }
 
-                ctx.log("Descargando CID automaticamente: " + selectedFile);
+                ctx.log(I18n.t("log.cm.autodownloadingcid", selectedFile));
 
                 // Descargar el archivo
                 downloadedCidData = ctx.getClient().downloadFile(selectedFile);
@@ -298,7 +298,7 @@ class ConnectionManager {
                 int lastSlash = selectedFile.lastIndexOf('/');
                 String filename = lastSlash >= 0 ? selectedFile.substring(lastSlash + 1) : selectedFile;
 
-                ctx.log("CID descargado: " + filename + " (" + downloadedCidData.length + " bytes)");
+                ctx.log(I18n.t("log.cm.ciddownloaded", filename, downloadedCidData.length));
 
                 // Parsear GoCBs del CID descargado
                 File tempFile = File.createTempFile("ied_cid_auto_", ".cid");
@@ -314,12 +314,12 @@ class ConnectionManager {
                 SwingUtilities.invokeLater(() -> {
                     // Refrescar panel de GoCBs
                     ctx.refreshGooseControlBlocks();
-                    ctx.log("GoCBs cargados automaticamente del CID");
+                    ctx.log(I18n.t("log.cm.gocbsautoloaded"));
                 });
 
             } catch (Exception e) {
-                ctx.log("Auto-descarga CID falló: " + e.getMessage());
-                ctx.log("Para ver GoCBs, cargue un archivo SCL manualmente");
+                ctx.log(I18n.t("log.cm.autocidfailed", e.getMessage()));
+                ctx.log(I18n.t("log.cm.formanualscl"));
             }
         });
     }
@@ -373,12 +373,12 @@ class ConnectionManager {
 
             try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
                 fos.write(downloadedCidData);
-                ctx.log("CID guardado en: " + file.getAbsolutePath());
+                ctx.log(I18n.t("log.cm.cidsaved", file.getAbsolutePath()));
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
                     "CID guardado exitosamente:\n" + file.getAbsolutePath(),
                     "Guardado", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception e) {
-                ctx.log("Error guardando CID: " + e.getMessage());
+                ctx.log(I18n.t("log.cm.cidsaveerror", e.getMessage()));
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
                     "Error guardando archivo:\n" + e.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
@@ -404,17 +404,17 @@ class ConnectionManager {
             File file = fc.getSelectedFile();
             ctx.setLoadedSclFile(file);
             ctx.setLblFileName(file.getName());
-            ctx.updateStatus(false, "Analizando SCL...");
+            ctx.updateStatus(false, I18n.t("status.analyzingscl"));
             ctx.setStatusIndicatorConnecting();
 
             ctx.backgroundExecutor().submit(() -> {
                 try {
-                    ctx.log("Analizando: " + file.getName() + " (" + (file.length()/1024) + " KB)");
+                    ctx.log(I18n.t("log.cm.analyzing", file.getName(), (file.length()/1024)));
 
                     // Primero obtener lista de IEDs disponibles
                     List<String> availableIEDs = ctx.getServer().getAvailableIEDs(file.getAbsolutePath());
                     int iedCount = availableIEDs.size();
-                    ctx.log("IEDs encontrados: " + iedCount);
+                    ctx.log(I18n.t("log.cm.iedsfound", iedCount));
 
                     int selectedIED = 0; // Por defecto el primero
 
@@ -428,18 +428,17 @@ class ConnectionManager {
                         if (selection[0] < 0) {
                             // Usuario canceló
                             SwingUtilities.invokeLater(() -> {
-                                ctx.updateStatus(false, "Carga cancelada");
+                                ctx.updateStatus(false, I18n.t("status.loadcancelled"));
                                 ctx.setLblFileName("");
                             });
                             return;
                         }
                         selectedIED = selection[0];
-                        ctx.log("IED seleccionado: " + availableIEDs.get(selectedIED) +
-                            " (índice " + selectedIED + ")");
+                        ctx.log(I18n.t("log.cm.iedselected", availableIEDs.get(selectedIED), selectedIED));
                     }
 
                     // Cargar el IED seleccionado
-                    SwingUtilities.invokeLater(() -> ctx.updateStatus(false, "Cargando IED..."));
+                    SwingUtilities.invokeLater(() -> ctx.updateStatus(false, I18n.t("status.loadingied")));
                     long startTime = System.currentTimeMillis();
 
                     boolean success = ctx.getServer().loadSclFileWithIED(file.getAbsolutePath(), selectedIED);
@@ -448,8 +447,8 @@ class ConnectionManager {
                     ctx.parseGoCBsFromScl(file, selectedIED);
 
                     long elapsed = System.currentTimeMillis() - startTime;
-                    ctx.log("Parsing completado en " + elapsed + "ms, success=" + success);
-                    ctx.log("GoCBs encontrados en SCL: " + ctx.getSclGoCBs().size());
+                    ctx.log(I18n.t("log.cm.parsingdone", elapsed, success));
+                    ctx.log(I18n.t("log.cm.gocbsfoundscl", ctx.getSclGoCBs().size()));
 
                     final int finalSelectedIED = selectedIED;
                     SwingUtilities.invokeLater(() -> {
@@ -458,7 +457,7 @@ class ConnectionManager {
                                 ctx.setBtnStartStopEnabled(true);
                                 String iedName = availableIEDs.size() > finalSelectedIED ?
                                     availableIEDs.get(finalSelectedIED) : "IED";
-                                ctx.updateStatus(false, "SCL cargado - " + iedName);
+                                ctx.updateStatus(false, I18n.t("status.sclloaded", iedName));
                                 ctx.setLblFileName(file.getName() + " [" + iedName + "]");
                                 // Mostrar nameplate del IED en status bar
                                 String[] np = ctx.getLoadedIedNameplate();
@@ -469,30 +468,30 @@ class ConnectionManager {
                                     String plate = String.format("  IED: %s  |  Fabricante: %s  |  Tipo: %s%s",
                                         iedName, mfr, type, cfgV);
                                     ctx.setLblIedInfo(plate);
-                                    ctx.log("Nameplate: fabricante=" + mfr + " tipo=" + type + cfgV.trim());
+                                    ctx.log(I18n.t("log.cm.nameplate", mfr, type, cfgV.trim()));
                                     // Inyectar nameplate en los nodos FC=DC del modelo servido
                                     // para que clientes que lean via MMS obtengan los datos reales
                                     ctx.getServer().injectNameplate(np[0], np[1], np[3]);
                                 }
-                                ctx.log("Construyendo arbol...");
+                                ctx.log(I18n.t("log.cm.buildingtree"));
                                 ctx.displayServerModel();
-                                ctx.log("SCL cargado correctamente");
+                                ctx.log(I18n.t("log.cm.sclloadedok"));
                                 // Actualizar GoCBs automaticamente
                                 ctx.refreshGooseControlBlocks();
                             } else {
-                                ctx.updateStatus(false, "Error cargando SCL");
-                                ctx.log("ERROR: No se pudo cargar el SCL");
+                                ctx.updateStatus(false, I18n.t("status.sclerror"));
+                                ctx.log(I18n.t("log.cm.sclloadfailed"));
                             }
                         } catch (Exception e) {
-                            ctx.log("ERROR en UI: " + e.getMessage());
+                            ctx.log(I18n.t("log.cm.uierror", e.getMessage()));
                             e.printStackTrace();
                         }
                     });
                 } catch (Exception e) {
-                    ctx.log("ERROR en background: " + e.getMessage());
+                    ctx.log(I18n.t("log.cm.bgerror", e.getMessage()));
                     e.printStackTrace();
                     SwingUtilities.invokeLater(() -> {
-                        ctx.updateStatus(false, "Error: " + e.getMessage());
+                        ctx.updateStatus(false, I18n.t("err.title") + ": " + e.getMessage());
                     });
                 }
             });
@@ -504,13 +503,13 @@ class ConnectionManager {
             ctx.getServer().stop();
             ctx.setServerRunning(false);
             ctx.setBtnStartStopText("Iniciar Simulacion");
-            ctx.updateStatus(false, "Simulacion detenida");
+            ctx.updateStatus(false, I18n.t("status.simstopped"));
             ctx.updateConnectionInfo("", 0);
-            ctx.log("Simulacion IED detenida");
+            ctx.log(I18n.t("log.cm.simstopped"));
         } else {
             try {
                 int port = Integer.parseInt(ctx.getTfServerPort().trim());
-                ctx.updateStatus(false, "Iniciando simulacion IED...");
+                ctx.updateStatus(false, I18n.t("status.simstarting"));
                 ctx.setStatusIndicatorConnecting();
 
                 final int finalPort = port;
@@ -524,19 +523,19 @@ class ConnectionManager {
                             String localIp = getLocalIpAddress();
                             currentHost = localIp;
                             ctx.setBtnStartStopText("Detener Simulacion");
-                            ctx.updateStatus(true, "IED Simulado ACTIVO");
+                            ctx.updateStatus(true, I18n.t("status.simactive"));
                             ctx.updateConnectionInfo(localIp + " (servidor)", finalPort);
-                            ctx.log("SIMULACION IED ACTIVA");
-                            ctx.log("IP: " + localIp + " | Puerto: " + finalPort);
-                            ctx.log("Conecta cliente a: " + localIp + ":" + finalPort);
+                            ctx.log(I18n.t("log.cm.simactive"));
+                            ctx.log(I18n.t("log.cm.ipport", localIp, finalPort));
+                            ctx.log(I18n.t("log.cm.connectclientto", localIp, finalPort));
 
                             // Auto-seleccionar interfaz de red para GOOSE (igual que en modo cliente)
                             ctx.autoSelectGooseInterface(localIp);
                         } else {
-                            ctx.updateStatus(false, "Error iniciando simulacion");
+                            ctx.updateStatus(false, I18n.t("status.simerror"));
                             ctx.updateConnectionInfo("", 0);
-                            ctx.log("ERROR: No se pudo iniciar el servidor");
-                            ctx.log("Verifica que el puerto " + finalPort + " no este en uso");
+                            ctx.log(I18n.t("log.cm.srvstartfailed"));
+                            ctx.log(I18n.t("log.cm.checkport", finalPort));
                         }
                     });
                 });
@@ -571,24 +570,24 @@ class ConnectionManager {
         }
 
         ctx.setBtnConnectEnabled(false);
-        ctx.updateStatus(false, "Conectando a " + host + ":" + port + "...");
+        ctx.updateStatus(false, I18n.t("status.connecting", host, port));
         ctx.setStatusIndicatorConnecting();
-        ctx.log("Conectando a " + host + ":" + port + "...");
+        ctx.log(I18n.t("log.cm.connectingto", host, port));
 
         ctx.backgroundExecutor().submit(() -> {
             try {
-                ctx.log("Iniciando conexion...");
+                ctx.log(I18n.t("log.cm.initiatingconn"));
                 long startTime = System.currentTimeMillis();
 
                 ctx.getClient().setConnectionTimeoutMs(ctx.getConnectionTimeoutMs());
                 ctx.getClient().connect(host, port);
 
                 long elapsed = System.currentTimeMillis() - startTime;
-                ctx.log("Conexion establecida en " + elapsed + "ms");
+                ctx.log(I18n.t("log.cm.connestablished", elapsed));
 
                 // Detectar interfaz local usada para la conexion
                 String localIp = detectLocalInterface(host);
-                ctx.log("Interfaz local detectada: " + localIp);
+                ctx.log(I18n.t("log.cm.localifacedetected", localIp));
 
                 final String finalHost = host;
                 final int finalPort = port;
@@ -599,15 +598,15 @@ class ConnectionManager {
                         currentHost = finalHost;
                         currentPort = finalPort;
                         connectedLocalIp = finalLocalIp;
-                        ctx.setBtnConnectText("Desconectar");
+                        ctx.setBtnConnectText(I18n.t("btn.disconnect"));
                         ctx.setBtnConnectEnabled(true);
                         ctx.setCbPollingEnabled(true);
                         ctx.setSpinnerIntervalEnabled(true);
-                        ctx.updateStatus(true, "Conectado");
+                        ctx.updateStatus(true, I18n.t("status.connected"));
                         ctx.updateConnectionInfo(finalHost, finalPort);
-                        ctx.log("Construyendo arbol del modelo...");
+                        ctx.log(I18n.t("log.cm.buildingmodeltree"));
                         ctx.displayClientModel();
-                        ctx.log("Conectado! Modelo recibido.");
+                        ctx.log(I18n.t("log.cm.connectedmodelreceived"));
 
                         // Leer placa de identificación del IED (FC=DC) en background
                         ctx.backgroundExecutor().submit(() -> {
@@ -631,7 +630,7 @@ class ConnectionManager {
                             final String finalInfo = sb.toString();
                             SwingUtilities.invokeLater(() -> {
                                 ctx.setLblIedInfo(finalInfo);
-                                ctx.log("Placa IED →" + finalInfo.trim());
+                                ctx.log(I18n.t("log.cm.iedplate", finalInfo.trim()));
                             });
                         });
 
@@ -641,7 +640,7 @@ class ConnectionManager {
                         // Auto-descargar CID para obtener GoCBs (en background)
                         autoDownloadCid();
                     } catch (Exception e) {
-                        ctx.log("ERROR en UI despues de conexion: " + e.getMessage());
+                        ctx.log(I18n.t("log.cm.uierrorafterconn", e.getMessage()));
                         e.printStackTrace();
                     }
                 });
@@ -651,8 +650,8 @@ class ConnectionManager {
                 if (errMsg.startsWith("SCL_FALLBACK:")) {
                     // El IED rechazó retrieveModel() por DataSet inexistente, pero la asociación MMS
                     // sigue activa. Pedimos al usuario un archivo SCL local para usarlo como modelo.
-                    ctx.log("AVISO: El IED no pudo entregar el modelo completo (DataSet inválido).");
-                    ctx.log("Cargando modelo desde archivo SCL local para continuar...");
+                    ctx.log(I18n.t("log.cm.incompletemodel"));
+                    ctx.log(I18n.t("log.cm.loadinglocalscl"));
 
                     final String fHost = host;
                     final int fPort = port;
@@ -668,8 +667,8 @@ class ConnectionManager {
                         if (choice != JOptionPane.YES_OPTION) {
                             ctx.getClient().cancelPendingAssociation();
                             ctx.setBtnConnectEnabled(true);
-                            ctx.updateStatus(false, "Conexión cancelada");
-                            ctx.log("Conexión cancelada por el usuario.");
+                            ctx.updateStatus(false, I18n.t("status.conncancelled"));
+                            ctx.log(I18n.t("log.cm.conncancelleduser"));
                             return;
                         }
 
@@ -688,13 +687,13 @@ class ConnectionManager {
                         if (fc.showOpenDialog(ctx.parentWindow()) != JFileChooser.APPROVE_OPTION) {
                             ctx.getClient().cancelPendingAssociation();
                             ctx.setBtnConnectEnabled(true);
-                            ctx.updateStatus(false, "Conexión cancelada");
-                            ctx.log("Selección de SCL cancelada.");
+                            ctx.updateStatus(false, I18n.t("status.conncancelled"));
+                            ctx.log(I18n.t("log.cm.sclselcancelled"));
                             return;
                         }
 
                         File sclFile = fc.getSelectedFile();
-                        ctx.log("Parseando SCL: " + sclFile.getName());
+                        ctx.log(I18n.t("log.cm.parsingscl", sclFile.getName()));
                         ctx.backgroundExecutor().submit(() -> {
                             try {
                                 // Usar IEC61850Server para parsear y fusionar AccessPoints
@@ -715,7 +714,7 @@ class ConnectionManager {
                                         ctx.getClient().cancelPendingAssociation();
                                         SwingUtilities.invokeLater(() -> {
                                             ctx.setBtnConnectEnabled(true);
-                                            ctx.updateStatus(false, "Conexión cancelada");
+                                            ctx.updateStatus(false, I18n.t("status.conncancelled"));
                                         });
                                         return;
                                     }
@@ -728,7 +727,7 @@ class ConnectionManager {
                                 boolean ok = ctx.getClient().attachExternalModel(model);
                                 if (!ok) throw new Exception("attachExternalModel falló");
 
-                                ctx.log("Modelo SCL inyectado: " + iedNames.get(iedIdx) + " (" + sclFile.getName() + ")");
+                                ctx.log(I18n.t("log.cm.sclmodelinjected", iedNames.get(iedIdx), sclFile.getName()));
 
                                 // Parsear GoCBs del SCL seleccionado
                                 final int fIdx = iedIdx;
@@ -744,39 +743,39 @@ class ConnectionManager {
                                         currentHost = fHost;
                                         currentPort = fPort;
                                         connectedLocalIp = finalLocalIp;
-                                        ctx.setBtnConnectText("Desconectar");
+                                        ctx.setBtnConnectText(I18n.t("btn.disconnect"));
                                         ctx.setBtnConnectEnabled(true);
                                         ctx.setCbPollingEnabled(true);
                                         ctx.setSpinnerIntervalEnabled(true);
-                                        ctx.updateStatus(true, "Conectado (modelo SCL)");
+                                        ctx.updateStatus(true, I18n.t("status.connected.sclmodel"));
                                         ctx.updateConnectionInfo(fHost, fPort);
-                                        ctx.log("Construyendo árbol del modelo desde SCL...");
+                                        ctx.log(I18n.t("log.cm.buildingtreefromscl"));
                                         ctx.displayClientModel();
-                                        ctx.log("Conectado con modelo SCL. Valores individuales disponibles vía MMS.");
+                                        ctx.log(I18n.t("log.cm.connectedsclmodel"));
                                         ctx.autoSelectGooseInterface(finalLocalIp);
                                         ctx.refreshGooseControlBlocks();
                                     } catch (Exception uiEx) {
-                                        ctx.log("ERROR en UI (SCL fallback): " + uiEx.getMessage());
+                                        ctx.log(I18n.t("log.cm.uierrorfallback", uiEx.getMessage()));
                                     }
                                 });
                             } catch (Exception ex) {
                                 ctx.getClient().cancelPendingAssociation();
-                                ctx.log("ERROR en fallback SCL: " + ex.getMessage());
+                                ctx.log(I18n.t("log.cm.fallbackerror", ex.getMessage()));
                                 ex.printStackTrace();
                                 SwingUtilities.invokeLater(() -> {
                                     ctx.setBtnConnectEnabled(true);
-                                    ctx.updateStatus(false, "Error: " + ex.getMessage());
+                                    ctx.updateStatus(false, I18n.t("err.title") + ": " + ex.getMessage());
                                 });
                             }
                         });
                     });
 
                 } else {
-                    ctx.log("ERROR de conexion: " + e.getClass().getSimpleName() + " - " + errMsg);
+                    ctx.log(I18n.t("log.cm.connerror", e.getClass().getSimpleName(), errMsg));
                     e.printStackTrace();
                     SwingUtilities.invokeLater(() -> {
                         ctx.setBtnConnectEnabled(true);
-                        ctx.updateStatus(false, "Error: " + errMsg);
+                        ctx.updateStatus(false, I18n.t("err.title") + ": " + errMsg);
                     });
                 }
             }
@@ -787,7 +786,7 @@ class ConnectionManager {
         ctx.stopPolling();
         ctx.getClient().disconnect();
         handleDisconnect();
-        ctx.log("Desconectado");
+        ctx.log(I18n.t("log.cm.disconnected"));
     }
 
     void handleDisconnect() {  // F26: package-private so IEDNavigatorApp can delegate
@@ -800,7 +799,7 @@ class ConnectionManager {
         ctx.setCbPollingEnabled(false);
         ctx.setCbPollingSelected(false);
         ctx.setSpinnerIntervalEnabled(false);
-        ctx.updateStatus(false, "Desconectado");
+        ctx.updateStatus(false, I18n.t("status.disconnected"));
         ctx.updateConnectionInfo("", 0);
         ctx.setLblIedInfo(" ");
         ctx.clearModel();
@@ -819,7 +818,7 @@ class ConnectionManager {
             socket.close();
             return localIp;
         } catch (Exception e) {
-            ctx.log("No se pudo detectar interfaz local: " + e.getMessage());
+            ctx.log(I18n.t("log.cm.localifaceerror", e.getMessage()));
             return "";
         }
     }

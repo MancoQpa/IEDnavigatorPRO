@@ -57,7 +57,7 @@ class ModelTreeBuilder {
 
             int nodeCount = countNodes(model);
             if (logger != null) logger.accept("buildTree: " + nodeCount + " nodos totales");
-            rootNode.setUserObject("Modelo (" + nodeCount + " nodos)");
+            rootNode.setUserObject(I18n.t("tree.root.count", nodeCount));
 
             int ldIdx = 0;
             for (ModelNode ld : model.getChildren()) {
@@ -161,7 +161,7 @@ class ModelTreeBuilder {
             Map<String, DefaultMutableTreeNode> nodeMap,
             DefaultTreeModel treeModel) {
         rootNode.removeAllChildren();
-        rootNode.setUserObject("Modelo");
+        rootNode.setUserObject(I18n.t("tree.root"));
         nodeMap.clear();
         treeModel.reload();
     }

@@ -1,5 +1,6 @@
 package com.iednavigator.native_lib;
 
+import com.iednavigator.I18n;
 import com.sun.jna.*;
 
 import java.util.*;
@@ -167,7 +168,7 @@ public class NativeSVSubscriber {
      */
     public boolean start(String interfaceId, int appId) {
         if (running) {
-            log("Ya en ejecucion");
+            log(I18n.t("log.native.alreadyrunning"));
             return false;
         }
 
@@ -178,13 +179,13 @@ public class NativeSVSubscriber {
             // Create receiver
             receiver = lib.SVReceiver_create();
             if (receiver == null) {
-                log("Error: No se pudo crear SVReceiver");
+                log(I18n.t("log.sv.receivercreateerror"));
                 return false;
             }
 
             // Set interface
             lib.SVReceiver_setInterfaceId(receiver, interfaceId);
-            log("Interface: " + interfaceId);
+            log(I18n.t("log.native.iface", interfaceId));
 
             // Disable destination address check for broader compatibility
             lib.SVReceiver_disableDestAddrCheck(receiver);
@@ -192,12 +193,12 @@ public class NativeSVSubscriber {
             // Create subscriber for specific APPID
             subscriber = lib.SVSubscriber_create(null, (short) appId);
             if (subscriber == null) {
-                log("Error: No se pudo crear SVSubscriber");
+                log(I18n.t("log.sv.subscribercreateerror"));
                 lib.SVReceiver_destroy(receiver);
                 return false;
             }
 
-            log("Suscrito a APPID: 0x" + String.format("%04X", appId));
+            log(I18n.t("log.sv.subscribed", String.format("%04X", appId)));
 
             // Create and set native callback
             nativeListener = new LibIec61850.SVUpdateListener() {
@@ -218,9 +219,9 @@ public class NativeSVSubscriber {
             running = lib.SVReceiver_isRunning(receiver);
 
             if (running) {
-                log("SV Receiver iniciado para APPID 0x" + String.format("%04X", appId));
+                log(I18n.t("log.sv.receiverstarted", String.format("%04X", appId)));
             } else {
-                log("Error: SVReceiver no inicio");
+                log(I18n.t("log.sv.receiver.notstarted"));
                 cleanup();
                 return false;
             }
@@ -228,7 +229,7 @@ public class NativeSVSubscriber {
             return true;
 
         } catch (Exception e) {
-            log("Error: " + e.getMessage());
+            log(I18n.t("log.native.generror", e.getMessage()));
             e.printStackTrace();
             cleanup();
             return false;
@@ -292,7 +293,7 @@ public class NativeSVSubscriber {
             }
 
         } catch (Exception e) {
-            log("Error procesando ASDU SV: " + e.getMessage());
+            log(I18n.t("log.sv.asduerror", e.getMessage()));
         }
     }
 
@@ -363,7 +364,7 @@ public class NativeSVSubscriber {
 
         running = false;
         cleanup();
-        log("SV Receiver detenido. Total ASDUs: " + asduCount + ", Samples: " + sampleCount);
+        log(I18n.t("log.sv.receiverstopped", asduCount, sampleCount));
     }
 
     private void cleanup() {
@@ -376,7 +377,7 @@ public class NativeSVSubscriber {
             subscriber = null;
             nativeListener = null;
         } catch (Exception e) {
-            log("Error en cleanup: " + e.getMessage());
+            log(I18n.t("log.native.cleanuperror", e.getMessage()));
         }
     }
 

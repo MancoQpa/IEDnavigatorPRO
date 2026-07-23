@@ -106,7 +106,7 @@ class GoosePanel {
             gooseMessages.clear();
             lastStNumBySource.clear();
             if (gooseLogArea != null) gooseLogArea.setText("");
-            logGoose("Datos GOOSE limpiados (cambio de modelo)");
+            logGoose(I18n.t("log.goose.datacleared"));
         });
     }
 
@@ -215,21 +215,21 @@ class GoosePanel {
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
         row1.setOpaque(false);
 
-        row1.add(new JLabel("Interface:"));
+        row1.add(new JLabel(I18n.t("lbl.interface")));
         gooseInterfaceCombo = new JComboBox<>();
         gooseInterfaceCombo.setPreferredSize(new Dimension(300, 26));
         loadNetworkInterfaces();
         row1.add(gooseInterfaceCombo);
 
         JButton btnRefresh = new JButton("↻");
-        btnRefresh.setToolTipText("Refrescar interfaces");
+        btnRefresh.setToolTipText(I18n.t("goose.refresh.tip"));
         btnRefresh.setMargin(new Insets(2, 6, 2, 6));
         btnRefresh.addActionListener(e -> loadNetworkInterfaces());
         row1.add(btnRefresh);
 
         row1.add(Box.createHorizontalStrut(15));
 
-        btnGooseStartStop = new JButton("▶ CAPTURAR GOOSE");
+        btnGooseStartStop = new JButton(I18n.t("goose.capture"));
         btnGooseStartStop.setBackground(new Color(46, 125, 50));
         btnGooseStartStop.setForeground(Color.WHITE);
         btnGooseStartStop.setFocusPainted(false);
@@ -238,7 +238,7 @@ class GoosePanel {
         btnGooseStartStop.addActionListener(e -> toggleGooseCapture());
         row1.add(btnGooseStartStop);
 
-        lblGooseStatus = new JLabel("Detenido");
+        lblGooseStatus = new JLabel(I18n.t("status.stopped"));
         lblGooseStatus.setForeground(Color.GRAY);
         row1.add(lblGooseStatus);
 
@@ -248,8 +248,8 @@ class GoosePanel {
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
         row2.setOpaque(false);
 
-        JCheckBox cbFilterRetrans = new JCheckBox("Filtrar retransmisiones");
-        cbFilterRetrans.setToolTipText("Solo mostrar cambios de estado (stNum nuevo). Omite heartbeats/retransmisiones (mismo stNum, distinto sqNum).");
+        JCheckBox cbFilterRetrans = new JCheckBox(I18n.t("goose.filter"));
+        cbFilterRetrans.setToolTipText(I18n.t("goose.filter.tip"));
         cbFilterRetrans.setOpaque(false);
         cbFilterRetrans.addActionListener(e -> {
             filterRetransmissions = cbFilterRetrans.isSelected();
@@ -259,26 +259,26 @@ class GoosePanel {
 
         row2.add(Box.createHorizontalStrut(20));
 
-        row2.add(new JLabel("Publicar:"));
-        btnGoosePublish = new JButton("▶ Publicar");
+        row2.add(new JLabel(I18n.t("lbl.publish")));
+        btnGoosePublish = new JButton(I18n.t("goose.publishbtn"));
         btnGoosePublish.setBackground(new Color(21, 101, 192));
         btnGoosePublish.setForeground(Color.WHITE);
         btnGoosePublish.setFocusPainted(false);
         btnGoosePublish.addActionListener(e -> toggleGoosePublishing());
         row2.add(btnGoosePublish);
 
-        lblPublishStatus = new JLabel("Detenido");
+        lblPublishStatus = new JLabel(I18n.t("status.stopped"));
         lblPublishStatus.setForeground(Color.GRAY);
         row2.add(lblPublishStatus);
 
         row2.add(Box.createHorizontalStrut(20));
-        row2.add(new JLabel("Estado:"));
+        row2.add(new JLabel(I18n.t("lbl.state")));
         cbGooseState = new JComboBox<>(new String[]{"OFF", "ON", "INTERMEDIATE", "BAD"});
         cbGooseState.setPreferredSize(new Dimension(110, 24));
         row2.add(cbGooseState);
 
         btnGooseStateChange = new JButton("⚡ Cambio");
-        btnGooseStateChange.setToolTipText("Enviar cambio de estado GOOSE");
+        btnGooseStateChange.setToolTipText(I18n.t("goose.change.tip"));
         btnGooseStateChange.setBackground(new Color(230, 81, 0));
         btnGooseStateChange.setForeground(Color.WHITE);
         btnGooseStateChange.setFocusPainted(false);
@@ -325,7 +325,7 @@ class GoosePanel {
         });
 
         JScrollPane tableScroll = new JScrollPane(gooseDataTable);
-        tableScroll.setBorder(BorderFactory.createTitledBorder("Mensajes GOOSE"));
+        tableScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("goose.msgtitle")));
         panel.add(tableScroll, BorderLayout.CENTER);
 
         // ===== BOTTOM: GoCBs + Log =====
@@ -348,7 +348,7 @@ class GoosePanel {
         gooseTable.getColumnModel().getColumn(6).setPreferredWidth(70);
 
         JPopupMenu gcbPopupMenu = new JPopupMenu();
-        JMenuItem menuPublicar = new JMenuItem("Publicar este GoCB");
+        JMenuItem menuPublicar = new JMenuItem(I18n.t("goose.publishone"));
         menuPublicar.addActionListener(e -> {
             int row = gooseTable.getSelectedRow();
             if (row >= 0 && row < ctx.getSclGoCBs().size()) {
@@ -357,7 +357,7 @@ class GoosePanel {
         });
         gcbPopupMenu.add(menuPublicar);
 
-        JMenuItem menuDetenerUno = new JMenuItem("Detener este GoCB");
+        JMenuItem menuDetenerUno = new JMenuItem(I18n.t("goose.stopone"));
         menuDetenerUno.addActionListener(e -> {
             int row = gooseTable.getSelectedRow();
             if (row >= 0 && activePublishers.containsKey(row)) {
@@ -366,11 +366,11 @@ class GoosePanel {
                 pub.close();
                 activePublishers.remove(row);
                 if (row < gooseTableModel.getRowCount()) {
-                    gooseTableModel.setValueAt("Detenido", row, 6);
+                    gooseTableModel.setValueAt(I18n.t("status.stopped"), row, 6);
                 }
-                logGoose("GoCB #" + row + " detenido");
+                logGoose(I18n.t("log.goose.gocbstopped", row));
                 if (activePublishers.isEmpty()) {
-                    btnPublicarTodos.setText("Publicar Todos");
+                    btnPublicarTodos.setText(I18n.t("goose.publishall"));
                     btnPublicarTodos.setBackground(new Color(0, 130, 60));
                     lblPublishStatus.setText("  Detenido");
                     lblPublishStatus.setForeground(Color.GRAY);
@@ -381,7 +381,7 @@ class GoosePanel {
 
         gcbPopupMenu.addSeparator();
 
-        JMenu menuCambiarEstado = new JMenu("Cambiar Estado de este GoCB");
+        JMenu menuCambiarEstado = new JMenu(I18n.t("goose.changestate"));
         gcbPopupMenu.add(menuCambiarEstado);
 
         gcbPopupMenu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
@@ -455,9 +455,9 @@ class GoosePanel {
                             miBad.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 4));
                             memberMenu.add(miBad);
                         } else {
-                            JMenuItem miCustom = new JMenuItem("Valor personalizado...");
+                            JMenuItem miCustom = new JMenuItem(I18n.t("ctx.customvalue"));
                             miCustom.addActionListener(ev -> {
-                                String val = JOptionPane.showInputDialog(null, "Nuevo valor para " + dv.name + ":", String.valueOf(dv.value));
+                                String val = JOptionPane.showInputDialog(null, I18n.t("dlg.newvalue", dv.name), String.valueOf(dv.value));
                                 if (val != null) {
                                     try { setPublisherDataValue(pubRow, idx, Integer.parseInt(val)); }
                                     catch (NumberFormatException ex) { setPublisherDataValue(pubRow, idx, val); }
@@ -475,11 +475,11 @@ class GoosePanel {
 
         gcbPopupMenu.addSeparator();
 
-        JMenuItem menuPublicarTodos = new JMenuItem("Publicar TODOS los GoCBs");
+        JMenuItem menuPublicarTodos = new JMenuItem(I18n.t("goose.pubtodos2"));
         menuPublicarTodos.addActionListener(e -> publishAllGoCBs());
         gcbPopupMenu.add(menuPublicarTodos);
 
-        JMenuItem menuDetener = new JMenuItem("Detener TODOS");
+        JMenuItem menuDetener = new JMenuItem(I18n.t("goose.stopall"));
         menuDetener.addActionListener(e -> stopAllPublishers());
         gcbPopupMenu.add(menuDetener);
 
@@ -503,21 +503,21 @@ class GoosePanel {
 
         JPanel gcbPanel = new JPanel(new BorderLayout());
         JScrollPane gcbScroll = new JScrollPane(gooseTable);
-        JButton btnLoadGcb = new JButton("Cargar GoCBs");
+        JButton btnLoadGcb = new JButton(I18n.t("goose.loadgcb"));
         btnLoadGcb.addActionListener(e -> refreshGooseControlBlocks());
-        JButton btnClearGcb = new JButton("Limpiar");
+        JButton btnClearGcb = new JButton(I18n.t("btn.clear"));
         btnClearGcb.addActionListener(e -> {
             gooseTableModel.setRowCount(0);
             ctx.getSclGoCBs().clear();
-            logGoose("GoCBs limpiados");
+            logGoose(I18n.t("log.goose.gocbscleared"));
         });
 
-        JButton btnLoadScl = new JButton("Cargar SCL...");
-        btnLoadScl.setToolTipText("Cargar archivo SCL/CID/ICD/SCD para obtener GoCBs");
+        JButton btnLoadScl = new JButton(I18n.t("goose.loadscl"));
+        btnLoadScl.setToolTipText(I18n.t("goose.loadscl.tip"));
         btnLoadScl.addActionListener(e -> cargarSclParaGoose());
 
-        btnPublicarTodos = new JButton("Publicar Todos");
-        btnPublicarTodos.setToolTipText("Publicar TODOS los GoCBs simultaneamente (modo IED)");
+        btnPublicarTodos = new JButton(I18n.t("goose.publishall"));
+        btnPublicarTodos.setToolTipText(I18n.t("goose.pubtodos.tip"));
         btnPublicarTodos.setBackground(new Color(0, 130, 60));
         btnPublicarTodos.setForeground(Color.WHITE);
         btnPublicarTodos.addActionListener(e -> {
@@ -535,7 +535,7 @@ class GoosePanel {
         gcbBtnPanel.add(btnClearGcb);
         gcbPanel.add(gcbScroll, BorderLayout.CENTER);
         gcbPanel.add(gcbBtnPanel, BorderLayout.SOUTH);
-        gcbPanel.setBorder(BorderFactory.createTitledBorder("GoCBs del Modelo"));
+        gcbPanel.setBorder(BorderFactory.createTitledBorder(I18n.t("goose.gcbtitle")));
         bottomPanel.add(gcbPanel);
 
         gooseLogArea = new JTextArea();
@@ -545,22 +545,22 @@ class GoosePanel {
         JPanel logPanel = new JPanel(new BorderLayout());
         logPanel.add(logScroll, BorderLayout.CENTER);
         JPanel logBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 2));
-        JButton btnClear = new JButton("Limpiar");
+        JButton btnClear = new JButton(I18n.t("btn.clear"));
         btnClear.addActionListener(e -> {
             gooseLogArea.setText("");
             gooseDataTableModel.setRowCount(0);
             if (goosePublisher != null) {
                 goosePublisher.resetCounters();
             }
-            logGoose("Log y contadores limpiados");
+            logGoose(I18n.t("log.goose.logcleared"));
         });
         JLabel lblCount = new JLabel("Msgs: 0");
-        javax.swing.Timer countTimer = new javax.swing.Timer(500, e -> lblCount.setText("Msgs: " + gooseDataTableModel.getRowCount()));
+        javax.swing.Timer countTimer = new javax.swing.Timer(500, e -> lblCount.setText(I18n.t("goose.msgs.count", gooseDataTableModel.getRowCount())));
         countTimer.start();
         logBtnPanel.add(btnClear);
         logBtnPanel.add(lblCount);
         logPanel.add(logBtnPanel, BorderLayout.SOUTH);
-        logPanel.setBorder(BorderFactory.createTitledBorder("Log"));
+        logPanel.setBorder(BorderFactory.createTitledBorder(I18n.t("border.log")));
         bottomPanel.add(logPanel);
 
         panel.add(bottomPanel, BorderLayout.SOUTH);
@@ -572,25 +572,25 @@ class GoosePanel {
 
     void autoSelectGooseInterface(String localIp) {
         if (localIp == null || localIp.isEmpty() || gooseInterfaceCombo == null) {
-            ctx.log("autoSelectGooseInterface: parametros invalidos - localIp=" + localIp);
+            ctx.log(I18n.t("log.goose.autoselect.invalidparams", localIp));
             return;
         }
 
-        ctx.log("=== AUTO-SELECCION DE INTERFAZ ===");
-        ctx.log("Buscando interfaz para IP: " + localIp);
-        ctx.log("Interfaces disponibles (" + gooseInterfaceCombo.getItemCount() + "):");
+        ctx.log(I18n.t("log.goose.autoselect.header"));
+        ctx.log(I18n.t("log.goose.autoselect.searchingip", localIp));
+        ctx.log(I18n.t("log.goose.autoselect.available", gooseInterfaceCombo.getItemCount()));
         for (int i = 0; i < gooseInterfaceCombo.getItemCount(); i++) {
             String item = gooseInterfaceCombo.getItemAt(i);
             boolean matches = item != null && item.contains(localIp);
-            ctx.log("  [" + i + "] " + item + (matches ? " <-- MATCH" : ""));
+            ctx.log(I18n.t("log.goose.autoselect.itemrow", i, item, (matches ? " <-- MATCH" : "")));
         }
 
         for (int i = 0; i < gooseInterfaceCombo.getItemCount(); i++) {
             String item = gooseInterfaceCombo.getItemAt(i);
             if (item != null && item.contains(localIp)) {
                 gooseInterfaceCombo.setSelectedIndex(i);
-                logGoose("*** INTERFAZ AUTO-SELECCIONADA: " + item);
-                ctx.log(">>> SELECCIONADA: " + item);
+                logGoose(I18n.t("log.goose.autoselected", item));
+                ctx.log(I18n.t("log.goose.selected", item));
                 return;
             }
         }
@@ -598,28 +598,28 @@ class GoosePanel {
         String[] parts = localIp.split("\\.");
         if (parts.length >= 3) {
             String subnet = parts[0] + "." + parts[1] + "." + parts[2] + ".";
-            ctx.log("Buscando por subred: " + subnet);
+            ctx.log(I18n.t("log.goose.searchingsubnet", subnet));
             for (int i = 0; i < gooseInterfaceCombo.getItemCount(); i++) {
                 String item = gooseInterfaceCombo.getItemAt(i);
                 if (item != null && item.contains(subnet)) {
                     gooseInterfaceCombo.setSelectedIndex(i);
-                    logGoose("*** INTERFAZ AUTO-SELECCIONADA (subred): " + item);
-                    ctx.log("Interfaz GOOSE seleccionada por subred: " + subnet);
+                    logGoose(I18n.t("log.goose.autoselected.subnet", item));
+                    ctx.log(I18n.t("log.goose.selectedbysubnet", subnet));
                     return;
                 }
             }
         }
 
-        ctx.log("ADVERTENCIA: No se encontro interfaz para " + localIp + " - Seleccione manualmente");
-        logGoose("ADVERTENCIA: Seleccione la interfaz correcta manualmente!");
+        ctx.log(I18n.t("log.goose.noifacefound", localIp));
+        logGoose(I18n.t("log.goose.selectmanually"));
     }
 
     private void loadNetworkInterfaces() {
         gooseInterfaceCombo.removeAllItems();
         interfaceMap.clear();
 
-        gooseInterfaceCombo.addItem("★ Loopback Interno (pruebas misma maquina)");
-        gooseInterfaceCombo.addItem("★ GOOSE sobre UDP (WiFi/Hotspot)");
+        gooseInterfaceCombo.addItem(I18n.t("goose.iface.loopback"));
+        gooseInterfaceCombo.addItem(I18n.t("goose.iface.udp"));
 
         try {
             List<PcapNetworkInterface> interfaces = GooseSubscriber.getNetworkInterfaces();
@@ -643,15 +643,15 @@ class GoosePanel {
                 interfaceMap.put(name, nif);
 
                 if (ips.length() > 0) {
-                    logGoose("Interface: " + desc + " -> " + ips.toString());
+                    logGoose(I18n.t("log.goose.ifacefound", desc, ips.toString()));
                 }
             }
             if (interfaces.isEmpty()) {
-                gooseInterfaceCombo.addItem("No se encontraron interfaces (ejecutar como Admin?)");
+                gooseInterfaceCombo.addItem(I18n.t("goose.iface.none"));
             }
         } catch (Exception e) {
-            gooseInterfaceCombo.addItem("Error: " + e.getMessage());
-            ctx.log("Error cargando interfaces: " + e.getMessage());
+            gooseInterfaceCombo.addItem(I18n.t("err.title") + ": " + e.getMessage());
+            ctx.log(I18n.t("log.goose.ifaceloaderror", e.getMessage()));
         }
     }
 
@@ -669,68 +669,67 @@ class GoosePanel {
             if (udpRunning) gooseUdpBridge.stopReceiving();
             internalLoopbackEnabled = false;
             udpBridgeEnabled = false;
-            btnGooseStartStop.setText("▶ Capturar");
+            btnGooseStartStop.setText(I18n.t("goose.capture2"));
             btnGooseStartStop.setBackground(new Color(46, 125, 50));
-            lblGooseStatus.setText("Detenido");
+            lblGooseStatus.setText(I18n.t("status.stopped"));
             lblGooseStatus.setForeground(Color.GRAY);
         } else {
             String selected = (String) gooseInterfaceCombo.getSelectedItem();
             if (selected == null) {
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    "Seleccione una interface de red valida.\n" +
-                    "Si no aparecen interfaces, ejecute como Administrador.",
+                    I18n.t("goose.selectifacevalid.admin"),
                     "GOOSE Capture", JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
             boolean started = false;
 
-            if (selected.contains("Loopback Interno") || selected.contains("Internal Loopback")) {
+            if (selected.contains("Loopback")) {
                 internalLoopbackEnabled = true;
                 started = true;
-                logGoose("=== MODO LOOPBACK INTERNO ACTIVADO ===");
-                logGoose("Los mensajes GOOSE publicados se mostraran directamente");
-                logGoose("(Sin pasar por la red - para pruebas en misma maquina)");
-                lblGooseStatus.setText("Loopback Interno");
+                logGoose(I18n.t("log.goose.loopback.activated"));
+                logGoose(I18n.t("log.goose.loopback.direct"));
+                logGoose(I18n.t("log.goose.loopback.noNetwork"));
+                lblGooseStatus.setText(I18n.t("goose.status.loopback"));
 
                 javax.swing.Timer loopbackTimer = new javax.swing.Timer(2000, ev -> {
                     if (internalLoopbackEnabled) {
                         int gooseRows = gooseDataTableModel.getRowCount();
-                        lblGooseStatus.setText("Loopback: " + gooseRows + " msgs");
+                        lblGooseStatus.setText(I18n.t("goose.status.loopback.count", gooseRows));
                     }
                 });
                 loopbackTimer.start();
-            } else if (selected.contains("GOOSE sobre UDP") || selected.contains("UDP")) {
+            } else if (selected.contains("UDP")) {
                 udpBridgeEnabled = true;
-                logGoose("=== MODO GOOSE SOBRE UDP (WiFi/Hotspot) ===");
-                logGoose("Puerto UDP: " + GooseUdpBridge.DEFAULT_PORT);
-                logGoose("Este modo permite GOOSE sobre redes WiFi/IP");
+                logGoose(I18n.t("log.goose.udpmode.header"));
+                logGoose(I18n.t("log.goose.udpmode.port", GooseUdpBridge.DEFAULT_PORT));
+                logGoose(I18n.t("log.goose.udpmode.desc"));
 
                 if (gooseUdpBridge.startReceiving()) {
                     started = true;
-                    lblGooseStatus.setText("UDP Listener activo");
-                    logGoose("*** ESCUCHANDO GOOSE-UDP en puerto " + GooseUdpBridge.DEFAULT_PORT + " ***");
-                    logGoose("La otra maquina debe publicar en modo 'GOOSE sobre UDP'");
+                    lblGooseStatus.setText(I18n.t("goose.status.udp.active"));
+                    logGoose(I18n.t("log.goose.udplistening", GooseUdpBridge.DEFAULT_PORT));
+                    logGoose(I18n.t("log.goose.udpother"));
 
                     javax.swing.Timer udpTimer = new javax.swing.Timer(2000, ev -> {
                         if (udpBridgeEnabled && gooseUdpBridge.isReceiving()) {
                             int received = gooseUdpBridge.getReceivedCount();
-                            lblGooseStatus.setText("UDP: " + received + " msgs");
+                            lblGooseStatus.setText(I18n.t("goose.status.udp.count", received));
                         }
                     });
                     udpTimer.start();
                 } else {
-                    logGoose("ERROR: No se pudo iniciar receptor UDP");
-                    logGoose("Verifique que el puerto " + GooseUdpBridge.DEFAULT_PORT + " no este en uso");
+                    logGoose(I18n.t("log.goose.udpstartfailed"));
+                    logGoose(I18n.t("log.goose.udpcheckport", GooseUdpBridge.DEFAULT_PORT));
                     udpBridgeEnabled = false;
                 }
             } else {
                 PcapNetworkInterface nif = interfaceMap.get(selected);
 
                 if (nif == null) {
-                    logGoose("ERROR: Interface no encontrada en el mapa");
+                    logGoose(I18n.t("log.goose.ifacenotinmap"));
                     JOptionPane.showMessageDialog(ctx.parentWindow(),
-                        "Interface no valida. Recargue las interfaces.",
+                        I18n.t("goose.capture.invalidiface"),
                         "GOOSE Capture", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
@@ -740,54 +739,54 @@ class GoosePanel {
                                 ifDesc.contains("wifi") || ifDesc.contains("802.11") ||
                                 ifDesc.contains("wlan");
                 if (isWifi) {
-                    logGoose("*** ADVERTENCIA: Interface WiFi detectada ***");
-                    logGoose("WiFi tiene limitaciones para captura GOOSE (multicast L2)");
-                    logGoose("Se recomienda usar 'GOOSE sobre UDP' para WiFi");
+                    logGoose(I18n.t("log.goose.wifiwarning"));
+                    logGoose(I18n.t("log.goose.wifilimits"));
+                    logGoose(I18n.t("log.goose.wifirecommendudp"));
                 }
 
                 String deviceName = nif.getName();
-                logGoose("Interface seleccionada: " + nif.getDescription());
-                logGoose("Device: " + deviceName);
-                logGoose("=== INICIANDO CAPTURA pcap4j ===");
-                logGoose("MACs: " + nif.getLinkLayerAddresses());
-                logGoose("IPs: " + nif.getAddresses());
+                logGoose(I18n.t("log.goose.ifaceselected", nif.getDescription()));
+                logGoose(I18n.t("log.goose.device", deviceName));
+                logGoose(I18n.t("log.goose.startingcapture"));
+                logGoose(I18n.t("log.goose.macs", nif.getLinkLayerAddresses()));
+                logGoose(I18n.t("log.goose.ips", nif.getAddresses()));
 
                 try {
                     if (gooseSubscriber.start(nif)) {
                         started = true;
-                        lblGooseStatus.setText("Capturando (pcap4j)");
-                        logGoose("*** CAPTURA INICIADA - Esperando tramas GOOSE ***");
-                        logGoose("Filtro: multicast/EtherType 0x88B8");
+                        lblGooseStatus.setText(I18n.t("goose.status.capturing"));
+                        logGoose(I18n.t("log.goose.captureinitiated"));
+                        logGoose(I18n.t("log.goose.filter"));
                         if (isWifi) {
-                            logGoose("NOTA: En WiFi, algunos paquetes multicast pueden no capturarse");
+                            logGoose(I18n.t("log.goose.wifinote"));
                         }
 
                         javax.swing.Timer captureTimer = new javax.swing.Timer(2000, ev -> {
                             if (gooseSubscriber != null && gooseSubscriber.isRunning()) {
                                 int pkts = gooseSubscriber.getPacketCount();
                                 int goose = gooseSubscriber.getGooseCount();
-                                lblGooseStatus.setText("Capturando: " + pkts + " pkts, " + goose + " GOOSE");
+                                lblGooseStatus.setText(I18n.t("goose.status.capturing.count", pkts, goose));
                             }
                         });
                         captureTimer.start();
                     } else {
-                        logGoose("ERROR: No se pudo iniciar captura pcap4j");
-                        logGoose("Posibles causas:");
-                        logGoose("  - Ejecutar como Administrador");
-                        logGoose("  - Verificar que Npcap este instalado con WinPcap compatibility");
-                        logGoose("  - La interfaz WiFi puede no soportar modo promiscuo");
+                        logGoose(I18n.t("log.goose.capturefailed"));
+                        logGoose(I18n.t("log.goose.possiblecauses"));
+                        logGoose(I18n.t("log.goose.causeadmin"));
+                        logGoose(I18n.t("log.goose.causenpcap"));
+                        logGoose(I18n.t("log.goose.causepromisc"));
                         if (isWifi) {
-                            logGoose("  - WiFi NO soporta captura GOOSE - use Ethernet");
+                            logGoose(I18n.t("log.goose.causewifi"));
                         }
                     }
                 } catch (Exception e) {
-                    logGoose("EXCEPCION iniciando captura: " + e.getMessage());
+                    logGoose(I18n.t("log.goose.captureexception", e.getMessage()));
                     e.printStackTrace();
                 }
             }
 
             if (started) {
-                btnGooseStartStop.setText("⬛ Detener");
+                btnGooseStartStop.setText(I18n.t("goose.capturestop"));
                 btnGooseStartStop.setBackground(new Color(200, 50, 50));
                 lblGooseStatus.setForeground(new Color(0, 150, 0));
             } else if (!internalLoopbackEnabled && !udpBridgeEnabled) {
@@ -807,7 +806,7 @@ class GoosePanel {
     private void publishSelectedGoCB(int gcbIndex) {
         List<SclGoCB> sclGoCBs = ctx.getSclGoCBs();
         if (gcbIndex < 0 || gcbIndex >= sclGoCBs.size()) {
-            logGoose("Indice de GoCB invalido: " + gcbIndex);
+            logGoose(I18n.t("log.goose.invalidgcbindex", gcbIndex));
             return;
         }
 
@@ -816,24 +815,24 @@ class GoosePanel {
             existing.stopPublishing();
             existing.close();
             activePublishers.remove(gcbIndex);
-            logGoose("Publisher #" + gcbIndex + " detenido para reconfigurar");
+            logGoose(I18n.t("log.goose.pubstopped.reconfig", gcbIndex));
         }
 
         String selected = (String) gooseInterfaceCombo.getSelectedItem();
         if (selected == null) {
             JOptionPane.showMessageDialog(ctx.parentWindow(),
-                "Seleccione una interface de red primero.",
+                I18n.t("goose.selectifacefirst"),
                 "Publicar GoCB", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        boolean isLoopback = selected.contains("Loopback Interno");
-        boolean isUdp = selected.contains("GOOSE sobre UDP") || selected.contains("UDP");
+        boolean isLoopback = selected.contains("Loopback");
+        boolean isUdp = selected.contains("UDP");
         PcapNetworkInterface nif = null;
         if (!isLoopback && !isUdp) {
             if (!interfaceMap.containsKey(selected)) {
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    "Seleccione una interface de red valida.",
+                    I18n.t("goose.selectifacevalid"),
                     "Publicar GoCB", JOptionPane.WARNING_MESSAGE);
                 return;
             }
@@ -848,20 +847,20 @@ class GoosePanel {
             pub.startPublishing();
             activePublishers.put(gcbIndex, pub);
 
-            logGoose("=== GoCB #" + gcbIndex + " publicando: " + gcb.toString() + " ===");
-            logGoose("  goID: " + pub.getGoId() + " | AppID: " + String.format("0x%04X", pub.getAppId()));
+            logGoose(I18n.t("log.goose.gcbpublishing", gcbIndex, gcb.toString()));
+            logGoose(I18n.t("log.goose.goidappid", pub.getGoId(), String.format("0x%04X", pub.getAppId())));
 
             if (gcbIndex < gooseTableModel.getRowCount()) {
-                gooseTableModel.setValueAt("Publicando", gcbIndex, 6);
+                gooseTableModel.setValueAt(I18n.t("goose.publishing"), gcbIndex, 6);
             }
 
-            btnGoosePublish.setText("Detener Publicacion");
+            btnGoosePublish.setText(I18n.t("goose.stoppub"));
             btnGoosePublish.setBackground(new Color(200, 50, 50));
             String modeStr = isLoopback ? "Loopback" : (isUdp ? "UDP" : "L2");
-            lblPublishStatus.setText("  " + activePublishers.size() + " GoCB(s) publicando (" + modeStr + ")");
+            lblPublishStatus.setText(I18n.t("goose.publishstatus", activePublishers.size(), modeStr));
             lblPublishStatus.setForeground(new Color(0, 150, 0));
         } else {
-            logGoose("ERROR: No se pudo inicializar publisher para " + gcb.cbName);
+            logGoose(I18n.t("log.goose.pubinitfailed", gcb.cbName));
             pub.close();
         }
     }
@@ -891,20 +890,20 @@ class GoosePanel {
             try {
                 pub.setDstMac(gcb.macAddress.replace(":", "-").replace(".", "-"));
             } catch (Exception e) {
-                logGoose("  MAC invalido para " + gcb.cbName + ": " + gcb.macAddress);
+                logGoose(I18n.t("log.goose.invalidmac", gcb.cbName, gcb.macAddress));
             }
         }
 
         // Autoconfig desde Communication/GSE del SCL: VLAN y tiempos de retransmisión
         if (gcb.vlanId >= 0) {
             pub.setVlan(gcb.vlanId, gcb.vlanPriority);
-            logGoose("  VLAN-ID=" + gcb.vlanId
-                + (gcb.vlanPriority >= 0 ? " VLAN-PRIORITY=" + gcb.vlanPriority : "") + " (del SCL)");
+            logGoose(I18n.t("log.goose.vlanid", gcb.vlanId,
+                (gcb.vlanPriority >= 0 ? " VLAN-PRIORITY=" + gcb.vlanPriority : "")));
         }
         if (gcb.maxTime > 0) {
             pub.setHeartbeatInterval(gcb.maxTime);
-            logGoose("  MaxTime=" + gcb.maxTime + "ms → heartbeat (del SCL)"
-                + (gcb.minTime > 0 ? " | MinTime=" + gcb.minTime + "ms" : ""));
+            logGoose(I18n.t("log.goose.maxtime", gcb.maxTime,
+                (gcb.minTime > 0 ? " | MinTime=" + gcb.minTime + "ms" : "")));
         }
 
         List<GoosePublisher.DataValue> dataValues = buildDataValuesFromDataSet(gcb);
@@ -941,7 +940,7 @@ class GoosePanel {
     private void changeGoCBState(int gcbIndex, String state) {
         GoosePublisher pub = activePublishers.get(gcbIndex);
         if (pub == null || !pub.isPublishing()) {
-            logGoose("GoCB #" + gcbIndex + " no esta publicando");
+            logGoose(I18n.t("log.goose.notpublishing", gcbIndex));
             return;
         }
 
@@ -976,7 +975,7 @@ class GoosePanel {
         List<SclGoCB> sclGoCBs = ctx.getSclGoCBs();
         SclGoCB gcb = gcbIndex < sclGoCBs.size() ? sclGoCBs.get(gcbIndex) : null;
         String gcbName = gcb != null ? gcb.toString() : "#" + gcbIndex;
-        logGoose("GoCB " + gcbName + " -> " + state.toUpperCase() + " (stNum=" + pub.getStNum() + ")");
+        logGoose(I18n.t("log.goose.gcbstatechange", gcbName, state.toUpperCase(), pub.getStNum()));
 
         syncPublisherToServerModel(gcbIndex, 0);
     }
@@ -984,14 +983,14 @@ class GoosePanel {
     private void setPublisherDataValue(int gcbIndex, int dataIndex, Object value) {
         GoosePublisher pub = activePublishers.get(gcbIndex);
         if (pub == null || !pub.isPublishing()) {
-            logGoose("GoCB #" + gcbIndex + " no esta publicando");
+            logGoose(I18n.t("log.goose.notpublishing", gcbIndex));
             return;
         }
         pub.setDataValue(dataIndex, value);
         pub.publishStateChange();
 
         GoosePublisher.DataValue dv = pub.getDataValues().get(dataIndex);
-        logGoose("GoCB#" + gcbIndex + " [" + dataIndex + "] " + dv.name + " = " + value + " (stNum=" + pub.getStNum() + ")");
+        logGoose(I18n.t("log.goose.datavaluechange", gcbIndex, dataIndex, dv.name, value, pub.getStNum()));
 
         syncPublisherToServerModel(gcbIndex, dataIndex);
     }
@@ -1020,7 +1019,7 @@ class GoosePanel {
 
         boolean success = server.setDataValue(modelRef, strValue);
         if (success) {
-            ctx.log("GOOSE -> Modelo: " + ctx.formatReference(modelRef) + " = " + strValue);
+            ctx.log(I18n.t("log.goose.tomodel", ctx.formatReference(modelRef), strValue));
             ctx.updateSingleNodeInTree(modelRef);
             ctx.updateServerMonitorValues();
         }
@@ -1054,7 +1053,7 @@ class GoosePanel {
         List<SclGoCB> sclGoCBs = ctx.getSclGoCBs();
         if (sclGoCBs.isEmpty()) {
             JOptionPane.showMessageDialog(ctx.parentWindow(),
-                "No hay GoCBs cargados.\nCargue un archivo SCL primero.",
+                I18n.t("goose.nogocbs"),
                 "Publicar Todos", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -1064,26 +1063,26 @@ class GoosePanel {
         String selected = (String) gooseInterfaceCombo.getSelectedItem();
         if (selected == null) {
             JOptionPane.showMessageDialog(ctx.parentWindow(),
-                "Seleccione una interface de red primero.",
+                I18n.t("goose.selectifacefirst"),
                 "Publicar Todos", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        boolean isLoopback = selected.contains("Loopback Interno");
-        boolean isUdp = selected.contains("GOOSE sobre UDP") || selected.contains("UDP");
+        boolean isLoopback = selected.contains("Loopback");
+        boolean isUdp = selected.contains("UDP");
         PcapNetworkInterface nif = null;
 
         if (!isLoopback && !isUdp) {
             if (!interfaceMap.containsKey(selected)) {
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    "Seleccione una interface de red valida.",
+                    I18n.t("goose.selectifacevalid"),
                     "Publicar Todos", JOptionPane.WARNING_MESSAGE);
                 return;
             }
             nif = interfaceMap.get(selected);
         }
 
-        logGoose("=== PUBLICANDO TODOS LOS GoCBs (" + sclGoCBs.size() + ") ===");
+        logGoose(I18n.t("log.goose.publishingall", sclGoCBs.size()));
         int successCount = 0;
 
         for (int i = 0; i < sclGoCBs.size(); i++) {
@@ -1096,19 +1095,19 @@ class GoosePanel {
                 pub.startPublishing();
                 activePublishers.put(i, pub);
                 successCount++;
-                logGoose("  [" + i + "] " + pub.getGocbRef() + " -> AppID=" + String.format("0x%04X", pub.getAppId())
-                    + ", DataValues=" + pub.getDataValues().size());
+                logGoose(I18n.t("log.goose.publishrow", i, pub.getGocbRef(), String.format("0x%04X", pub.getAppId()),
+                    pub.getDataValues().size()));
             } else {
-                logGoose("  ERROR: No se pudo inicializar publisher para " + gcb.cbName);
+                logGoose(I18n.t("log.goose.pubinitfailed", gcb.cbName));
                 pub.close();
             }
         }
 
         if (successCount > 0) {
-            logGoose("=== " + successCount + "/" + sclGoCBs.size() + " GoCBs publicando ===");
-            btnGoosePublish.setText("Detener Publicacion");
+            logGoose(I18n.t("log.goose.publishcount", successCount, sclGoCBs.size()));
+            btnGoosePublish.setText(I18n.t("goose.stoppub"));
             btnGoosePublish.setBackground(new Color(200, 50, 50));
-            btnPublicarTodos.setText("Detener Todos");
+            btnPublicarTodos.setText(I18n.t("goose.stopall2"));
             btnPublicarTodos.setBackground(new Color(200, 50, 50));
             String modeStr = isLoopback ? "Loopback" : (isUdp ? "UDP" : "L2");
             lblPublishStatus.setText("  " + successCount + " GoCBs publicando (" + modeStr + ")");
@@ -1116,11 +1115,11 @@ class GoosePanel {
 
             for (int i = 0; i < gooseTableModel.getRowCount() && i < sclGoCBs.size(); i++) {
                 if (activePublishers.containsKey(i)) {
-                    gooseTableModel.setValueAt("Publicando", i, 6);
+                    gooseTableModel.setValueAt(I18n.t("goose.publishing"), i, 6);
                 }
             }
         } else {
-            logGoose("ERROR: No se pudo iniciar ninguna publicacion");
+            logGoose(I18n.t("log.goose.nopublishstarted"));
         }
     }
 
@@ -1130,7 +1129,7 @@ class GoosePanel {
                 entry.getValue().stopPublishing();
                 entry.getValue().close();
             } catch (Exception e) {
-                logGoose("Error deteniendo publisher #" + entry.getKey() + ": " + e.getMessage());
+                logGoose(I18n.t("log.goose.stoperror", entry.getKey(), e.getMessage()));
             }
         }
         int count = activePublishers.size();
@@ -1143,17 +1142,17 @@ class GoosePanel {
         }
 
         if (count > 0) {
-            btnGoosePublish.setText("Iniciar Publicacion");
+            btnGoosePublish.setText(I18n.t("goose.startpub"));
             btnGoosePublish.setBackground(new Color(0, 100, 180));
             btnGooseStateChange.setEnabled(false);
-            btnPublicarTodos.setText("Publicar Todos");
+            btnPublicarTodos.setText(I18n.t("goose.publishall"));
             btnPublicarTodos.setBackground(new Color(0, 130, 60));
             lblPublishStatus.setText("  Detenido");
             lblPublishStatus.setForeground(Color.GRAY);
             logGoose(count + " publisher(s) detenidos");
 
             for (int i = 0; i < gooseTableModel.getRowCount(); i++) {
-                gooseTableModel.setValueAt("Detenido", i, 6);
+                gooseTableModel.setValueAt(I18n.t("status.stopped"), i, 6);
             }
         }
     }
@@ -1232,27 +1231,27 @@ class GoosePanel {
 
             boolean publishStarted = false;
 
-            if (selected.contains("Loopback Interno")) {
+            if (selected.contains("Loopback")) {
                 internalLoopbackEnabled = true;
                 goosePublisher.closeSendHandle();  // soltar handle L2 fantasma de una sesión previa
                 publishStarted = true;
-                logGoose("Publisher iniciado en modo LOOPBACK INTERNO");
-                logGoose("Los mensajes se mostraran localmente sin red");
-            } else if (selected.contains("GOOSE sobre UDP") || selected.contains("UDP")) {
+                logGoose(I18n.t("log.goose.pub.loopbackstarted"));
+                logGoose(I18n.t("log.goose.pub.loopbacklocal"));
+            } else if (selected.contains("UDP")) {
                 udpBridgeEnabled = true;
                 goosePublisher.closeSendHandle();  // soltar handle L2 fantasma de una sesión previa
                 if (gooseUdpBridge.initSender(null)) {
                     publishStarted = true;
-                    logGoose("Publisher iniciado en modo UDP BROADCAST");
-                    logGoose("Puerto: " + GooseUdpBridge.DEFAULT_PORT);
+                    logGoose(I18n.t("log.goose.pub.udpstarted"));
+                    logGoose(I18n.t("log.goose.pub.udpport", GooseUdpBridge.DEFAULT_PORT));
                 } else {
-                    logGoose("ERROR: No se pudo inicializar UDP sender");
+                    logGoose(I18n.t("log.goose.pub.udpsenderfailed"));
                     udpBridgeEnabled = false;
                 }
             } else {
                 if (!interfaceMap.containsKey(selected)) {
                     JOptionPane.showMessageDialog(ctx.parentWindow(),
-                        "Seleccione una interface de red valida.",
+                        I18n.t("goose.selectifacevalid"),
                         "GOOSE Publisher", JOptionPane.WARNING_MESSAGE);
                     return;
                 }
@@ -1261,7 +1260,7 @@ class GoosePanel {
                     publishStarted = true;
                 } else {
                     JOptionPane.showMessageDialog(ctx.parentWindow(),
-                        "Error inicializando GOOSE Publisher.\nVerifique que la interface es correcta y ejecute como Admin.",
+                        I18n.t("goose.pub.initerror"),
                         "GOOSE Publisher", JOptionPane.ERROR_MESSAGE);
                 }
             }
@@ -1269,12 +1268,12 @@ class GoosePanel {
             if (publishStarted) {
                 updatePublisherState();
                 goosePublisher.startPublishing();
-                btnGoosePublish.setText("Detener Publicacion");
+                btnGoosePublish.setText(I18n.t("goose.stoppub"));
                 btnGoosePublish.setBackground(new Color(200, 50, 50));
                 btnGooseStateChange.setEnabled(true);
 
                 String modeStr = internalLoopbackEnabled ? "Loopback" : (udpBridgeEnabled ? "UDP" : "L2");
-                lblPublishStatus.setText("  Publicando " + modeStr + " (stNum=" + goosePublisher.getStNum() + ")");
+                lblPublishStatus.setText(I18n.t("goose.publishing.mode", modeStr, goosePublisher.getStNum()));
                 lblPublishStatus.setForeground(new Color(0, 150, 0));
 
                 javax.swing.Timer pubTimer = new javax.swing.Timer(500, e -> {
@@ -1303,7 +1302,7 @@ class GoosePanel {
     private void publishGooseStateChange() {
         boolean anyActive = goosePublisher.isPublishing() || !activePublishers.isEmpty();
         if (!anyActive) {
-            logGoose("Publisher no esta activo");
+            logGoose(I18n.t("log.goose.pub.notactive"));
             return;
         }
 
@@ -1313,7 +1312,7 @@ class GoosePanel {
 
         if (goosePublisher.isPublishing()) {
             goosePublisher.publishStateChange();
-            logGoose("Cambio de estado publicado: " + stateName + " (stNum=" + goosePublisher.getStNum() + ")");
+            logGoose(I18n.t("log.goose.statechangepublished", stateName, goosePublisher.getStNum()));
         }
 
         for (Map.Entry<Integer, GoosePublisher> entry : activePublishers.entrySet()) {
@@ -1327,19 +1326,19 @@ class GoosePanel {
         }
 
         if (!activePublishers.isEmpty()) {
-            logGoose("Cambio de estado en " + activePublishers.size() + " GoCBs: " + stateName);
+            logGoose(I18n.t("log.goose.statechangemulti", activePublishers.size(), stateName));
         }
 
         if (udpBridgeEnabled) {
             if (gooseUdpBridge.send(goosePublisher)) {
-                logGoose("[UDP] Mensaje enviado por broadcast UDP");
+                logGoose("[UDP] " + I18n.t("log.goose.udpbroadcastsent"));
             }
         }
 
         String stInfo = goosePublisher.isPublishing() ?
             "stNum=" + goosePublisher.getStNum() :
             activePublishers.size() + " GoCBs";
-        lblPublishStatus.setText("  CAMBIO! " + stInfo);
+        lblPublishStatus.setText(I18n.t("goose.changed", stInfo));
         lblPublishStatus.setForeground(new Color(200, 100, 0));
 
         javax.swing.Timer resetTimer = new javax.swing.Timer(2000, e -> {
@@ -1436,11 +1435,11 @@ class GoosePanel {
                 String appId = gcb.appID != null ? gcb.appID : "";
                 String mac = gcb.macAddress != null ? gcb.macAddress : "";
                 String confRev = String.valueOf(gcb.confRev);
-                String estado = "Disponible";
+                String estado = I18n.t("goose.available");
                 gooseTableModel.addRow(new Object[]{ref, goId, datSet, appId, mac, confRev, estado});
             }
-            ctx.log("GoCBs del SCL: " + gooseTableModel.getRowCount());
-            logGoose("Cargados " + gooseTableModel.getRowCount() + " GoCBs del SCL");
+            ctx.log(I18n.t("log.goose.gocbsscl", gooseTableModel.getRowCount()));
+            logGoose(I18n.t("log.goose.gocbsloadedscl", gooseTableModel.getRowCount()));
             return;
         }
 
@@ -1454,7 +1453,7 @@ class GoosePanel {
         }
 
         if (model == null) {
-            ctx.log("No hay modelo cargado. Cargue un archivo SCL para ver los GoCBs.");
+            ctx.log(I18n.t("log.goose.nomodelforgocb"));
             return;
         }
 
@@ -1467,8 +1466,8 @@ class GoosePanel {
                     String lnName = ln.getName();
 
                     if (lnName.equals("LLN0")) {
-                        ctx.log("Buscando GoCBs en " + ldName + "/" + lnName + " (" +
-                            (ln.getChildren() != null ? ln.getChildren().size() : 0) + " nodos)");
+                        ctx.log(I18n.t("log.goose.searchinggocbs", ldName, lnName,
+                            (ln.getChildren() != null ? ln.getChildren().size() : 0)));
                     }
 
                     for (ModelNode node : ln.getChildren()) {
@@ -1524,20 +1523,20 @@ class GoosePanel {
                             String ref = lnName + "." + nodeName;
                             String displayDatSet = !datSet.isEmpty() ? datSet : (!goID.isEmpty() ? goID : nodeName);
                             gooseTableModel.addRow(new Object[]{ldName + "/" + ref, goID, displayDatSet, "", "", "", "MMS"});
-                            ctx.log("  GoCB encontrado: " + ldName + "/" + ref);
+                            ctx.log(I18n.t("log.goose.gocbfound", ldName, ref));
                         }
                     }
                 }
             }
 
             if (gooseTableModel.getRowCount() == 0) {
-                ctx.log("No se encontraron GoCBs. Listando nodos de LLN0:");
+                ctx.log(I18n.t("log.goose.nogocbslistingln0"));
                 for (ModelNode ld : model.getChildren()) {
                     for (ModelNode ln : ld.getChildren()) {
                         if (ln.getName().equals("LLN0") && ln.getChildren() != null) {
                             for (ModelNode node : ln.getChildren()) {
                                 String type = node.getClass().getSimpleName();
-                                ctx.log("  - " + node.getName() + " [" + type + "]");
+                                ctx.log(I18n.t("log.goose.lln0node", node.getName(), type));
                             }
                             break;
                         }
@@ -1545,10 +1544,10 @@ class GoosePanel {
                     break;
                 }
             } else {
-                ctx.log("GoCBs encontrados (MMS): " + gooseTableModel.getRowCount());
+                ctx.log(I18n.t("log.goose.gocbsfoundmms", gooseTableModel.getRowCount()));
             }
         } catch (Exception e) {
-            ctx.log("Error obteniendo GoCBs: " + e.getMessage());
+            ctx.log(I18n.t("log.goose.gocbsgeterror", e.getMessage()));
             e.printStackTrace();
         }
     }
@@ -1557,8 +1556,8 @@ class GoosePanel {
 
     /** Public entry point for loading an SCL file (called from IEDNavigatorApp.loadSclForGoCBs). */
     void loadSclFile(File file) {
-        ctx.log("Cargando SCL para GoCBs: " + file.getName());
-        logGoose("Cargando: " + file.getName());
+        ctx.log(I18n.t("log.goose.loadingsclgocb", file.getName()));
+        logGoose(I18n.t("log.goose.loading", file.getName()));
         try {
             int iedIndex = detectAndSelectIED(file);
             if (iedIndex == -2) return;
@@ -1570,18 +1569,18 @@ class GoosePanel {
             }
             ctx.setLoadedSclFile(file);
             refreshGooseControlBlocks();
-            ctx.log("GoCBs cargados: " + ctx.getSclGoCBs().size());
-            logGoose("GoCBs encontrados: " + ctx.getSclGoCBs().size());
+            ctx.log(I18n.t("log.goose.gocbsloaded", ctx.getSclGoCBs().size()));
+            logGoose(I18n.t("log.goose.gocbsfound", ctx.getSclGoCBs().size()));
             ctx.onSclLoaded();
         } catch (Exception e) {
-            ctx.log("Error cargando SCL: " + e.getMessage());
-            logGoose("ERROR: " + e.getMessage());
+            ctx.log(I18n.t("log.goose.sclloaderror", e.getMessage()));
+            logGoose(I18n.t("log.native.generror", e.getMessage()));
         }
     }
 
     private void cargarSclParaGoose() {
         JFileChooser fc = new JFileChooser();
-        fc.setDialogTitle("Cargar archivo SCL para obtener GoCBs");
+        fc.setDialogTitle(I18n.t("goose.filechooser.title"));
         fc.setFileFilter(new javax.swing.filechooser.FileFilter() {
             public boolean accept(File f) {
                 if (f.isDirectory()) return true;
@@ -1590,7 +1589,7 @@ class GoosePanel {
                        name.endsWith(".scd") || name.endsWith(".scl");
             }
             public String getDescription() {
-                return "Archivos SCL (*.cid, *.icd, *.scd, *.scl)";
+                return I18n.t("goose.filechooser.desc");
             }
         });
 
@@ -1601,8 +1600,8 @@ class GoosePanel {
 
         if (fc.showOpenDialog(ctx.parentWindow()) == JFileChooser.APPROVE_OPTION) {
             File file = fc.getSelectedFile();
-            ctx.log("Cargando SCL para GoCBs: " + file.getName());
-            logGoose("Cargando: " + file.getName());
+            ctx.log(I18n.t("log.goose.loadingsclgocb", file.getName()));
+            logGoose(I18n.t("log.goose.loading", file.getName()));
 
             try {
                 int iedIndex = detectAndSelectIED(file);
@@ -1615,14 +1614,14 @@ class GoosePanel {
                 }
                 ctx.setLoadedSclFile(file);
                 refreshGooseControlBlocks();
-                ctx.log("GoCBs cargados: " + ctx.getSclGoCBs().size());
-                logGoose("GoCBs encontrados: " + ctx.getSclGoCBs().size());
+                ctx.log(I18n.t("log.goose.gocbsloaded", ctx.getSclGoCBs().size()));
+                logGoose(I18n.t("log.goose.gocbsfound", ctx.getSclGoCBs().size()));
                 ctx.onSclLoaded();
             } catch (Exception e) {
-                ctx.log("Error cargando SCL: " + e.getMessage());
-                logGoose("ERROR: " + e.getMessage());
+                ctx.log(I18n.t("log.goose.sclloaderror", e.getMessage()));
+                logGoose(I18n.t("log.native.generror", e.getMessage()));
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    "Error cargando archivo SCL:\n" + e.getMessage(),
+                    I18n.t("goose.sclloaderror.dlg", e.getMessage()),
                     "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -1663,14 +1662,14 @@ class GoosePanel {
                 iedNames.add(name);
             }
 
-            ctx.log("Archivo SCD contiene " + iedNames.size() + " IEDs: " + iedNames);
+            ctx.log(I18n.t("log.goose.scdieds", iedNames.size(), iedNames));
 
             int selected = ctx.showIEDSelectionDialog(iedNames, sclFile.getName());
             if (selected < 0) return -2;
             return selected;
 
         } catch (Exception e) {
-            ctx.log("Error detectando IEDs: " + e.getMessage());
+            ctx.log(I18n.t("log.goose.ieddetecterror", e.getMessage()));
             return -1;
         }
     }
@@ -1730,7 +1729,7 @@ class GoosePanel {
             }
             sclLnTypeDoTypes.put(lnTypeId, doMap);
         }
-        ctx.log("DataTypeTemplates: " + sclEnumTypes.size() + " EnumTypes, " + sclDaEnumType.size() + " DA enumeradas");
+        ctx.log(I18n.t("log.goose.datatypetemplates", sclEnumTypes.size(), sclDaEnumType.size()));
 
         ctx.setSclEnumMaps(sclEnumTypes, sclDaEnumType, sclLnTypeDoTypes, sclLnClassToLnType);
     }
@@ -1799,7 +1798,7 @@ class GoosePanel {
         combo.setPreferredSize(new Dimension(260, 26));
 
         JPanel panel = new JPanel(new BorderLayout(10, 8));
-        panel.add(new JLabel("Seleccionar valor para " + daName + ":"), BorderLayout.NORTH);
+        panel.add(new JLabel(I18n.t("dlg.selectvalue.for") + daName + ":"), BorderLayout.NORTH);
         panel.add(combo, BorderLayout.CENTER);
 
         int result = JOptionPane.showConfirmDialog(ctx.parentWindow(), panel,
@@ -1822,23 +1821,23 @@ class GoosePanel {
             for (Map.Entry<Integer, GoosePublisher> entry : activePublishers.entrySet()) {
                 entry.getValue().publishStateChange();
             }
-            ctx.log("GOOSE: Cambio de estado en " + activePublishers.size() + " GoCBs");
-            logGoose("Estado publicado en " + activePublishers.size() + " GoCBs");
+            ctx.log(I18n.t("log.goose.statechangemulti2", activePublishers.size()));
+            logGoose(I18n.t("log.goose.statepublishedmulti", activePublishers.size()));
         } else if (goosePublisher != null && goosePublisher.isPublishing()) {
             goosePublisher.publishStateChange();
-            ctx.log("GOOSE: Cambio de estado publicado (stNum=" + goosePublisher.getStNum() + ")");
-            logGoose("Estado publicado: stNum=" + goosePublisher.getStNum());
+            ctx.log(I18n.t("log.goose.statechangesingle", goosePublisher.getStNum()));
+            logGoose(I18n.t("log.goose.statepublishedsingle", goosePublisher.getStNum()));
         } else {
             String selected = (String) gooseInterfaceCombo.getSelectedItem();
             if (selected != null && interfaceMap.containsKey(selected)) {
                 PcapNetworkInterface nif = interfaceMap.get(selected);
                 if (goosePublisher.init(nif)) {
                     goosePublisher.publishStateChange();
-                    ctx.log("GOOSE: Mensaje unico publicado");
-                    logGoose("GOOSE publicado (una vez)");
+                    ctx.log(I18n.t("log.goose.singlepublished"));
+                    logGoose(I18n.t("log.goose.publishedonce"));
                 } else {
                     JOptionPane.showMessageDialog(ctx.parentWindow(),
-                        "No se pudo publicar GOOSE.\nVerifique la interfaz seleccionada.",
+                        I18n.t("goose.publishfailed"),
                         "GOOSE Error", JOptionPane.ERROR_MESSAGE);
                 }
             } else {
@@ -1881,7 +1880,7 @@ class GoosePanel {
             NodeList gseControls = iedEl != null
                 ? iedEl.getElementsByTagName("GSEControl")
                 : doc.getElementsByTagName("GSEControl");
-            ctx.log("Encontrados " + gseControls.getLength() + " elementos GSEControl");
+            ctx.log(I18n.t("log.goose.gsecontrolsfound", gseControls.getLength()));
 
             Map<String, Map<String, String>> gseInfo = new HashMap<>();
 
@@ -1943,11 +1942,11 @@ class GoosePanel {
                 }
 
                 sclGoCBs.add(gcb);
-                ctx.log("  GoCB: " + gcb.toString() + " appID=" + gcb.appID + " goID=" + gcb.goID);
+                ctx.log(I18n.t("log.goose.gocbdetail", gcb.toString(), gcb.appID, gcb.goID));
             }
 
         } catch (Exception e) {
-            ctx.log("Error parseando GoCBs del SCL: " + e.getMessage());
+            ctx.log(I18n.t("log.goose.gocbsclparseerror", e.getMessage()));
             e.printStackTrace();
         }
 
@@ -1967,7 +1966,7 @@ class GoosePanel {
 
             NodeList ieds = doc.getElementsByTagName("IED");
             if (iedIndex >= ieds.getLength()) {
-                ctx.log("Índice de IED inválido: " + iedIndex);
+                ctx.log(I18n.t("log.goose.invalidiedindex", iedIndex));
                 parseGoCBsFromScl(sclFile);
                 return;
             }
@@ -1981,15 +1980,15 @@ class GoosePanel {
                 selectedIED.getAttribute("desc"),
                 selectedIED.getAttribute("configVersion")
             });
-            ctx.log("Parseando SCL para IED: " + iedName);
+            ctx.log(I18n.t("log.goose.parsingsclfored", iedName));
 
             parseSclDataTypeTemplates(doc);
 
             parseDataSetsFromIED(selectedIED, sclDataSets);
-            ctx.log("DataSets encontrados: " + sclDataSets.size());
+            ctx.log(I18n.t("log.goose.datasetsfound", sclDataSets.size()));
 
             parseReportsFromIED(selectedIED, sclReports);
-            ctx.log("Reports encontrados: " + sclReports.size());
+            ctx.log(I18n.t("log.goose.reportsfound", sclReports.size()));
 
             Map<String, Map<String, String>> gseInfo = new HashMap<>();
 
@@ -2009,7 +2008,7 @@ class GoosePanel {
             }
 
             NodeList gseControls = selectedIED.getElementsByTagName("GSEControl");
-            ctx.log("Encontrados " + gseControls.getLength() + " GSEControl para " + iedName);
+            ctx.log(I18n.t("log.goose.gsecontrolsfor", gseControls.getLength(), iedName));
 
             for (int i = 0; i < gseControls.getLength(); i++) {
                 Element gseCtrl = (Element) gseControls.item(i);
@@ -2049,11 +2048,11 @@ class GoosePanel {
                 }
 
                 sclGoCBs.add(gcb);
-                ctx.log("  GoCB: " + gcb.toString() + " appID=" + gcb.appID + " goID=" + gcb.goID);
+                ctx.log(I18n.t("log.goose.gocbdetail", gcb.toString(), gcb.appID, gcb.goID));
             }
 
         } catch (Exception e) {
-            ctx.log("Error parseando GoCBs: " + e.getMessage());
+            ctx.log(I18n.t("log.goose.gocbparseerror", e.getMessage()));
             e.printStackTrace();
         }
 
@@ -2186,7 +2185,7 @@ class GoosePanel {
             }
             return changed;
         } catch (Exception e) {
-            ctx.log("Error actualizando valores GOOSE: " + e.getMessage());
+            ctx.log(I18n.t("log.goose.updateerror", e.getMessage()));
             return false;
         }
     }
@@ -2220,7 +2219,7 @@ class GoosePanel {
             }
             if (changed) {
                 pub.publishStateChange();
-                logGoose("Modelo -> GoCB#" + gcbIdx + " sincronizado (stNum=" + pub.getStNum() + ")");
+                logGoose(I18n.t("log.goose.modelsynced", gcbIdx, pub.getStNum()));
             }
         }
     }

@@ -65,7 +65,7 @@ class MonitorManager {
                     ctx.getWatchlist().add(fullRef);
                     ctx.updateWatchlistLabel();
                     refreshMonitorTable();
-                    ctx.log("Monitor: + " + displayName + " [" + fc + "]");
+                    ctx.log(I18n.t("log.monitor.added", displayName, fc));
                 }
             }
         }
@@ -124,7 +124,7 @@ class MonitorManager {
             });
         }
         if (ctx.getMonitorCountLabel() != null) {
-            ctx.getMonitorCountLabel().setText(" Items: " + ctx.getMonitorItems().size());
+            ctx.getMonitorCountLabel().setText(" " + I18n.t("monitor.items", ctx.getMonitorItems().size()));
         }
         applyMonitorFilter();
     }
@@ -137,10 +137,10 @@ class MonitorManager {
         JComboBox<String> fcBox = ctx.getMonitorFcFilter();
         JTextField nameBox = ctx.getMonitorNameFilter();
 
-        String fc   = fcBox   != null ? (String) fcBox.getSelectedItem()           : "Todos";
+        String fc   = fcBox   != null ? (String) fcBox.getSelectedItem()           : I18n.t("filter.all");
         String name = nameBox != null ? nameBox.getText().trim().toLowerCase()      : "";
 
-        boolean fcAll   = fc == null || fc.equals("Todos");
+        boolean fcAll   = fc == null || fc.equals(I18n.t("filter.all"));
         boolean nameAll = name.isEmpty();
 
         if (fcAll && nameAll) {
@@ -159,8 +159,8 @@ class MonitorManager {
             int visible = ctx.getMonitorTable().getRowCount();
             int total   = ctx.getMonitorItems().size();
             lbl.setText(visible == total
-                ? " Items: " + total
-                : " Items: " + total + "  (visible: " + visible + ")");
+                ? " " + I18n.t("monitor.items", total)
+                : " " + I18n.t("monitor.items.visible", total, visible));
         }
     }
 
@@ -183,7 +183,7 @@ class MonitorManager {
                 Fc     fc     = ((FcModelNode) info.node).getFc();
                 String fullRef = ref + "$" + fc.toString();
                 if (ctx.getWatchlist().add(fullRef)) {
-                    ctx.log("Agregado a watchlist: " + info.name + " [" + fc + "]");
+                    ctx.log(I18n.t("log.watchlist.added", info.name, fc));
                 }
             }
         }
@@ -209,7 +209,7 @@ class MonitorManager {
                 Fc     fc     = ((FcModelNode) info.node).getFc();
                 String fullRef = ref + "$" + fc.toString();
                 if (ctx.getWatchlist().remove(fullRef)) {
-                    ctx.log("Quitado de watchlist: " + info.name);
+                    ctx.log(I18n.t("log.watchlist.removed", info.name));
                 }
             }
         }
@@ -268,7 +268,7 @@ class MonitorManager {
                     ctx.getMonitorTableModel().setValueAt(newVal,     row, 3);
                     ctx.getMonitorTableModel().setValueAt("CHANGED",  row, 4);
 
-                    ctx.log("CAMBIO: " + item.name + " = " + newVal);
+                    ctx.log(I18n.t("log.value.changed", item.name, newVal));
                 } else {
                     long ago = System.currentTimeMillis() - item.lastChangeTime;
                     if (ago > 3000 && item.lastChangeTime > 0) {
@@ -288,7 +288,7 @@ class MonitorManager {
         ctx.updateWatchlistLabel();
         refreshMonitorTable();
         ctx.getModelTree().repaint();
-        ctx.log("Monitor limpiado");
+        ctx.log(I18n.t("log.monitor.cleared"));
     }
 
     void clearWatchlist() {
@@ -296,7 +296,7 @@ class MonitorManager {
         ctx.getMonitorItems().clear();
         ctx.updateWatchlistLabel();
         refreshMonitorTable();
-        ctx.log("Watchlist limpiada");
+        ctx.log(I18n.t("log.watchlist.cleared"));
         ctx.getModelTree().repaint();
     }
 }

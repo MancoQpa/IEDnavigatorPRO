@@ -123,11 +123,11 @@ public class GoosePublisher {
             // Open handle for sending
             sendHandle = nif.openLive(65536, PcapNetworkInterface.PromiscuousMode.PROMISCUOUS, 10);
 
-            log("GOOSE Publisher initialized on: " + nif.getDescription());
-            log("Source MAC: " + srcMac);
+            log(I18n.t("log.pub.initialized", nif.getDescription()));
+            log(I18n.t("log.pub.srcmac", srcMac));
             return true;
         } catch (Exception e) {
-            log("Error initializing GOOSE Publisher: " + e.getMessage());
+            log(I18n.t("log.pub.initerror", e.getMessage()));
             return false;
         }
     }
@@ -151,7 +151,7 @@ public class GoosePublisher {
             }
         }, 0, heartbeatInterval, TimeUnit.MILLISECONDS);
 
-        log("GOOSE publishing started (interval: " + heartbeatInterval + "ms)");
+        log(I18n.t("log.pub.started", heartbeatInterval));
     }
 
     /**
@@ -160,7 +160,7 @@ public class GoosePublisher {
     public void stopPublishing() {
         publishing = false;
         scheduler.shutdownNow();
-        log("GOOSE publishing stopped");
+        log(I18n.t("log.pub.stopped"));
     }
 
     /**
@@ -175,7 +175,7 @@ public class GoosePublisher {
             sqNum = 0;
             publishAndBump();  // publica sqNum=0 y deja sqNum=1
         }
-        log("GOOSE state change published (stNum=" + stNum + ")");
+        log(I18n.t("log.pub.statechange", stNum));
 
         // Retransmisión rápida (IEC 61850-8-1): T1=2ms, T2=4ms, T3=8ms, T4=16ms, luego heartbeat.
         // Cada envío publica el sqNum actual y lo incrementa (monótono), bajo el mismo lock.
@@ -194,7 +194,7 @@ public class GoosePublisher {
         try {
             publishGoose();
         } catch (Exception e) {
-            log("Error publishing GOOSE: " + e.getMessage());
+            log(I18n.t("log.pub.error", e.getMessage()));
         }
         sqNum++;
         if (sqNum > 65535) sqNum = 0;
@@ -521,7 +521,7 @@ public class GoosePublisher {
     public void resetCounters() {
         stNum = 1;
         sqNum = 0;
-        log("Contadores reseteados: stNum=1, sqNum=0");
+        log(I18n.t("log.pub.countersreset"));
     }
 
     /**
