@@ -1980,69 +1980,72 @@ public class IEDNavigatorApp extends JFrame {
      * La operación se ejecuta en el backgroundExecutor para no bloquear el EDT.
      */
     private void showControlDialog(FcModelNode operNode) {
-        String ref = operNode.getReference().toString();
-        int ctlModel = client.getCtlModelValue(operNode);
-        String ctlModelName = new String[]{
+        final String ref = operNode.getReference().toString();
+        final int ctlModel = client.getCtlModelValue(operNode);
+        final String ctlModelName = new String[]{
             "status-only", "direct-normal-security", "sbo-normal-security",
             "direct-enhanced-security", "sbo-enhanced-security"
         }[Math.min(ctlModel, 4)];
-        boolean isSbo = (ctlModel == 2 || ctlModel == 4);
-        String ctlValType = client.getOperCtlValType(operNode);
+        final boolean isSbo = (ctlModel == 2 || ctlModel == 4);
+        final String ctlValType = client.getOperCtlValType(operNode);
 
-        // ── Construir panel del diálogo ──────────────────────────────────────────
+        // Comandos binarios (interruptor/seccionador) → botones Abrir/Cerrar.
+        final boolean binary = "Boolean".equals(ctlValType)
+            || "DoubleBitPos".equals(ctlValType) || "DoubleBit".equals(ctlValType);
+        final String closeVal = "Boolean".equals(ctlValType) ? "true" : "on";
+        final String openVal  = "Boolean".equals(ctlValType) ? "false" : "off";
+
+        // ── Panel de contenido ───────────────────────────────────────────────────
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints g = new GridBagConstraints();
         g.insets = new Insets(4, 6, 4, 6);
         g.anchor = GridBagConstraints.WEST;
         g.fill = GridBagConstraints.HORIZONTAL;
 
-        // Info del nodo
         g.gridx = 0; g.gridy = 0; g.gridwidth = 2;
-        JLabel lblRef = new JLabel("<html><b>" + ref + "</b></html>");
-        panel.add(lblRef, g);
+        panel.add(new JLabel("<html><b>" + ref + "</b></html>"), g);
 
         g.gridy = 1;
-        Color ctlColor = isSbo ? new Color(183, 28, 28) : new Color(0, 100, 0);
         JLabel lblModel = new JLabel("Modelo de control: " + ctlModelName);
-        lblModel.setForeground(ctlColor);
+        lblModel.setForeground(isSbo ? new Color(183, 28, 28) : new Color(0, 100, 0));
         panel.add(lblModel, g);
 
-        if (isSbo) {
-            g.gridy = 2;
-            JLabel lblSboNote = new JLabel(
-                "<html><i>SELECT → OPERATE (SBO): el IED reservará el nodo antes de ejecutar.</i></html>");
-            lblSboNote.setFont(lblSboNote.getFont().deriveFont(Font.ITALIC, 11f));
-            panel.add(lblSboNote, g);
-        }
+        g.gridy = 2;
+        JLabel lblSboNote = new JLabel(isSbo
+            ? "<html><i>SBO en 2 pasos: <b>Seleccionar (SBOw)</b> reserva el nodo; luego "
+              + "<b>Ejecutar</b> o <b>Cancelar</b> mientras corre el timeout.</i></html>"
+            : "<html><i>Control directo: se ejecuta con <b>Ejecutar</b> (sin reserva previa).</i></html>");
+        lblSboNote.setFont(lblSboNote.getFont().deriveFont(Font.ITALIC, 11f));
+        panel.add(lblSboNote, g);
 
         g.gridwidth = 1;
 
-        // Selector de valor según tipo
+        // Selector de valor. inputs = componentes a bloquear mientras haya reserva.
+        final java.util.List<JComponent> inputs = new java.util.ArrayList<>();
+        final String[] selectedValue = {binary ? closeVal : null};
+
         g.gridy = 3; g.gridx = 0;
         panel.add(new JLabel("Valor:"), g);
         g.gridx = 1;
-
-        // Devuelve el string del valor seleccionado; null = cancelado
-        final String[] selectedValue = {null};
-
-        if ("DoubleBitPos".equals(ctlValType) || "DoubleBit".equals(ctlValType)) {
-            String[] opts = {"on", "off", "intermediate", "bad"};
-            JComboBox<String> combo = new JComboBox<>(opts);
-            panel.add(combo, g);
-            selectedValue[0] = "on"; // default
-            combo.addActionListener(e -> selectedValue[0] = (String) combo.getSelectedItem());
-        } else if ("Boolean".equals(ctlValType)) {
-            JComboBox<String> combo = new JComboBox<>(new String[]{"true", "false"});
-            panel.add(combo, g);
-            selectedValue[0] = "true";
-            combo.addActionListener(e -> selectedValue[0] = (String) combo.getSelectedItem());
+        if (binary) {
+            JToggleButton btnOpen  = new JToggleButton("Abrir (OFF)");
+            JToggleButton btnClose = new JToggleButton("Cerrar (ON)");
+            ButtonGroup bgVal = new ButtonGroup();
+            bgVal.add(btnOpen); bgVal.add(btnClose);
+            btnClose.setSelected(true);
+            btnOpen.addActionListener(e -> selectedValue[0] = openVal);
+            btnClose.addActionListener(e -> selectedValue[0] = closeVal);
+            JPanel vp = new JPanel(new GridLayout(1, 2, 6, 0));
+            vp.add(btnOpen); vp.add(btnClose);
+            panel.add(vp, g);
+            inputs.add(btnOpen); inputs.add(btnClose);
         } else if ("TapCommand".equals(ctlValType)) {
             JComboBox<String> combo = new JComboBox<>(new String[]{"stop", "lower", "higher"});
             panel.add(combo, g);
             selectedValue[0] = "stop";
             combo.addActionListener(e -> selectedValue[0] = (String) combo.getSelectedItem());
+            inputs.add(combo);
         } else {
-            // Float, Int, genérico → campo de texto
             JTextField tfVal = new JTextField("0", 12);
             panel.add(tfVal, g);
             selectedValue[0] = "0";
@@ -2051,17 +2054,15 @@ public class IEDNavigatorApp extends JFrame {
                 public void removeUpdate(javax.swing.event.DocumentEvent e)  { selectedValue[0] = tfVal.getText(); }
                 public void changedUpdate(javax.swing.event.DocumentEvent e) { selectedValue[0] = tfVal.getText(); }
             });
+            inputs.add(tfVal);
         }
 
-        // Test flag
         g.gridy = 4; g.gridx = 0; g.gridwidth = 2;
-        JCheckBox cbTest = new JCheckBox(
+        final JCheckBox cbTest = new JCheckBox(
             "Modo Test — el IED registra el evento pero NO actúa en hardware");
         cbTest.setForeground(new Color(150, 70, 0));
-        panel.add(cbTest, g);
+        panel.add(cbTest, g); inputs.add(cbTest);
 
-        // Aviso interacción Test/Mode (IEC 61850-7-2): con Test=ON y la LN en modo "on"
-        // el IED rechaza con Blocked-by-Mode (addCause 8).
         g.gridy = 5;
         JLabel lblTestWarn = new JLabel("<html><div style='width:430px;color:#966400;'>"
             + "⚠ Con <b>Test</b> activado, si la Logical Node está en modo <b>on</b> el IED "
@@ -2071,29 +2072,37 @@ public class IEDNavigatorApp extends JFrame {
         lblTestWarn.setFont(lblTestWarn.getFont().deriveFont(Font.PLAIN, 11f));
         panel.add(lblTestWarn, g);
 
-        // Check field (IEC 61850-7-2: synchroChk + interlkChk)
         g.gridy = 6;
-        JCheckBox cbSynchro = new JCheckBox(
+        final JCheckBox cbSynchro = new JCheckBox(
             "synchroChk — verificar sincronismo (tensión, ángulo, frecuencia)");
         cbSynchro.setToolTipText("Check.synchroChk: el IED verifica sincronismo antes de operar");
-        panel.add(cbSynchro, g);
+        panel.add(cbSynchro, g); inputs.add(cbSynchro);
 
         g.gridy = 7;
-        JCheckBox cbInterlock = new JCheckBox(
+        final JCheckBox cbInterlock = new JCheckBox(
             "interlkChk — verificar enclavamiento lógico del IED");
         cbInterlock.setToolTipText("Check.interlkChk: el IED verifica enclavamientos antes de operar");
-        panel.add(cbInterlock, g);
+        panel.add(cbInterlock, g); inputs.add(cbInterlock);
 
-        // orIdent
         g.gridy = 8; g.gridwidth = 1; g.gridx = 0;
         panel.add(new JLabel("Operador (orIdent):"), g);
         g.gridx = 1;
-        JTextField tfOrIdent = new JTextField("IEDNavigator", 14);
-        panel.add(tfOrIdent, g);
+        final JTextField tfOrIdent = new JTextField("IEDNavigator", 14);
+        panel.add(tfOrIdent, g); inputs.add(tfOrIdent);
 
-        // Descargo de uso educativo
+        // Indicador de estado del SBOw (se colorea y muestra la cuenta regresiva)
         g.gridy = 9; g.gridx = 0; g.gridwidth = 2;
-        JLabel lblDisclaimer = new JLabel("<html><div style='width:430px;color:#B71C1C;'>"
+        final JLabel sbowInd = new JLabel(isSbo
+            ? "  SBOw: sin reservar" : "  Control directo (sin reserva SBO)");
+        sbowInd.setOpaque(true);
+        sbowInd.setBackground(new Color(224, 224, 224));
+        sbowInd.setForeground(Color.DARK_GRAY);
+        sbowInd.setBorder(BorderFactory.createLineBorder(new Color(160, 160, 160)));
+        sbowInd.setPreferredSize(new Dimension(440, 26));
+        panel.add(sbowInd, g);
+
+        g.gridy = 10;
+        JLabel lblDisclaimer = new JLabel("<html><div style='width:440px;color:#B71C1C;'>"
             + "⚠ <b>Herramienta de uso exclusivamente educativo.</b> No apta para pruebas "
             + "FAT/SAT, comisionamiento ni maniobras en instalaciones en servicio. El "
             + "desarrollador no garantiza la ejecución ni el resultado de los comandos; "
@@ -2101,125 +2110,308 @@ public class IEDNavigatorApp extends JFrame {
         lblDisclaimer.setFont(lblDisclaimer.getFont().deriveFont(Font.PLAIN, 11f));
         panel.add(lblDisclaimer, g);
 
-        // ── Mostrar diálogo ──────────────────────────────────────────────────────
-        String title = isSbo ? "Operar nodo — SBO" : "Operar nodo — Direct";
-        int result = JOptionPane.showConfirmDialog(this, panel, title,
-            JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        // ── Diálogo + botonera ───────────────────────────────────────────────────
+        final JDialog dlg = new JDialog(this,
+            isSbo ? "Operar nodo — SBO (2 pasos)" : "Operar nodo — Directo", true);
+        final JButton btnSelect    = new JButton("Seleccionar (SBOw)");
+        final JButton btnExec       = new JButton("Ejecutar (OPER)");
+        final JButton btnCancelSel = new JButton("Cancelar SELECT");
+        final JButton btnClose      = new JButton("Cerrar");
 
-        if (result != JOptionPane.OK_OPTION || selectedValue[0] == null) return;
+        final boolean[] busy = {false};      // hay una operación MMS en vuelo
+        final boolean[] reserved = {false};  // hay una selección SBOw vigente
+        final javax.swing.Timer[] timer = {null};
 
-        final String ctlVal       = selectedValue[0].trim();
-        final boolean testFlag    = cbTest.isSelected();
-        final boolean synchroCheck  = cbSynchro.isSelected();
-        final boolean interlockCheck = cbInterlock.isSelected();
-        final String orIdent      = tfOrIdent.getText().trim();
+        final Runnable stopTimer = () -> { if (timer[0] != null) { timer[0].stop(); timer[0] = null; } };
 
-        // ── Ejecutar en background ───────────────────────────────────────────────
-        backgroundExecutor.submit(() -> {
-            try {
-                IEC61850Client.ControlResult cr =
-                    client.operateControl(operNode, ctlVal, testFlag, orIdent,
-                                          synchroCheck, interlockCheck);
+        final Runnable refreshButtons = () -> {
+            boolean b = busy[0], r = reserved[0];
+            if (isSbo) {
+                btnSelect.setEnabled(!b && !r);
+                btnExec.setEnabled(!b && r);
+                btnCancelSel.setEnabled(!b && r);
+            } else {
+                btnSelect.setEnabled(false);
+                btnExec.setEnabled(!b);
+                btnCancelSel.setEnabled(false);
+            }
+            btnClose.setEnabled(!b);
+            for (JComponent c : inputs) c.setEnabled(!b && !r);
+        };
 
-                // Verificación de posición: pollear stVal [ST] del DO operado hasta que
-                // refleje el valor comandado. El ack MMS solo confirma la aceptación;
-                // el cambio real llega por el proceso (contactos auxiliares → stVal).
-                // En modo Test el IED no actúa sobre el proceso → no hay nada que verificar.
-                IEC61850Client.FeedbackResult fb = null;
-                if (cr.success && !testFlag) {
-                    log("[FEEDBACK] Comando aceptado. Verificando posición (stVal) de " + ref + "...");
-                    fb = client.verifyControlFeedback(operNode, ctlVal, 10000);
+        final Runnable startCountdown = () -> {
+            stopTimer.run();
+            timer[0] = new javax.swing.Timer(200, null);
+            timer[0].addActionListener(ev -> {
+                IEC61850Client.PendingSelect ps = client.getPendingSelect();
+                long rem = (ps != null) ? ps.remainingMs() : 0;
+                if (ps == null || rem <= 0) {
+                    stopTimer.run();
+                    reserved[0] = false;
+                    client.clearPendingSelect();
+                    sbowInd.setBackground(new Color(189, 189, 189));
+                    sbowInd.setForeground(Color.BLACK);
+                    sbowInd.setText("  SBOw: SELECT expiró — vuelva a seleccionar");
+                    refreshButtons.run();
+                    return;
                 }
-                final IEC61850Client.FeedbackResult fbf = fb;
+                boolean warn = rem <= 5000;
+                sbowInd.setBackground(warn ? new Color(229, 57, 53) : new Color(255, 171, 64));
+                sbowInd.setForeground(warn ? Color.WHITE : new Color(60, 30, 0));
+                sbowInd.setText(String.format(
+                    "  ● SBOw RESERVADO — Ejecutar o Cancelar   (%.1f s)", rem / 1000.0));
+            });
+            timer[0].setInitialDelay(0);
+            timer[0].start();
+        };
 
+        // Paso 1: SELECT (SBOw)
+        btnSelect.addActionListener(e -> {
+            final String ctlVal = selectedValue[0] != null ? selectedValue[0].trim() : "";
+            final boolean testFlag = cbTest.isSelected();
+            final boolean sync = cbSynchro.isSelected();
+            final boolean ilk = cbInterlock.isSelected();
+            final String orIdent = tfOrIdent.getText().trim();
+            busy[0] = true; refreshButtons.run();
+            sbowInd.setBackground(new Color(255, 224, 130));
+            sbowInd.setForeground(new Color(60, 30, 0));
+            sbowInd.setText("  Enviando SELECT (SBOw)...");
+            backgroundExecutor.submit(() -> {
+                IEC61850Client.ControlResult cr;
+                int sboTo = client.getSboTimeoutMs(operNode);
+                try {
+                    cr = client.selectControl(operNode, ctlVal, testFlag, orIdent, sync, ilk, sboTo);
+                } catch (Exception ex) {
+                    final String em = ex.getMessage();
+                    SwingUtilities.invokeLater(() -> {
+                        busy[0] = false; reserved[0] = false; refreshButtons.run();
+                        sbowInd.setBackground(new Color(224, 224, 224));
+                        sbowInd.setForeground(Color.DARK_GRAY);
+                        sbowInd.setText("  SBOw: sin reservar");
+                        log("[SELECT EXCEPTION] " + ref + " — " + em);
+                        JOptionPane.showMessageDialog(dlg, "Error de comunicación:\n" + em,
+                            "Error de SELECT", JOptionPane.ERROR_MESSAGE);
+                    });
+                    return;
+                }
+                final IEC61850Client.ControlResult fcr = cr;
+                final int fto = sboTo;
                 SwingUtilities.invokeLater(() -> {
-                    if (cr.success) {
-                        String checkInfo = (synchroCheck || interlockCheck)
-                            ? "\n  Check: " + (synchroCheck ? "synchroChk " : "")
-                              + (interlockCheck ? "interlkChk" : "") : "";
-
-                        String fbInfo;
-                        String fbLog;
-                        String dlgTitle;
-                        int dlgType;
-                        if (testFlag) {
-                            fbInfo = "\n\nModo Test: sin verificación de posición "
-                                + "(el IED registra el comando pero no actúa en el proceso).";
-                            fbLog = " [TEST, sin verificación]";
-                            dlgTitle = "Comando aceptado (Test)";
-                            dlgType = JOptionPane.INFORMATION_MESSAGE;
-                        } else if (fbf != null && fbf.verifiable && fbf.confirmed) {
-                            String secs = String.format("%.1f", fbf.elapsedMs / 1000.0);
-                            fbInfo = "\n\nPosición CONFIRMADA: stVal = " + fbf.observed
-                                + " (verificado por lectura en " + secs + " s)";
-                            fbLog = " | posición confirmada: stVal=" + fbf.observed + " en " + secs + "s";
-                            dlgTitle = "Maniobra confirmada";
-                            dlgType = JOptionPane.INFORMATION_MESSAGE;
-                        } else if (fbf != null && fbf.verifiable) {
-                            String secs = String.format("%.0f", fbf.elapsedMs / 1000.0);
-                            fbInfo = "\n\n⚠ SIN confirmación de posición tras " + secs + " s.\n"
-                                + "Último stVal leído: " + fbf.observed + "\n"
-                                + "El comando fue aceptado pero el equipo no reportó el cambio.\n"
-                                + "Verifique el interruptor y la señalización local.";
-                            fbLog = " | SIN confirmación de posición (último stVal=" + fbf.observed + ")";
-                            dlgTitle = "Comando aceptado — sin confirmación";
-                            dlgType = JOptionPane.WARNING_MESSAGE;
-                        } else {
-                            fbInfo = "\n\nNota: la aceptación MMS no confirma la maniobra física\n"
-                                + "y este DO no expone stVal on/off verificable.\n"
-                                + "Verifique la posición real del equipo.";
-                            fbLog = " (aceptado; sin stVal verificable)";
-                            dlgTitle = "Comando aceptado";
-                            dlgType = JOptionPane.INFORMATION_MESSAGE;
-                        }
-
-                        String msg = "Comando ACEPTADO por el IED\n"
-                            + "  Nodo: " + ref + "\n"
-                            + "  Valor: " + ctlVal + "\n"
-                            + "  Modelo: " + cr.ctlModelName
-                            + (isSbo ? " (SELECT → OPERATE)" : "")
-                            + (testFlag ? "\n  [MODO TEST activado]" : "")
-                            + checkInfo
-                            + fbInfo;
-                        log("[CONTROL OK] " + ref + " = " + ctlVal
-                            + (testFlag ? " [TEST]" : "")
-                            + (synchroCheck ? " [SYNCHRO]" : "")
-                            + (interlockCheck ? " [INTERLOCK]" : "")
-                            + " via " + cr.ctlModelName
-                            + fbLog);
-                        JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg,
-                            dlgTitle, dlgType);
-                        // Refrescar el nodo en el árbol
-                        updateSingleNodeInTree(ref.substring(0, ref.lastIndexOf('.')));
+                    busy[0] = false;
+                    if (fcr.success) {
+                        reserved[0] = true;
+                        log("[SELECT OK] " + ref + " reservado (SBOw) ctlVal=" + ctlVal
+                            + " — timeout " + (fto / 1000) + "s");
+                        startCountdown.run();
                     } else {
-                        StringBuilder msg = new StringBuilder();
-                        msg.append("OPERATE rechazado por el IED\n\n");
+                        reserved[0] = false;
+                        sbowInd.setBackground(new Color(189, 189, 189));
+                        sbowInd.setForeground(Color.BLACK);
+                        sbowInd.setText("  SBOw: SELECT rechazado");
+                        log("[SELECT ERROR] " + ref + " — " + fcr.error
+                            + (fcr.lastApplError != null ? " | " + fcr.lastApplError : ""));
+                        JOptionPane.showMessageDialog(dlg,
+                            "SELECT rechazado por el IED\n\n  Nodo: " + ref + "\n  Error: " + fcr.error
+                            + (fcr.lastApplError != null ? "\n  LastApplError: " + fcr.lastApplError : ""),
+                            "SELECT rechazado", JOptionPane.ERROR_MESSAGE);
+                    }
+                    refreshButtons.run();
+                });
+            });
+        });
+
+        // Paso 2: EXECUTE (OPER)  — o control directo si no es SBO
+        btnExec.addActionListener(e -> {
+            final String ctlVal = selectedValue[0] != null ? selectedValue[0].trim() : "";
+            if (ctlVal.isEmpty()) {
+                JOptionPane.showMessageDialog(dlg, "Ingrese un valor.", "Valor requerido",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            final boolean testFlag = cbTest.isSelected();
+            final boolean sync = cbSynchro.isSelected();
+            final boolean ilk = cbInterlock.isSelected();
+            final String orIdent = tfOrIdent.getText().trim();
+            busy[0] = true; refreshButtons.run();
+            backgroundExecutor.submit(() -> {
+                IEC61850Client.ControlResult cr;
+                try {
+                    cr = isSbo ? client.executeControl(operNode)
+                               : client.operateControl(operNode, ctlVal, testFlag, orIdent, sync, ilk);
+                } catch (Exception ex) {
+                    final String em = ex.getMessage();
+                    SwingUtilities.invokeLater(() -> {
+                        busy[0] = false; reserved[0] = false; stopTimer.run();
+                        client.clearPendingSelect(); refreshButtons.run();
+                        log("[CONTROL EXCEPTION] " + ref + " — " + em);
+                        JOptionPane.showMessageDialog(dlg, "Error de comunicación:\n" + em,
+                            "Error de control", JOptionPane.ERROR_MESSAGE);
+                    });
+                    return;
+                }
+                final IEC61850Client.ControlResult fcr = cr;
+                if (fcr.success) {
+                    SwingUtilities.invokeLater(() -> { stopTimer.run(); reserved[0] = false; dlg.dispose(); });
+                    reportControlResult(operNode, ref, ctlVal, testFlag, sync, ilk, isSbo, fcr);
+                } else {
+                    SwingUtilities.invokeLater(() -> {
+                        busy[0] = false; reserved[0] = false; stopTimer.run();
+                        client.clearPendingSelect(); refreshButtons.run();
+                        sbowInd.setBackground(new Color(189, 189, 189));
+                        sbowInd.setForeground(Color.BLACK);
+                        sbowInd.setText("  " + (isSbo ? "OPERATE rechazado (reserva liberada)" : "OPERATE rechazado"));
+                        StringBuilder msg = new StringBuilder("OPERATE rechazado por el IED\n\n");
                         msg.append("  Nodo: ").append(ref).append("\n");
-                        msg.append("  Modelo: ").append(cr.ctlModelName).append("\n");
-                        msg.append("  Error: ").append(cr.error);
-                        if (cr.lastApplError != null) {
-                            msg.append("\n  LastApplError: ").append(cr.lastApplError);
-                        }
-                        // Pista: si se operó con Test=ON, la causa frecuente es Blocked-by-Mode
-                        // (la LN está en modo "on"). El IED puede no exponer LastApplError.
+                        msg.append("  Modelo: ").append(fcr.ctlModelName).append("\n");
+                        msg.append("  Error: ").append(fcr.error);
+                        if (fcr.lastApplError != null) msg.append("\n  LastApplError: ").append(fcr.lastApplError);
                         if (testFlag) {
                             msg.append("\n\n  Sugerencia: operó con Modo Test activado. Si la LN está en "
                                 + "modo \"on\", el IED lo rechaza (Blocked-by-Mode). Para prueba simulada "
                                 + "ponga la LN en modo test (Mod=test); para maniobra real desmarque Test.");
                         }
-                        log("[CONTROL ERROR] " + ref + " — " + cr.error
-                            + (cr.lastApplError != null ? " | " + cr.lastApplError : ""));
-                        JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg.toString(),
-                            "Control rechazado", JOptionPane.ERROR_MESSAGE);
-                    }
-                });
-            } catch (Exception ex) {
+                        log("[CONTROL ERROR] " + ref + " — " + fcr.error
+                            + (fcr.lastApplError != null ? " | " + fcr.lastApplError : ""));
+                        JOptionPane.showMessageDialog(dlg, msg.toString(), "Control rechazado",
+                            JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            });
+        });
+
+        // Cancelar SELECT
+        btnCancelSel.addActionListener(e -> {
+            final String orIdent = tfOrIdent.getText().trim();
+            busy[0] = true; refreshButtons.run();
+            backgroundExecutor.submit(() -> {
+                IEC61850Client.ControlResult cr = null;
+                try { cr = client.cancelControl(operNode, orIdent); }
+                catch (Exception ex) { log("[CANCEL EXCEPTION] " + ref + " — " + ex.getMessage()); }
+                final IEC61850Client.ControlResult fcr = cr;
                 SwingUtilities.invokeLater(() -> {
-                    log("[CONTROL EXCEPTION] " + ref + " — " + ex.getMessage());
-                    JOptionPane.showMessageDialog(IEDNavigatorApp.this,
-                        "Error de comunicación:\n" + ex.getMessage(),
-                        "Error de control", JOptionPane.ERROR_MESSAGE);
+                    busy[0] = false; reserved[0] = false; stopTimer.run();
+                    client.clearPendingSelect();
+                    sbowInd.setBackground(new Color(224, 224, 224));
+                    sbowInd.setForeground(Color.DARK_GRAY);
+                    sbowInd.setText("  SBOw: SELECT cancelado");
+                    if (fcr != null && fcr.success) log("[CANCEL OK] " + ref + " — SELECT liberado");
+                    else log("[CANCEL ERROR] " + ref + (fcr != null ? " — " + fcr.error : ""));
+                    refreshButtons.run();
                 });
+            });
+        });
+
+        // Cerrar (si hay reserva vigente, la cancela best-effort antes de cerrar)
+        final Runnable doClose = () -> {
+            if (reserved[0]) {
+                final String orIdent = tfOrIdent.getText().trim();
+                backgroundExecutor.submit(() -> {
+                    try { client.cancelControl(operNode, orIdent); } catch (Exception ignore) {}
+                });
+            }
+            client.clearPendingSelect();
+            stopTimer.run();
+            dlg.dispose();
+        };
+        btnClose.addActionListener(e -> doClose.run());
+        dlg.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        dlg.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosing(java.awt.event.WindowEvent we) {
+                if (!busy[0]) doClose.run();
+            }
+        });
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 6));
+        btns.add(btnSelect); btns.add(btnExec); btns.add(btnCancelSel); btns.add(btnClose);
+
+        dlg.getContentPane().setLayout(new BorderLayout());
+        dlg.getContentPane().add(panel, BorderLayout.CENTER);
+        dlg.getContentPane().add(btns, BorderLayout.SOUTH);
+        refreshButtons.run();
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+    }
+
+    /**
+     * Verifica la posición (stVal) tras un control aceptado y muestra el resultado.
+     * Se invoca desde un hilo del backgroundExecutor: la verificación es bloqueante y el
+     * diálogo final se muestra en el EDT. Extraído para compartir entre el flujo directo
+     * (operateControl) y el SBO de dos pasos (executeControl).
+     */
+    private void reportControlResult(FcModelNode operNode, String ref, String ctlVal,
+                                     boolean testFlag, boolean synchroCheck, boolean interlockCheck,
+                                     boolean isSbo, IEC61850Client.ControlResult cr) {
+        IEC61850Client.FeedbackResult fb = null;
+        if (cr.success && !testFlag) {
+            log("[FEEDBACK] Comando aceptado. Verificando posición (stVal) de " + ref + "...");
+            fb = client.verifyControlFeedback(operNode, ctlVal, 10000);
+        }
+        final IEC61850Client.FeedbackResult fbf = fb;
+
+        SwingUtilities.invokeLater(() -> {
+            if (cr.success) {
+                String checkInfo = (synchroCheck || interlockCheck)
+                    ? "\n  Check: " + (synchroCheck ? "synchroChk " : "")
+                      + (interlockCheck ? "interlkChk" : "") : "";
+
+                String fbInfo, fbLog, dlgTitle;
+                int dlgType;
+                if (testFlag) {
+                    fbInfo = "\n\nModo Test: sin verificación de posición "
+                        + "(el IED registra el comando pero no actúa en el proceso).";
+                    fbLog = " [TEST, sin verificación]";
+                    dlgTitle = "Comando aceptado (Test)";
+                    dlgType = JOptionPane.INFORMATION_MESSAGE;
+                } else if (fbf != null && fbf.verifiable && fbf.confirmed) {
+                    String secs = String.format("%.1f", fbf.elapsedMs / 1000.0);
+                    fbInfo = "\n\nPosición CONFIRMADA: stVal = " + fbf.observed
+                        + " (verificado por lectura en " + secs + " s)";
+                    fbLog = " | posición confirmada: stVal=" + fbf.observed + " en " + secs + "s";
+                    dlgTitle = "Maniobra confirmada";
+                    dlgType = JOptionPane.INFORMATION_MESSAGE;
+                } else if (fbf != null && fbf.verifiable) {
+                    String secs = String.format("%.0f", fbf.elapsedMs / 1000.0);
+                    fbInfo = "\n\n⚠ SIN confirmación de posición tras " + secs + " s.\n"
+                        + "Último stVal leído: " + fbf.observed + "\n"
+                        + "El comando fue aceptado pero el equipo no reportó el cambio.\n"
+                        + "Verifique el interruptor y la señalización local.";
+                    fbLog = " | SIN confirmación de posición (último stVal=" + fbf.observed + ")";
+                    dlgTitle = "Comando aceptado — sin confirmación";
+                    dlgType = JOptionPane.WARNING_MESSAGE;
+                } else {
+                    fbInfo = "\n\nNota: la aceptación MMS no confirma la maniobra física\n"
+                        + "y este DO no expone stVal on/off verificable.\n"
+                        + "Verifique la posición real del equipo.";
+                    fbLog = " (aceptado; sin stVal verificable)";
+                    dlgTitle = "Comando aceptado";
+                    dlgType = JOptionPane.INFORMATION_MESSAGE;
+                }
+
+                String msg = "Comando ACEPTADO por el IED\n"
+                    + "  Nodo: " + ref + "\n"
+                    + "  Valor: " + ctlVal + "\n"
+                    + "  Modelo: " + cr.ctlModelName
+                    + (isSbo ? " (SELECT → OPERATE)" : "")
+                    + (testFlag ? "\n  [MODO TEST activado]" : "")
+                    + checkInfo + fbInfo;
+                log("[CONTROL OK] " + ref + " = " + ctlVal
+                    + (testFlag ? " [TEST]" : "")
+                    + (synchroCheck ? " [SYNCHRO]" : "")
+                    + (interlockCheck ? " [INTERLOCK]" : "")
+                    + " via " + cr.ctlModelName + fbLog);
+                JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg, dlgTitle, dlgType);
+                updateSingleNodeInTree(ref.substring(0, ref.lastIndexOf('.')));
+            } else {
+                StringBuilder msg = new StringBuilder("OPERATE rechazado por el IED\n\n");
+                msg.append("  Nodo: ").append(ref).append("\n");
+                msg.append("  Modelo: ").append(cr.ctlModelName).append("\n");
+                msg.append("  Error: ").append(cr.error);
+                if (cr.lastApplError != null) msg.append("\n  LastApplError: ").append(cr.lastApplError);
+                log("[CONTROL ERROR] " + ref + " — " + cr.error
+                    + (cr.lastApplError != null ? " | " + cr.lastApplError : ""));
+                JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg.toString(),
+                    "Control rechazado", JOptionPane.ERROR_MESSAGE);
             }
         });
     }
