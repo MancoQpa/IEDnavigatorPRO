@@ -485,14 +485,14 @@
     const PATH_START = 150, PATH_END = 810;
     const NORMAL_SPEED = (PATH_END - PATH_START) / 2.2;
     const BURST_SPEED = NORMAL_SPEED * 6;
+    const DECAY_RATE = 0.8; // 1/s — how fast speed eases back to normal after a burst
 
     let stNum = 14, sqNum = 91;
     let breakerClosed = true;
     let speed = NORMAL_SPEED, targetSpeed = NORMAL_SPEED;
     let packetX = PATH_START;
     let lastTime = null;
-    let heartbeatTimer = null;
-    let burstTimers = [];
+    let flowRateResetTimer = null;
 
     function pad(n){ return String(n).padStart(4, '0'); }
     function updateCounters(){
@@ -500,44 +500,8 @@
       sqNumEl.textContent = pad(sqNum);
     }
 
-    function scheduleHeartbeat(){
-      clearTimeout(heartbeatTimer);
-      heartbeatTimer = setTimeout(() => {
-        sqNum++;
-        updateCounters();
-        scheduleHeartbeat();
-      }, 3000 + Math.random() * 600);
-    }
-
     function setFlowRate(fast){
       if(trail) trail.style.animationDuration = fast ? '0.45s' : '2.2s';
-    }
-
-    function triggerBurst(){
-      burstTimers.forEach(clearTimeout);
-      burstTimers = [];
-      clearTimeout(heartbeatTimer);
-
-      stNum++;
-      sqNum = 0;
-      updateCounters();
-      targetSpeed = BURST_SPEED;
-      setFlowRate(true);
-
-      const intervals = [80, 160, 320, 640, 1280];
-      let t = 0;
-      intervals.forEach((delay, i) => {
-        t += delay;
-        burstTimers.push(setTimeout(() => {
-          sqNum++;
-          updateCounters();
-          if(i === intervals.length - 1){
-            targetSpeed = NORMAL_SPEED;
-            setFlowRate(false);
-            scheduleHeartbeat();
-          }
-        }, t));
-      });
     }
 
     function setBreaker(closed){
@@ -545,7 +509,19 @@
       breaker.setAttribute('aria-pressed', String(closed));
       breaker.classList.toggle('is-open', !closed);
       if(bay01Led) bay01Led.style.fill = closed ? 'var(--state-on)' : 'var(--state-off)';
-      triggerBurst();
+
+      // State change: stNum advances, sqNum restarts. The retransmission
+      // burst is represented purely by the packet's own speed — sqNum is
+      // driven by how many times it laps the path, so a faster packet
+      // means a faster-climbing sqNum, with no separate timers involved.
+      stNum++;
+      sqNum = 0;
+      updateCounters();
+      speed = BURST_SPEED;
+      targetSpeed = NORMAL_SPEED;
+      setFlowRate(true);
+      clearTimeout(flowRateResetTimer);
+      flowRateResetTimer = setTimeout(() => setFlowRate(false), 3200);
     }
 
     breaker.addEventListener('click', () => setBreaker(!breakerClosed));
@@ -553,22 +529,27 @@
       if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); setBreaker(!breakerClosed); }
     });
 
+    function step(dt){
+      speed += (targetSpeed - speed) * Math.min(1, dt * DECAY_RATE);
+      packetX += speed * dt;
+      if(packetX > PATH_END){
+        packetX = PATH_START + (packetX - PATH_END);
+        sqNum++;
+        updateCounters();
+      }
+      packet.setAttribute('cx', packetX.toFixed(1));
+    }
+
     function tick(ts){
       if(lastTime === null) lastTime = ts;
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
-
-      speed += (targetSpeed - speed) * Math.min(1, dt * 3);
-      packetX += speed * dt;
-      if(packetX > PATH_END) packetX = PATH_START;
-      packet.setAttribute('cx', packetX.toFixed(1));
-
+      step(dt);
       requestAnimationFrame(tick);
     }
 
     if(bay01Led) bay01Led.style.fill = 'var(--state-on)';
     updateCounters();
-    scheduleHeartbeat();
     requestAnimationFrame(tick);
   })();
 </script>
