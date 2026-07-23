@@ -20,6 +20,8 @@
     --text-hi:#EAF0F8;
     --text-mid:#9FB0C6;
     --text-low:#5E7089;
+    --state-on:#4ADE80;
+    --state-off:#F87171;
     --radius:6px;
   }
   *{box-sizing:border-box;}
@@ -114,6 +116,21 @@
   @keyframes dash{to{stroke-dashoffset:-160;}}
   .status-led{fill:var(--teal); animation:blink2 2.4s infinite;}
   @keyframes blink2{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  .breaker{cursor:pointer;}
+  .breaker-ring{fill:var(--navy-800); stroke:var(--line); stroke-width:1.5; transition:stroke .2s;}
+  .breaker:hover .breaker-ring, .breaker:focus-visible .breaker-ring{stroke:var(--teal);}
+  .breaker:focus{outline:none;}
+  .breaker:focus-visible .breaker-ring{stroke-width:2;}
+  .breaker-arm{stroke:var(--state-on); stroke-width:2.5; stroke-linecap:round; transform-origin:296px 110px; transition:transform .25s ease, stroke .25s ease;}
+  .breaker.is-open .breaker-arm{stroke:var(--state-off); transform:rotate(-32deg);}
+  .breaker-pivot{fill:var(--text-low);}
+  .breaker-label{fill:var(--text-mid); font-family:'IBM Plex Mono'; font-size:9px; text-anchor:middle;}
+  .breaker-state{font-family:'IBM Plex Mono'; font-size:9px; font-weight:600; text-anchor:middle; fill:var(--state-on); transition:fill .25s ease;}
+  .breaker.is-open .breaker-state{fill:var(--state-off);}
+  .breaker .state-open{display:none;}
+  .breaker.is-open .state-closed{display:none;}
+  .breaker.is-open .state-open{display:inline;}
 
   /* ---------- SCREENSHOTS (carousel) ---------- */
   .shot-main{
@@ -241,19 +258,29 @@
     <div class="schematic">
       <div class="schematic-label">
         <span><span lang="es">ESQUEMA — MENSAJE GOOSE ENTRE IEDs</span><span lang="en">SCHEMATIC — GOOSE MESSAGE BETWEEN IEDs</span></span>
-        <span class="mono" style="color:var(--teal)">stNum: 0014&nbsp;&nbsp;sqNum: 0091</span>
+        <span class="mono" style="color:var(--teal)">stNum: <span id="stNumVal">0014</span>&nbsp;&nbsp;sqNum: <span id="sqNumVal">0091</span></span>
       </div>
       <svg id="diagram" viewBox="0 0 960 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama unifilar animado mostrando publicación GOOSE entre tres IEDs">
         <path class="link-line" d="M 150 110 H 470"/>
         <path class="link-line" d="M 490 110 H 810"/>
         <path class="goose-trail" d="M 150 110 H 810"/>
-        <circle class="goose-packet" r="4">
-          <animateMotion dur="2.2s" repeatCount="indefinite" path="M 150 110 H 810"/>
-        </circle>
+        <circle class="goose-packet" id="goosePacket" cx="150" cy="110" r="4"/>
+
+        <g class="breaker" id="breakerCtrl" role="button" tabindex="0" aria-pressed="true" aria-label="Q1">
+          <circle class="breaker-ring" cx="310" cy="110" r="20"/>
+          <circle class="breaker-pivot" cx="296" cy="110" r="2.5"/>
+          <circle class="breaker-pivot" cx="324" cy="110" r="2.5"/>
+          <line class="breaker-arm" x1="296" y1="110" x2="324" y2="110"/>
+          <text class="breaker-label" x="310" y="142">Q1</text>
+          <text class="breaker-state" x="310" y="153">
+            <tspan class="state-closed"><tspan lang="es">CERRADO</tspan><tspan lang="en">CLOSED</tspan></tspan>
+            <tspan class="state-open"><tspan lang="es">ABIERTO</tspan><tspan lang="en">OPEN</tspan></tspan>
+          </text>
+        </g>
 
         <g class="ied-node">
           <rect x="30" y="70" width="120" height="80" rx="4"/>
-          <circle class="status-led" cx="120" cy="86" r="3"/>
+          <circle class="status-led" id="bay01Led" cx="120" cy="86" r="3"/>
           <text class="label" x="46" y="105">Bay 01</text>
           <text x="46" y="122">XCBR / CB</text>
           <text x="46" y="137" style="fill:var(--amber)">GoCB: gse01</text>
@@ -443,6 +470,107 @@
   function localStorage_safe_set(lang){
     try{ /* no-op: avoided per artifact rules, kept in-memory only */ }catch(e){}
   }
+</script>
+
+<script>
+  (function(){
+    const packet = document.getElementById('goosePacket');
+    const trail = document.querySelector('.goose-trail');
+    const stNumEl = document.getElementById('stNumVal');
+    const sqNumEl = document.getElementById('sqNumVal');
+    const breaker = document.getElementById('breakerCtrl');
+    const bay01Led = document.getElementById('bay01Led');
+    if(!packet || !breaker) return;
+
+    const PATH_START = 150, PATH_END = 810;
+    const NORMAL_SPEED = (PATH_END - PATH_START) / 2.2;
+    const BURST_SPEED = NORMAL_SPEED * 6;
+
+    let stNum = 14, sqNum = 91;
+    let breakerClosed = true;
+    let speed = NORMAL_SPEED, targetSpeed = NORMAL_SPEED;
+    let packetX = PATH_START;
+    let lastTime = null;
+    let heartbeatTimer = null;
+    let burstTimers = [];
+
+    function pad(n){ return String(n).padStart(4, '0'); }
+    function updateCounters(){
+      stNumEl.textContent = pad(stNum);
+      sqNumEl.textContent = pad(sqNum);
+    }
+
+    function scheduleHeartbeat(){
+      clearTimeout(heartbeatTimer);
+      heartbeatTimer = setTimeout(() => {
+        sqNum++;
+        updateCounters();
+        scheduleHeartbeat();
+      }, 3000 + Math.random() * 600);
+    }
+
+    function setFlowRate(fast){
+      if(trail) trail.style.animationDuration = fast ? '0.45s' : '2.2s';
+    }
+
+    function triggerBurst(){
+      burstTimers.forEach(clearTimeout);
+      burstTimers = [];
+      clearTimeout(heartbeatTimer);
+
+      stNum++;
+      sqNum = 0;
+      updateCounters();
+      targetSpeed = BURST_SPEED;
+      setFlowRate(true);
+
+      const intervals = [80, 160, 320, 640, 1280];
+      let t = 0;
+      intervals.forEach((delay, i) => {
+        t += delay;
+        burstTimers.push(setTimeout(() => {
+          sqNum++;
+          updateCounters();
+          if(i === intervals.length - 1){
+            targetSpeed = NORMAL_SPEED;
+            setFlowRate(false);
+            scheduleHeartbeat();
+          }
+        }, t));
+      });
+    }
+
+    function setBreaker(closed){
+      breakerClosed = closed;
+      breaker.setAttribute('aria-pressed', String(closed));
+      breaker.classList.toggle('is-open', !closed);
+      if(bay01Led) bay01Led.style.fill = closed ? 'var(--state-on)' : 'var(--state-off)';
+      triggerBurst();
+    }
+
+    breaker.addEventListener('click', () => setBreaker(!breakerClosed));
+    breaker.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); setBreaker(!breakerClosed); }
+    });
+
+    function tick(ts){
+      if(lastTime === null) lastTime = ts;
+      const dt = Math.min((ts - lastTime) / 1000, 0.05);
+      lastTime = ts;
+
+      speed += (targetSpeed - speed) * Math.min(1, dt * 3);
+      packetX += speed * dt;
+      if(packetX > PATH_END) packetX = PATH_START;
+      packet.setAttribute('cx', packetX.toFixed(1));
+
+      requestAnimationFrame(tick);
+    }
+
+    if(bay01Led) bay01Led.style.fill = 'var(--state-on)';
+    updateCounters();
+    scheduleHeartbeat();
+    requestAnimationFrame(tick);
+  })();
 </script>
 
 </body>
