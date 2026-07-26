@@ -84,6 +84,7 @@
   .eyebrow .pulse{width:6px;height:6px;border-radius:50%;background:var(--teal); animation:blink 1.6s infinite;}
   @keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
   h1.title{font-size:clamp(34px,5.5vw,58px); font-weight:700; line-height:1.05; max-width:820px;}
+  h1.title .appname{color:var(--teal);}
   h1.title .accent{color:var(--amber);}
   .subtitle{font-size:18px; color:var(--text-mid); max-width:620px; margin-top:20px;}
   .cta-row{display:flex; gap:14px; flex-wrap:wrap; margin-top:36px;}
@@ -239,8 +240,8 @@
       <span lang="en">MMS · GOOSE · IEC 61850-8-1</span>
     </div>
     <h1 class="title">
-      <span lang="es">Explorá, simulá y aprendé acerca de los dispositivos <span class="accent">IEC 61850</span> desde tu escritorio.</span>
-      <span lang="en">Explore, simulate and learn about <span class="accent">IEC 61850</span> devices from your desktop.</span>
+      <span lang="es">Con <span class="appname">IEDNavigator PRO</span>, explorá, simulá y aprendé acerca de los dispositivos <span class="accent">IEC 61850</span> desde tu escritorio.</span>
+      <span lang="en">With <span class="appname">IEDNavigator PRO</span>, explore, simulate and learn about <span class="accent">IEC 61850</span> devices from your desktop.</span>
     </h1>
     <p class="subtitle">
       <span lang="es">Cliente MMS y simulador de IED en un mismo lugar, pensado para formación profesional. Navegá el modelo de datos, practicá el control SBO en dos pasos y observá tráfico GOOSE en tiempo real — sin depender de herramientas comerciales.</span>
@@ -510,10 +511,6 @@
       breaker.classList.toggle('is-open', !closed);
       if(bay01Led) bay01Led.style.fill = closed ? 'var(--state-on)' : 'var(--state-off)';
 
-      // State change: stNum advances, sqNum restarts. The retransmission
-      // burst is represented purely by the packet's own speed — sqNum is
-      // driven by how many times it laps the path, so a faster packet
-      // means a faster-climbing sqNum, with no separate timers involved.
       stNum++;
       sqNum = 0;
       updateCounters();
