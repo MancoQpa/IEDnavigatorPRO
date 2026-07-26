@@ -133,6 +133,19 @@
   .breaker.is-open .state-closed{display:none;}
   .breaker.is-open .state-open{display:inline;}
 
+  .free-badge{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:'IBM Plex Mono'; font-size:12px; font-weight:600; color:#4ADE80;
+    border:1px solid rgba(74,222,128,0.35); background:rgba(74,222,128,0.08);
+    padding:6px 12px; border-radius:99px; margin-bottom:24px; margin-left:10px;
+  }
+  .free-badge svg{width:13px; height:13px; flex-shrink:0;}
+  .cta-note{
+    font-family:'IBM Plex Mono'; font-size:12.5px; color:var(--text-low);
+    margin-top:14px; width:100%;
+  }
+  @media (max-width:560px){ .free-badge{margin-left:0; margin-top:10px;} }
+
   /* ---------- SCREENSHOTS (carousel) ---------- */
   .shot-main{
     border:1px solid var(--line); border-radius:10px; overflow:hidden;
@@ -239,6 +252,11 @@
       <span lang="es">MMS · GOOSE · IEC 61850-8-1</span>
       <span lang="en">MMS · GOOSE · IEC 61850-8-1</span>
     </div>
+    <span class="free-badge">
+      <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10.5L8 14.5L16 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span lang="es">100% GRATIS · CÓDIGO ABIERTO</span>
+      <span lang="en">100% FREE · OPEN SOURCE</span>
+    </span>
     <h1 class="title">
       <span lang="es">Con <span class="appname">IEDNavigator PRO</span>, explorá, simulá y aprendé acerca de los dispositivos <span class="accent">IEC 61850</span> desde tu escritorio.</span>
       <span lang="en">With <span class="appname">IEDNavigator PRO</span>, explore, simulate and learn about <span class="accent">IEC 61850</span> devices from your desktop.</span>
@@ -254,6 +272,10 @@
       <a class="btn btn-ghost" href="https://github.com/MancoQpa/IEDnavigatorPRO">
         <span lang="es">Ver código fuente</span><span lang="en">View source</span>
       </a>
+      <div class="cta-note">
+        <span lang="es">Sin costo, sin registro, sin límite de uso — licencia GPL v3.</span>
+        <span lang="en">No cost, no signup, no usage limits — GPL v3 license.</span>
+      </div>
     </div>
 
     <div class="schematic">
