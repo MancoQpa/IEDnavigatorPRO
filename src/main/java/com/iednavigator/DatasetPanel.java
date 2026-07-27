@@ -45,19 +45,19 @@ class DatasetPanel {
 
         JToolBar toolbar = new JToolBar();
         toolbar.setFloatable(false);
-        JButton btnRefreshDS = new JButton("Actualizar");
+        JButton btnRefreshDS = new JButton(I18n.t("btn.refresh"));
         btnRefreshDS.addActionListener(e -> refreshDatasets());
         toolbar.add(btnRefreshDS);
         toolbar.addSeparator();
-        JButton btnCreateDS = new JButton("Crear Dataset");
+        JButton btnCreateDS = new JButton(I18n.t("dataset.create"));
         btnCreateDS.addActionListener(e -> createNewDataset());
         toolbar.add(btnCreateDS);
-        JButton btnDeleteDS = new JButton("Eliminar Dataset");
+        JButton btnDeleteDS = new JButton(I18n.t("dataset.delete"));
         btnDeleteDS.addActionListener(e -> deleteSelectedDataset());
         toolbar.add(btnDeleteDS);
         toolbar.addSeparator();
-        JButton btnReadValues = new JButton("Leer valores");
-        btnReadValues.setToolTipText("Lee todos los valores del DataSet en lote (GetDataSetValues)");
+        JButton btnReadValues = new JButton(I18n.t("dataset.read"));
+        btnReadValues.setToolTipText(I18n.t("dataset.read.tip"));
         btnReadValues.addActionListener(e -> readSelectedDatasetValues());
         toolbar.add(btnReadValues);
         panel.add(toolbar, BorderLayout.NORTH);
@@ -73,7 +73,7 @@ class DatasetPanel {
             if (!e.getValueIsAdjusting()) showDatasetMembers();
         });
         JScrollPane dsScroll = new JScrollPane(datasetTable);
-        dsScroll.setBorder(BorderFactory.createTitledBorder("Datasets"));
+        dsScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("dataset.title")));
 
         String[] memberColumns = {"#", "Referencia", "FC", "Valor"};
         datasetMembersTableModel = new DefaultTableModel(memberColumns, 0) {
@@ -208,7 +208,7 @@ class DatasetPanel {
     private void readSelectedDatasetValues() {
         int row = datasetTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(parent, "Seleccione un Dataset");
+            JOptionPane.showMessageDialog(parent, I18n.t("dataset.select"));
             return;
         }
         IEC61850Client client = clientSupplier != null ? clientSupplier.get() : null;
@@ -248,7 +248,7 @@ class DatasetPanel {
     private void deleteSelectedDataset() {
         int row = datasetTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(parent, "Seleccione un Dataset");
+            JOptionPane.showMessageDialog(parent, I18n.t("dataset.select"));
             return;
         }
         String name      = (String) datasetTableModel.getValueAt(row, 0);

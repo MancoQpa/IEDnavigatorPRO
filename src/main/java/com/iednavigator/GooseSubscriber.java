@@ -100,7 +100,7 @@ public class GooseSubscriber {
      */
     public boolean start(PcapNetworkInterface nif) {
         if (running) {
-            log("Already running");
+            log(I18n.t("log.sub.alreadyrunning"));
             return false;
         }
 
@@ -117,27 +117,27 @@ public class GooseSubscriber {
             // Set filter for GOOSE: direct (0x88B8) or VLAN-tagged (0x8100 wrapping 0x88B8)
             try {
                 handle.setFilter("ether proto 0x88b8 or (vlan and ether proto 0x88b8)", BpfProgram.BpfCompileMode.OPTIMIZE);
-                log("Filtro GOOSE aplicado (directo + VLAN-tagged)");
+                log(I18n.t("log.sub.filterapplied"));
             } catch (Exception filterEx) {
                 // Fallback: multicast captures both tagged and untagged
                 try {
                     handle.setFilter("multicast", BpfProgram.BpfCompileMode.OPTIMIZE);
-                    log("Filtro multicast aplicado (captura GOOSE)");
+                    log(I18n.t("log.sub.mcastfilter"));
                 } catch (Exception e2) {
-                    log("AVISO: Sin filtro, capturando todo el trafico");
+                    log(I18n.t("log.sub.nofilter"));
                 }
             }
 
             running = true;
-            log("Captura GOOSE iniciada en: " + nif.getDescription());
-            log("MAC local: " + (nif.getLinkLayerAddresses().isEmpty() ? "N/A" : nif.getLinkLayerAddresses().get(0)));
+            log(I18n.t("log.sub.started", nif.getDescription()));
+            log(I18n.t("log.sub.localmac", (nif.getLinkLayerAddresses().isEmpty() ? "N/A" : nif.getLinkLayerAddresses().get(0))));
 
             // Start capture loop in background
             executor.submit(this::captureLoop);
 
             return true;
         } catch (Exception e) {
-            log("Error starting GOOSE capture: " + e.getMessage());
+            log(I18n.t("log.sub.starterror", e.getMessage()));
             return false;
         }
     }
@@ -155,7 +155,7 @@ public class GooseSubscriber {
             }
             handle.close();
         }
-        log("GOOSE capture stopped");
+        log(I18n.t("log.sub.stopped"));
     }
 
     private int packetCount = 0;
@@ -167,8 +167,8 @@ public class GooseSubscriber {
     private void captureLoop() {
         packetCount = 0;
         gooseCount = 0;
-        log("Loop de captura iniciado...");
-        log("Esperando paquetes multicast/GOOSE...");
+        log(I18n.t("log.sub.looplstarted"));
+        log(I18n.t("log.sub.waitingpackets"));
 
         long lastLogTime = System.currentTimeMillis();
 
@@ -196,7 +196,7 @@ public class GooseSubscriber {
                         // Log periodic stats every 10 seconds
                         long now = System.currentTimeMillis();
                         if (now - lastLogTime > 10000) {
-                            log("Stats: " + packetCount + " paquetes, " + gooseCount + " GOOSE");
+                            log(I18n.t("log.sub.stats", packetCount, gooseCount));
                             lastLogTime = now;
                         }
                     }
@@ -206,11 +206,11 @@ public class GooseSubscriber {
             }
         } catch (Exception e) {
             if (running) {
-                log("Error en captura: " + e.getMessage());
+                log(I18n.t("log.sub.captureerror", e.getMessage()));
                 e.printStackTrace();
             }
         }
-        log("Loop de captura terminado. Total: " + packetCount + " paquetes, " + gooseCount + " GOOSE");
+        log(I18n.t("log.sub.loopended", packetCount, gooseCount));
     }
 
     public int getPacketCount() { return packetCount; }
@@ -246,7 +246,7 @@ public class GooseSubscriber {
 
             // Parse GOOSE PDU
             if (payload == null) {
-                log("GOOSE sin payload");
+                log(I18n.t("log.sub.nopayload"));
                 return;
             }
 
@@ -262,10 +262,10 @@ public class GooseSubscriber {
                     messageListener.accept(msg);
                 }
             } else {
-                log("GOOSE parse failed, AppID=" + String.format("%04X", ((rawData[0] & 0xFF) << 8) | (rawData[1] & 0xFF)));
+                log(I18n.t("log.sub.parsefailed", String.format("%04X", ((rawData[0] & 0xFF) << 8) | (rawData[1] & 0xFF))));
             }
         } catch (Exception e) {
-            log("Error procesando paquete: " + e.getMessage());
+            log(I18n.t("log.sub.processerror", e.getMessage()));
         }
     }
 

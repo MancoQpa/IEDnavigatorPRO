@@ -55,11 +55,11 @@ class ProtectionSettingsPanel {
         panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        JButton btnLoad = new JButton("Cargar ajustes");
+        JButton btnLoad = new JButton(I18n.t("psp.load"));
         btnLoad.addActionListener(e -> loadSettings());
-        JButton btnRead = new JButton("Leer del IED");
+        JButton btnRead = new JButton(I18n.t("psp.read"));
         btnRead.addActionListener(e -> readFromIed());
-        JButton btnWrite = new JButton("Escribir cambios");
+        JButton btnWrite = new JButton(I18n.t("psp.write"));
         btnWrite.addActionListener(e -> writeChanges());
         filterField = new JTextField(16);
         filterField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
@@ -129,7 +129,7 @@ class ProtectionSettingsPanel {
 
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
 
-        lblSummary = new JLabel("Pulse 'Cargar ajustes' con un modelo cargado (cliente conectado o servidor)");
+        lblSummary = new JLabel(I18n.t("psp.hint"));
         panel.add(lblSummary, BorderLayout.SOUTH);
 
         return panel;
@@ -214,7 +214,7 @@ class ProtectionSettingsPanel {
             }
             roots.add(root);
         }
-        lblSummary.setText("Leyendo " + roots.size() + " nodos SP del IED...");
+        lblSummary.setText(I18n.t("psp.reading", roots.size()));
         backgroundExecutor.submit(() -> {
             int ok = 0, err = 0;
             for (FcModelNode root : roots) {
@@ -263,8 +263,8 @@ class ProtectionSettingsPanel {
             }
         }
         if (changes.isEmpty()) {
-            JOptionPane.showMessageDialog(parent, "No hay cambios pendientes.\n"
-                + "Edita la columna 'Nuevo valor' primero.", "Ajustes SP", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(parent, I18n.t("psp.nochanges"),
+                I18n.t("tab.sp"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
@@ -311,7 +311,7 @@ class ProtectionSettingsPanel {
             }
             final int fOk = ok, fErr = err;
             SwingUtilities.invokeLater(() -> {
-                lblSummary.setText("Escritura: " + fOk + " OK, " + fErr + " errores");
+                lblSummary.setText(I18n.t("psp.writeresult", fOk, fErr));
                 if (fErr > 0) {
                     JOptionPane.showMessageDialog(parent,
                         fOk + " ajustes escritos, " + fErr + " errores (ver log)",

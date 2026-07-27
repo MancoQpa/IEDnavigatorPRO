@@ -69,19 +69,19 @@ class PollingManager {
                 try {
                     refreshAllValues();
                 } catch (Exception e) {
-                    ctx.log("Polling error: " + e.getMessage());
+                    ctx.log(I18n.t("log.polling.error", e.getMessage()));
                 }
             }
         }, 0, interval, TimeUnit.MILLISECONDS);
 
-        ctx.log("Polling iniciado (cada " + interval + "ms)");
+        ctx.log(I18n.t("log.polling.started", interval));
     }
 
     void stop() {
         if (pollExecutor != null) {
             pollExecutor.shutdown();
             pollExecutor = null;
-            ctx.log("Polling detenido");
+            ctx.log(I18n.t("log.polling.stopped"));
         }
     }
 
@@ -119,8 +119,8 @@ class PollingManager {
             updateVisibleTreeNodes(ctx.getRootNode());
             ctx.updateMonitorValues();
             if (finalCount > 0) {
-                String mode = usingWatchlist ? "watchlist" : "visibles";
-                ctx.log("Polling: " + finalCount + " nodos (" + mode + ")");
+                String mode = usingWatchlist ? "watchlist" : I18n.t("log.polling.mode.visible");
+                ctx.log(I18n.t("log.polling.count", finalCount, mode));
             }
         });
     }
@@ -188,19 +188,19 @@ class PollingManager {
             NodeInfo info = (NodeInfo) userObj;
             if (info.node instanceof FcModelNode) {
                 try {
-                    ctx.log("Leyendo: " + info.node.getReference());
+                    ctx.log(I18n.t("log.reading", info.node.getReference()));
                     ctx.getClient().readNodeValues((FcModelNode) info.node);
                     if (info.node instanceof BasicDataAttribute) {
                         BasicDataAttribute bda = (BasicDataAttribute) info.node;
                         info.value = bda.getValueString();
                         ctx.getTreeModel().nodeChanged(treeNode);
-                        ctx.log("Valor: " + info.value);
+                        ctx.log(I18n.t("log.value", info.value));
                     } else {
                         ModelTreeBuilder.updateTreeNodeRecursive(treeNode, ctx.getTreeModel());
-                        ctx.log("DO actualizado con hijos");
+                        ctx.log(I18n.t("log.do.updated"));
                     }
                 } catch (Exception e) {
-                    ctx.log("Error leyendo: " + e.getMessage());
+                    ctx.log(I18n.t("log.read.error", e.getMessage()));
                 }
             }
         }
@@ -225,7 +225,7 @@ class PollingManager {
     void toggleBlocking(boolean block) {
         FcModelNode blkNode = getSelectedBlkEnaNode();
         if (blkNode == null) {
-            ctx.log("Este nodo no soporta FC=BL (blkEna no encontrado)");
+            ctx.log(I18n.t("log.blk.notsupported"));
             return;
         }
         ctx.backgroundExecutor().submit(() -> {
@@ -233,7 +233,7 @@ class PollingManager {
                 ctx.getClient().setBlocking(blkNode, block);
                 String ref = blkNode.getReference().toString();
                 SwingUtilities.invokeLater(() -> {
-                    ctx.log((block ? "Bloqueado" : "Desbloqueado") + ": " + ref);
+                    ctx.log((block ? I18n.t("log.blocked") : I18n.t("log.unblocked")) + ": " + ref);
                     TreePath path = ctx.getModelTree().getSelectionPath();
                     if (path != null) {
                         ModelTreeBuilder.updateTreeNodeRecursive(
@@ -241,7 +241,7 @@ class PollingManager {
                     }
                 });
             } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> ctx.log("Error setBlocking: " + ex.getMessage()));
+                SwingUtilities.invokeLater(() -> ctx.log(I18n.t("log.setblocking.error", ex.getMessage())));
             }
         });
     }

@@ -42,18 +42,18 @@ class DataModelPanel {
 
         JToolBar toolbar = new JToolBar();
         toolbar.setFloatable(false);
-        JButton btnRefreshDM = new JButton("Actualizar");
+        JButton btnRefreshDM = new JButton(I18n.t("btn.refresh"));
         btnRefreshDM.addActionListener(e -> refreshDataModel());
         toolbar.add(btnRefreshDM);
         toolbar.addSeparator();
-        JButton btnExpandAll = new JButton("Expandir Todo");
+        JButton btnExpandAll = new JButton(I18n.t("tree.expandall"));
         btnExpandAll.addActionListener(e -> expandAllDataModel());
         toolbar.add(btnExpandAll);
-        JButton btnCollapseAll = new JButton("Colapsar Todo");
+        JButton btnCollapseAll = new JButton(I18n.t("tree.collapseall"));
         btnCollapseAll.addActionListener(e -> collapseAllDataModel());
         toolbar.add(btnCollapseAll);
         toolbar.addSeparator();
-        JButton btnExportXML = new JButton("Exportar XML");
+        JButton btnExportXML = new JButton(I18n.t("tree.exportxml"));
         btnExportXML.addActionListener(e -> exportDataModelToXML());
         toolbar.add(btnExportXML);
         panel.add(toolbar, BorderLayout.NORTH);
@@ -65,7 +65,7 @@ class DataModelPanel {
         dataModelTree.setCellRenderer(new DataModelTreeCellRenderer(iconCache));
         dataModelTree.addTreeSelectionListener(e -> showDataModelAttributes());
         JScrollPane treeScroll = new JScrollPane(dataModelTree);
-        treeScroll.setBorder(BorderFactory.createTitledBorder("Estructura del Modelo"));
+        treeScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("tree.structure")));
 
         String[] attrColumns = {"Propiedad", "Valor", "Tipo"};
         dataModelAttrTableModel = new DefaultTableModel(attrColumns, 0) {
@@ -74,7 +74,7 @@ class DataModelPanel {
         };
         dataModelAttrTable = new JTable(dataModelAttrTableModel);
         JScrollPane attrScroll = new JScrollPane(dataModelAttrTable);
-        attrScroll.setBorder(BorderFactory.createTitledBorder("Propiedades"));
+        attrScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("tree.properties")));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treeScroll, attrScroll);
         splitPane.setDividerLocation(400);
@@ -94,7 +94,7 @@ class DataModelPanel {
             return;
         }
 
-        dataModelRootNode.setUserObject("Data Model - " + ModelTreeBuilder.countNodes(model) + " nodos");
+        dataModelRootNode.setUserObject(I18n.t("datamodel.rootcount", ModelTreeBuilder.countNodes(model)));
 
         for (ModelNode ld : model.getChildren()) {
             DefaultMutableTreeNode ldNode = new DefaultMutableTreeNode(new DataModelNodeInfo(ld, "LD"));

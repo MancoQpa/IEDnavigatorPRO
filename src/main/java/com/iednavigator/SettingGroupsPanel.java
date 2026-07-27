@@ -45,14 +45,14 @@ class SettingGroupsPanel {
 
         JToolBar toolbar = new JToolBar();
         toolbar.setFloatable(false);
-        JButton btnRefreshSG = new JButton("Actualizar");
+        JButton btnRefreshSG = new JButton(I18n.t("btn.refresh"));
         btnRefreshSG.addActionListener(e -> refreshSettingGroups());
         toolbar.add(btnRefreshSG);
         toolbar.addSeparator();
-        JButton btnActivateSG = new JButton("Activar Grupo");
+        JButton btnActivateSG = new JButton(I18n.t("sg.activate"));
         btnActivateSG.addActionListener(e -> activateSelectedSettingGroup());
         toolbar.add(btnActivateSG);
-        JButton btnEditSG = new JButton("Editar Grupo");
+        JButton btnEditSG = new JButton(I18n.t("sg.edit"));
         btnEditSG.addActionListener(e -> editSelectedSettingGroup());
         toolbar.add(btnEditSG);
         panel.add(toolbar, BorderLayout.NORTH);
@@ -76,7 +76,7 @@ class SettingGroupsPanel {
             }
         });
         JScrollPane sgScroll = new JScrollPane(settingGroupsTable);
-        sgScroll.setBorder(BorderFactory.createTitledBorder("Setting Groups (SGCB)"));
+        sgScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("sg.title")));
 
         String[] valColumns = {"Atributo", "Valor", "FC", "Tipo"};
         sgValuesTableModel = new DefaultTableModel(valColumns, 0) {
@@ -97,7 +97,7 @@ class SettingGroupsPanel {
             onNavigate.accept(target);
         });
         JScrollPane valScroll = new JScrollPane(sgValuesTable);
-        valScroll.setBorder(BorderFactory.createTitledBorder("Valores del Setting Group"));
+        valScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("sg.values")));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, sgScroll, valScroll);
         splitPane.setDividerLocation(200);
@@ -199,7 +199,7 @@ class SettingGroupsPanel {
     private void activateSelectedSettingGroup() {
         int row = settingGroupsTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(parent, "Seleccione un Setting Group");
+            JOptionPane.showMessageDialog(parent, I18n.t("sg.select"));
             return;
         }
 
@@ -265,7 +265,7 @@ class SettingGroupsPanel {
     private void editSelectedSettingGroup() {
         int row = settingGroupsTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(parent, "Seleccione un Setting Group");
+            JOptionPane.showMessageDialog(parent, I18n.t("sg.select"));
             return;
         }
         String ref = (String) settingGroupsTableModel.getValueAt(row, 0);
