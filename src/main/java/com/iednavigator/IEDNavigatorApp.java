@@ -989,12 +989,6 @@ public class IEDNavigatorApp extends JFrame {
 
         toolbar.add(Box.createHorizontalGlue());
 
-        // Info version
-        JLabel lblVersion = new JLabel("v1.0 | IEC 61850  ");
-        lblVersion.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        lblVersion.setForeground(new Color(0x90A4AE));
-        toolbar.add(lblVersion);
-
         return toolbar;
     }
 
