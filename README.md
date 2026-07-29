@@ -2,6 +2,8 @@
 
 [🇪🇸 Español](#español) | [🇬🇧 English](#english) | [🇨🇳 中文](#中文) | [🇧🇷 Português](#português) | [🇸🇦 العربية](#العربية)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/mancoqpa)
+
 Desktop tool for **IEC 61850** exploration, simulation and analysis, built in **Java**.
 Developed by **Emilio Medina** (Paraguay). Free software under **GPL v3**.
 
