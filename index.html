@@ -98,6 +98,9 @@
   .btn-primary:hover{background:#ffa15e;}
   .btn-ghost{border-color:var(--line); color:var(--text-hi);}
   .btn-ghost:hover{border-color:var(--teal); color:var(--teal);}
+  .btn-kofi{border-color:rgba(255,138,61,0.35); background:rgba(255,138,61,0.07); color:var(--text-hi);}
+  .btn-kofi:hover{border-color:var(--amber); background:rgba(255,138,61,0.14);}
+  .btn-kofi svg{color:var(--amber); flex-shrink:0;}
 
   /* ---------- SCHEMATIC (signature element) ---------- */
   .schematic{
@@ -144,6 +147,12 @@
     font-family:'IBM Plex Mono'; font-size:12.5px; color:var(--text-low);
     margin-top:14px; width:100%;
   }
+  .dl-counter{
+    font-family:'IBM Plex Mono'; font-size:12px; color:var(--text-mid);
+    margin-top:10px; width:100%;
+    display:flex; align-items:center; gap:6px;
+  }
+  .dl-counter svg{width:13px; height:13px; flex-shrink:0; color:var(--text-low);}
   @media (max-width:560px){ .free-badge{margin-left:0; margin-top:10px;} }
 
   /* ---------- SCREENSHOTS (carousel) ---------- */
@@ -272,9 +281,19 @@
       <a class="btn btn-ghost" href="https://github.com/MancoQpa/IEDnavigatorPRO">
         <span lang="es">Ver código fuente</span><span lang="en">View source</span>
       </a>
+      <a class="btn btn-kofi" href="https://ko-fi.com/mancoqpa" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16">
+          <path d="M12 20.5s-7-4.35-9.5-8.5C.5 8.5 2 5 5.5 5c2 0 3.5 1.3 4.5 3 1-1.7 2.5-3 4.5-3 3.5 0 5 3.5 3 7-2.5 4.15-9.5 8.5-9.5 8.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+        <span lang="es">Apoyar el proyecto</span><span lang="en">Support the project</span>
+      </a>
       <div class="cta-note">
         <span lang="es">Sin costo, sin registro, sin límite de uso — licencia GPL v3.</span>
         <span lang="en">No cost, no signup, no usage limits — GPL v3 license.</span>
+      </div>
+      <div class="dl-counter" id="dlCounter">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3v10m0 0l-4-4m4 4l4-4M4 16.5h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="dlCounterText"><span lang="es">Cargando descargas…</span><span lang="en">Loading downloads…</span></span>
       </div>
     </div>
 
@@ -579,6 +598,35 @@
     if(bay01Led) bay01Led.style.fill = 'var(--state-on)';
     updateCounters();
     requestAnimationFrame(tick);
+  })();
+</script>
+
+<script>
+  (function(){
+    const counterEl = document.getElementById('dlCounter');
+    const textEl = document.getElementById('dlCounterText');
+    if(!counterEl || !textEl) return;
+
+    fetch('https://api.github.com/repos/MancoQpa/IEDnavigatorPRO/releases')
+      .then(res => {
+        if(!res.ok) throw new Error('GitHub API error: ' + res.status);
+        return res.json();
+      })
+      .then(releases => {
+        let total = 0;
+        releases.forEach(release => {
+          (release.assets || []).forEach(asset => {
+            total += asset.download_count || 0;
+          });
+        });
+        const formatted = total.toLocaleString('en-US');
+        textEl.innerHTML =
+          '<span lang="es">' + formatted + ' descargas</span>' +
+          '<span lang="en">' + formatted + ' downloads</span>';
+      })
+      .catch(() => {
+        counterEl.style.display = 'none';
+      });
   })();
 </script>
 
