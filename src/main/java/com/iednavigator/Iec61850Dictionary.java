@@ -1963,6 +1963,216 @@ public class Iec61850Dictionary {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    //  Nodos lógicos de sistema de IEC 61850-7-4 Ed.2 que faltaban
+    // ─────────────────────────────────────────────────────────────────────────
+    // Aparecen en equipos Ed.2 de cualquier marca (se detectaron explorando un
+    // SIPROTEC 5, pero no son específicos de Siemens).
+    static {
+        ln("LCCH", "Canal de comunicación físico", "Physical Communication Channel",
+           "Supervisa un canal de comunicación físico del equipo: estado del enlace, "
+           + "redundancia y estadísticas de error. Se instancia uno por canal.",
+           "IEC 61850-7-4 Ed.2",
+           "LCCH1.ChLiv (canal vivo), LCCH1.RedChLiv (canal redundante vivo)");
+        ln("LTIM", "Gestión de hora", "Time Management",
+           "Gestiona la hora local del equipo: zona horaria, horario de verano y el "
+           + "desplazamiento respecto de UTC.",
+           "IEC 61850-7-4 Ed.2",
+           "LTIM1.TmSrc (fuente de hora), LTIM1.TmZn (zona horaria)");
+        ln("LTMS", "Supervisión del maestro de hora", "Time Master Supervision",
+           "Supervisa la sincronización horaria: calidad de la fuente, desviación respecto "
+           + "del maestro y pérdida de sincronismo.",
+           "IEC 61850-7-4 Ed.2",
+           "LTMS1.TmSyn (estado de sincronización)");
+        ln("LTRK", "Seguimiento de servicios", "Service Tracking",
+           "Registra el último servicio IEC 61850 ejecutado (control, ajuste, reporte) con "
+           + "su resultado, para auditoría desde el propio modelo de datos.",
+           "IEC 61850-7-4 Ed.2",
+           "LTRK1.CtsCmd (seguimiento de comandos)");
+
+        en("LCCH", "Supervises a physical communication channel of the device: link state, "
+           + "redundancy and error statistics. One instance per channel.",
+           "LCCH1.ChLiv (channel live), LCCH1.RedChLiv (redundant channel live)");
+        en("LTIM", "Manages the device local time: time zone, daylight saving and the offset "
+           + "from UTC.", "LTIM1.TmSrc (time source), LTIM1.TmZn (time zone)");
+        en("LTMS", "Supervises time synchronization: source quality, deviation from the master "
+           + "and loss of synchronism.", "LTMS1.TmSyn (synchronization state)");
+        en("LTRK", "Records the last IEC 61850 service executed (control, setting, report) with "
+           + "its result, for auditing from the data model itself.",
+           "LTRK1.CtsCmd (command tracking)");
+
+        pt("LCCH", "Supervisiona um canal de comunicação físico do equipamento: estado do enlace, "
+           + "redundância e estatísticas de erro. Uma instância por canal.",
+           "LCCH1.ChLiv (canal vivo), LCCH1.RedChLiv (canal redundante vivo)");
+        pt("LTIM", "Gerencia a hora local do equipamento: fuso horário, horário de verão e o "
+           + "deslocamento em relação ao UTC.", "LTIM1.TmSrc (fonte de hora), LTIM1.TmZn (fuso)");
+        pt("LTMS", "Supervisiona a sincronização de hora: qualidade da fonte, desvio em relação "
+           + "ao mestre e perda de sincronismo.", "LTMS1.TmSyn (estado de sincronização)");
+        pt("LTRK", "Registra o último serviço IEC 61850 executado (controle, ajuste, relatório) "
+           + "com seu resultado, para auditoria a partir do próprio modelo de dados.",
+           "LTRK1.CtsCmd (rastreamento de comandos)");
+
+        zh("LCCH", "监视装置的一个物理通信通道：链路状态、冗余和误码统计。每个通道一个实例。",
+           "LCCH1.ChLiv（通道有效）、LCCH1.RedChLiv（冗余通道有效）");
+        zh("LTIM", "管理装置本地时间：时区、夏令时以及相对 UTC 的偏移。",
+           "LTIM1.TmSrc（时间源）、LTIM1.TmZn（时区）");
+        zh("LTMS", "监视对时同步：时间源质量、与主时钟的偏差以及失步。",
+           "LTMS1.TmSyn（同步状态）");
+        zh("LTRK", "记录最近一次执行的 IEC 61850 服务（控制、定值、报告）及其结果，便于直接从数据模型进行审计。",
+           "LTRK1.CtsCmd（命令跟踪）");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Capa de fabricante: Siemens SIPROTEC 5
+    // ─────────────────────────────────────────────────────────────────────────
+    /**
+     * SIPROTEC 5 nombra sus nodos lógicos como {@code PREFIJO_CLASE+instancia}
+     * (p. ej. {@code POTT_PSCH1}, {@code QUAD_PDIS2}), donde el prefijo identifica el bloque
+     * funcional del equipo, no la clase IEC 61850. Sin esta tabla el diccionario resuelve la
+     * clase por inferencia de sufijo y no puede explicar el prefijo.
+     *
+     * Clave = prefijo TAL CUAL aparece (con guion bajo si lo lleva).
+     *
+     * ATENCIÓN: la expansión de cada prefijo está tomada de la función que el bloque cumple
+     * en el modelo. Los prefijos cuyo significado no pudo confirmarse quedan registrados
+     * igual (para que la clase LN resuelva exacta) pero SIN inventar una expansión.
+     */
+    private static final Map<String, String[]> VENDOR_PREFIX_SIPROTEC5 = new LinkedHashMap<>();
+
+    /** Marca de fabricante que se muestra junto al prefijo. */
+    private static final String SIPROTEC5 = "Siemens SIPROTEC 5";
+
+    private static void vp(String prefix, String expansion, String note) {
+        VENDOR_PREFIX_SIPROTEC5.put(prefix.toUpperCase(), new String[]{expansion, note});
+    }
+
+    static {
+        // ── Prefijos con significado confirmable por la función que cumple el bloque ──
+        vp("POTT_", "Permissive Overreach Transfer Trip",
+           "Esquema de teleprotección permisivo por sobrealcance: envía y recibe la señal "
+           + "permisiva del otro extremo de la línea. Acompaña a la clase PSCH.");
+        vp("QUAD_", "Quadrilateral",
+           "Característica cuadrilátera de la zona de distancia. Acompaña a la clase PDIS; "
+           + "cada instancia es una zona.");
+        vp("SE_", "Single-Ended",
+           "Localización de falta por medida de un solo extremo (sin datos del extremo "
+           + "remoto). Acompaña a la clase RFLO.");
+        vp("CT3P_", "Current Transformer, 3-phase",
+           "Punto de medida de intensidad trifásico.");
+        vp("VT3P_", "Voltage Transformer, 3-phase",
+           "Punto de medida de tensión trifásico.");
+        vp("Line_", "Line",
+           "Canal de comunicación asociado a la línea. Acompaña a la clase LCCH.");
+        vp("RSLED", "Reset LED",
+           "Bloque de reposición de los LED del frente del equipo. Acompaña a la clase GAPC. "
+           + "Nótese que este prefijo NO lleva guion bajo.");
+        vp("PU_", "Pickup",
+           "Bloque de arranque general (señalización de arranque de las funciones de "
+           + "protección). Acompaña a la clase GAPC.");
+        vp("CBT_", "Circuit Breaker Test",
+           "Bloque de prueba del interruptor. Acompaña a la clase GAPC.");
+
+        // ── Prefijos presentes en equipos reales cuya expansión no está confirmada ──
+        // Se registran para que la clase LN resuelva de forma exacta (sin inferencia), pero
+        // no se les atribuye un significado que no pudo verificarse contra documentación.
+        for (String p : new String[]{"FPRE_", "RPRE_", "PPRE_", "XPRE_",
+                                     "REBI_", "DEF_", "DISB_", "GFLG_", "RCDG_", "RCDR_"}) {
+            vp(p, null, null);
+        }
+    }
+
+    /**
+     * Nombres de Logical Device de SIPROTEC 5. El patrón es
+     * {@code <grupo funcional>[_<función>]}, donde la función suele llevar el código ANSI
+     * delante (21 = distancia, 85 = teleprotección).
+     */
+    private static final Map<String, String> VENDOR_LD_SIPROTEC5 = new LinkedHashMap<>();
+    static {
+        VENDOR_LD_SIPROTEC5.put("APPLICATION",
+            "LD de aplicación: agrupa la configuración general del equipo y los bloques de "
+            + "control de reportes (URCB/BRCB).");
+        VENDOR_LD_SIPROTEC5.put("CB",   "Grupo funcional Interruptor: mando, enclavamiento y posición.");
+        VENDOR_LD_SIPROTEC5.put("LN",   "Grupo funcional Línea: funciones de protección de la línea.");
+        VENDOR_LD_SIPROTEC5.put("POWS", "Grupo funcional Sistema de potencia: puntos de medida de intensidad y tensión.");
+        VENDOR_LD_SIPROTEC5.put("REC",  "Grupo funcional Registrador: perturbografía y registros de falta.");
+        VENDOR_LD_SIPROTEC5.put("BINIO","Grupo funcional Entradas/salidas binarias.");
+        VENDOR_LD_SIPROTEC5.put("MOD",  "Módulo de hardware del equipo (canales de E/S o de comunicación).");
+    }
+
+    /**
+     * Si {@code name} es un nodo lógico con prefijo de fabricante SIPROTEC 5
+     * ({@code POTT_PSCH1}), retorna {@code [prefijo, expansión|null, nota|null]}.
+     * Retorna null si el nombre no lleva un prefijo SIPROTEC 5 conocido.
+     */
+    static String[] vendorPrefix(String name) {
+        if (name == null || name.isBlank()) return null;
+        String up = name.trim().toUpperCase();
+        for (Map.Entry<String, String[]> e : VENDOR_PREFIX_SIPROTEC5.entrySet()) {
+            String p = e.getKey();
+            if (!up.startsWith(p) || up.length() <= p.length()) continue;
+            // Lo que queda tras el prefijo debe ser una clase LN conocida (+ instancia).
+            String rest = up.substring(p.length()).replaceAll("\\d+$", "");
+            Entry ln = DICT.get(rest);
+            if (ln != null && ln.type == EntryType.LOGICAL_NODE) {
+                return new String[]{e.getKey(), e.getValue()[0], e.getValue()[1]};
+            }
+        }
+        return null;
+    }
+
+    /** Descripción del nombre de Logical Device SIPROTEC 5, o null si no se reconoce. */
+    static String vendorLogicalDevice(String ldName) {
+        if (ldName == null || ldName.isBlank()) return null;
+        String base = ldName.trim().toUpperCase();
+        int us = base.indexOf('_');
+        String group = (us > 0 ? base.substring(0, us) : base).replaceAll("\\d+$", "");
+        String desc = VENDOR_LD_SIPROTEC5.get(group);
+        if (desc == null) return null;
+        if (us > 0) {
+            String fn = ldName.trim().substring(us + 1);
+            String ansi = ansiHint(fn);
+            desc = desc + " — subgrupo \"" + fn + "\"" + (ansi != null ? " (" + ansi + ")" : "") + ".";
+        }
+        return desc + " [" + SIPROTEC5 + "]";
+    }
+
+    /** Traduce el código ANSI que SIPROTEC 5 antepone al nombre de la función, si lo lleva. */
+    private static String ansiHint(String fnName) {
+        if (fnName == null) return null;
+        java.util.regex.Matcher m =
+            java.util.regex.Pattern.compile("^(\\d{2,4})").matcher(fnName);
+        if (!m.find()) return null;
+        String code = m.group(1);
+        // Los códigos compuestos se leen de a dos dígitos (8521 = 85 sobre 21).
+        StringBuilder sb = new StringBuilder("ANSI ");
+        for (int i = 0; i + 1 < code.length() + 1 && i < code.length(); i += 2) {
+            if (i + 2 > code.length()) break;
+            String two = code.substring(i, i + 2);
+            String meaning = ANSI_CODES.get(two);
+            if (i > 0) sb.append(" / ");
+            sb.append(two).append(meaning != null ? " " + meaning : "");
+        }
+        return sb.toString();
+    }
+
+    private static final Map<String, String> ANSI_CODES = new LinkedHashMap<>();
+    static {
+        ANSI_CODES.put("21", "distancia");
+        ANSI_CODES.put("25", "sincronismo");
+        ANSI_CODES.put("27", "subtensión");
+        ANSI_CODES.put("32", "potencia direccional");
+        ANSI_CODES.put("46", "secuencia negativa");
+        ANSI_CODES.put("49", "sobrecarga térmica");
+        ANSI_CODES.put("50", "sobreintensidad instantánea");
+        ANSI_CODES.put("51", "sobreintensidad temporizada");
+        ANSI_CODES.put("59", "sobretensión");
+        ANSI_CODES.put("67", "sobreintensidad direccional");
+        ANSI_CODES.put("79", "reenganche automático");
+        ANSI_CODES.put("81", "frecuencia");
+        ANSI_CODES.put("85", "teleprotección");
+        ANSI_CODES.put("87", "diferencial");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     //  Lookup
     // ─────────────────────────────────────────────────────────────────────────
     /**
@@ -1991,6 +2201,13 @@ public class Iec61850Dictionary {
         if ((e = DICT.get(name.toUpperCase())) != null) return e;
         // Sin dígitos + mayúsculas
         if (!noDigits.equals(name) && (e = DICT.get(noDigits.toUpperCase())) != null) return e;
+        // ── Prefijo de fabricante conocido (SIPROTEC 5): resolución exacta, no inferida ──
+        String[] vp = vendorPrefix(name);
+        if (vp != null) {
+            String cls = name.trim().toUpperCase()
+                             .substring(vp[0].length()).replaceAll("\\d+$", "");
+            if ((e = DICT.get(cls)) != null) return e;
+        }
         // ── Inferencia por sufijo para nombres con prefijo de fabricante ────────
         // Algunos fabricantes extienden el nombre del LN con un prefijo propio:
         //   "BK1AXCBR1" → prefijo "BK1A", clase "XCBR", instancia "1"
@@ -2047,7 +2264,22 @@ public class Iec61850Dictionary {
         if (e.example != null) m.put("example", e.example);
         String inferred = inferLnClass(name);
         if (inferred != null) m.put("lnClass", inferred);
+        String[] vendor = vendorPrefix(name);
+        if (vendor != null) {
+            m.put("vendor", SIPROTEC5);
+            m.put("vendorPrefix", vendor[0]);
+            if (vendor[1] != null) m.put("vendorPrefixName", vendor[1]);
+            if (vendor[2] != null) m.put("vendorPrefixNote", vendor[2]);
+        }
         return m;
+    }
+
+    /**
+     * Descripción de un nombre de Logical Device de fabricante (SIPROTEC 5), o null.
+     * Acceso sin Swing, para el árbol de modelo y el bridge.
+     */
+    public static String describeLogicalDevice(String ldName) {
+        return vendorLogicalDevice(ldName);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -2072,9 +2304,12 @@ public class Iec61850Dictionary {
         // (el nombre sin dígitos no coincide directamente con la clase inferida)
         String inferredClass = inferLnClass(nodeName);
         String stripped = nodeName.replaceAll("\\d+$", "").toUpperCase();
+        // Prefijo de fabricante conocido: el nombre está identificado, no inferido.
+        final String[] vendor = vendorPrefix(nodeName);
         boolean isInferred = entry != null
                 && inferredClass != null
-                && !stripped.equals(inferredClass);
+                && !stripped.equals(inferredClass)
+                && vendor == null;
 
         boolean modal = (legendAction == null);
         JDialog dialog = new JDialog(
@@ -2151,6 +2386,27 @@ public class Iec61850Dictionary {
                 inferLbl.setForeground(new Color(0x5D4037));
                 inferBanner.add(inferLbl, BorderLayout.CENTER);
                 body.add(inferBanner);
+                body.add(Box.createVerticalStrut(10));
+            }
+            // Prefijo de fabricante reconocido: se explica en vez de avisar "inferido".
+            if (vendor != null) {
+                JPanel vBanner = new JPanel(new BorderLayout(8, 0));
+                vBanner.setBackground(new Color(0xE3F2FD));
+                vBanner.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 4, 0, 0, new Color(0x1565C0)),
+                    new EmptyBorder(7, 10, 7, 10)));
+                vBanner.setAlignmentX(Component.LEFT_ALIGNMENT);
+                String txt = "<html><b>" + SIPROTEC5 + "</b> &nbsp;·&nbsp; "
+                    + I18n.t("dict.vendor.prefix") + " <code>" + vendor[0] + "</code>";
+                if (vendor[1] != null) txt += " = <b>" + vendor[1] + "</b>";
+                if (vendor[2] != null) txt += "<br>" + vendor[2];
+                if (vendor[1] == null)  txt += "<br>" + I18n.t("dict.vendor.unknown");
+                txt += "</html>";
+                JLabel vLbl = new JLabel(txt);
+                vLbl.setFont(new Font("SansSerif", Font.PLAIN, 12));
+                vLbl.setForeground(new Color(0x0D3C61));
+                vBanner.add(vLbl, BorderLayout.CENTER);
+                body.add(vBanner);
                 body.add(Box.createVerticalStrut(10));
             }
             // Nombres

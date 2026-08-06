@@ -2072,8 +2072,27 @@ public class IEDNavigatorApp extends JFrame {
         final JTextField tfOrIdent = new JTextField("IEDNavigator", 14);
         panel.add(tfOrIdent, g); inputs.add(tfOrIdent);
 
+        // Nivel de mando (origin.orCat). Debe coincidir con la autoridad de mando del IED:
+        // un equipo con autoridad de estación rechaza el 3 (remote-control) y exige el 2.
+        g.gridy = 9; g.gridx = 0;
+        JLabel lblOrCat = new JLabel(I18n.t("ctl.orcat"));
+        lblOrCat.setToolTipText(I18n.t("ctl.orcat.tip"));
+        panel.add(lblOrCat, g);
+        g.gridx = 1;
+        final java.util.Map<Integer, String> orCatMap = IEC61850Client.getOrCategoryMap();
+        final java.util.List<Integer> orCatKeys = new java.util.ArrayList<>(orCatMap.keySet());
+        final JComboBox<String> cbOrCat = new JComboBox<>();
+        for (Integer k : orCatKeys) cbOrCat.addItem(k + " — " + orCatMap.get(k));
+        cbOrCat.setSelectedIndex(Math.max(0, orCatKeys.indexOf(client.getControlOrCat())));
+        cbOrCat.setToolTipText(I18n.t("ctl.orcat.tip"));
+        cbOrCat.addActionListener(e -> {
+            int i = cbOrCat.getSelectedIndex();
+            if (i >= 0) client.setControlOrCat(orCatKeys.get(i));
+        });
+        panel.add(cbOrCat, g); inputs.add(cbOrCat);
+
         // Indicador de estado del SBOw (se colorea y muestra la cuenta regresiva)
-        g.gridy = 9; g.gridx = 0; g.gridwidth = 2;
+        g.gridy = 10; g.gridx = 0; g.gridwidth = 2;
         final JLabel sbowInd = new JLabel(isSbo
             ? I18n.t("ctl.sbo.idle") : "  " + I18n.t("ctl.direct.norsv"));
         sbowInd.setOpaque(true);
@@ -2083,7 +2102,7 @@ public class IEDNavigatorApp extends JFrame {
         sbowInd.setPreferredSize(new Dimension(440, 26));
         panel.add(sbowInd, g);
 
-        g.gridy = 10;
+        g.gridy = 11;
         JLabel lblDisclaimer = new JLabel(I18n.t("ctl.disclaimer"));
         lblDisclaimer.setFont(lblDisclaimer.getFont().deriveFont(Font.PLAIN, 11f));
         panel.add(lblDisclaimer, g);
@@ -2297,7 +2316,26 @@ public class IEDNavigatorApp extends JFrame {
             }
         });
 
+        // Preflight: lee del IED las condiciones que gobiernan la orden antes de enviarla.
+        final JButton btnPreflight = new JButton(I18n.t("ctl.pre.btn"));
+        btnPreflight.addActionListener(e -> {
+            final String ctlVal = selectedValue[0] != null ? selectedValue[0].trim() : null;
+            busy[0] = true; refreshButtons.run();
+            btnPreflight.setEnabled(false);
+            log(I18n.t("ctl.pre.checking"));
+            backgroundExecutor.submit(() -> {
+                final java.util.List<IEC61850Client.PreflightCheck> checks =
+                    client.preflightControl(operNode, ctlVal);
+                SwingUtilities.invokeLater(() -> {
+                    busy[0] = false; refreshButtons.run();
+                    btnPreflight.setEnabled(true);
+                    showPreflightDialog(ref, checks);
+                });
+            });
+        });
+
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 6));
+        btns.add(btnPreflight);
         btns.add(btnSelect); btns.add(btnExec); btns.add(btnCancelSel); btns.add(btnClose);
 
         dlg.getContentPane().setLayout(new BorderLayout());
@@ -2307,6 +2345,61 @@ public class IEDNavigatorApp extends JFrame {
         dlg.pack();
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
+    }
+
+    /**
+     * Muestra el resultado del preflight: las condiciones del IED que gobiernan la orden,
+     * con las bloqueantes destacadas y su explicación.
+     */
+    private void showPreflightDialog(String ref, java.util.List<IEC61850Client.PreflightCheck> checks) {
+        StringBuilder html = new StringBuilder("<html><body style='width:420px'>");
+        html.append("<b>").append(escapeHtml(ref)).append("</b><br><br>");
+
+        if (checks == null || checks.isEmpty()) {
+            html.append(escapeHtml(I18n.t("ctl.pre.none")));
+            html.append("</body></html>");
+            JOptionPane.showMessageDialog(this, html.toString(),
+                I18n.t("ctl.pre.title"), JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        int blocking = 0;
+        for (IEC61850Client.PreflightCheck c : checks) if (c.blocking) blocking++;
+
+        html.append("<p>").append(escapeHtml(
+            blocking > 0 ? I18n.t("ctl.pre.blocked") : I18n.t("ctl.pre.ok"))).append("</p>");
+        html.append("<table cellpadding='3'>");
+        for (IEC61850Client.PreflightCheck c : checks) {
+            String color = c.blocking ? "#B71C1C" : "#1B5E20";
+            String mark  = c.blocking ? "&#10007;" : "&#10003;";
+            html.append("<tr>")
+                .append("<td valign='top' style='color:").append(color).append("'><b>")
+                .append(mark).append("</b></td>")
+                .append("<td valign='top'>").append(escapeHtml(c.label()))
+                .append("<br><span style='color:#555;font-size:90%'>")
+                .append(escapeHtml(c.reference)).append("</span></td>")
+                .append("<td valign='top'><b style='color:").append(color).append("'>")
+                .append(escapeHtml(c.value)).append("</b></td>")
+                .append("</tr>");
+            String hint = c.hint();
+            if (hint != null) {
+                html.append("<tr><td></td><td colspan='2' style='color:#B71C1C;font-size:92%'>")
+                    .append(escapeHtml(hint)).append("</td></tr>");
+            }
+        }
+        html.append("</table></body></html>");
+
+        JOptionPane.showMessageDialog(this, html.toString(), I18n.t("ctl.pre.title"),
+            blocking > 0 ? JOptionPane.WARNING_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
+
+        log(I18n.t("ctl.pre.title") + " — " + ref + ": "
+            + checks.size() + " / " + blocking + " " + I18n.t("ctl.pre.blocked"));
+    }
+
+    /** Escapa el texto para insertarlo en las etiquetas HTML de Swing. */
+    private static String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /**
@@ -2377,10 +2470,33 @@ public class IEDNavigatorApp extends JFrame {
                 msg.append("  ").append(I18n.t("ctl.msg.model")).append(": ").append(cr.ctlModelName).append("\n");
                 msg.append("  ").append(I18n.t("ctl.msg.error")).append(": ").append(cr.error);
                 if (cr.lastApplError != null) msg.append("\n  LastApplError: ").append(cr.lastApplError);
+                // AddCause traducido a una explicación accionable (IEC 61850-7-3 Tabla 9)
+                String causeName = cr.addCauseName();
+                String diag = cr.diagnosis();
+                if (causeName != null) {
+                    msg.append("\n  AddCause: ").append(cr.addCause).append(" — ").append(causeName);
+                }
+                if (diag != null) {
+                    msg.append("\n\n").append(I18n.t("ctl.diag")).append(":\n  ").append(diag);
+                }
                 log(I18n.t("log.app.controlerror", ref, cr.error,
-                    (cr.lastApplError != null ? " | " + cr.lastApplError : "")));
+                    (cr.lastApplError != null ? " | " + cr.lastApplError : "")
+                    + (causeName != null ? " | AddCause=" + cr.addCause + " (" + causeName + ")" : "")
+                    + (diag != null ? " | " + diag : "")));
                 JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg.toString(),
                     I18n.t("ctl.rejected.title"), JOptionPane.ERROR_MESSAGE);
+
+                // Tras un rechazo, leer las condiciones del IED para localizar la causa.
+                backgroundExecutor.submit(() -> {
+                    final java.util.List<IEC61850Client.PreflightCheck> checks =
+                        client.preflightControl(operNode, ctlVal);
+                    boolean anyBlocking = false;
+                    for (IEC61850Client.PreflightCheck c : checks) if (c.blocking) anyBlocking = true;
+                    if (anyBlocking) {
+                        final java.util.List<IEC61850Client.PreflightCheck> f = checks;
+                        SwingUtilities.invokeLater(() -> showPreflightDialog(ref, f));
+                    }
+                });
             }
         });
     }

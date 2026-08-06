@@ -46,6 +46,25 @@ public class IEC61850Client implements ClientEventListener {
     // Guarda el ctlNum reservado y el valor comandado para que el OPERATE coincida con el SBOw.
     private PendingSelect pendingSelect;
 
+    // origin.orCat con el que se emiten las órdenes de control (IEC 61850-7-3, orCategory).
+    // Default 3 = remote-control. Debe coincidir con la autoridad de mando configurada en el
+    // IED, o éste rechaza la orden (típicamente con AddCause=blocked-by-switching-hierarchy
+    // o no-access-authority).
+    private int controlOrCat = 3;
+
+    /** orCat actual con el que se emiten las órdenes de control (IEC 61850-7-3 orCategory). */
+    public int getControlOrCat() { return controlOrCat; }
+
+    /** Fija el orCat de las órdenes de control. Valores válidos: 0-8; fuera de rango se ignora. */
+    public void setControlOrCat(int orCat) {
+        if (orCat >= 0 && orCat <= 8) this.controlOrCat = orCat;
+    }
+
+    /** Mapa orCategory → nombre estándar, para poblar el selector de la GUI. */
+    public static Map<Integer, String> getOrCategoryMap() {
+        return java.util.Collections.unmodifiableMap(OR_CATEGORY_MAP);
+    }
+
     public interface ValueChangeListener {
         void onValueChanged(String reference, String value, String type);
         void onError(String reference, String error);
@@ -1546,24 +1565,56 @@ public class IEC61850Client implements ClientEventListener {
         public final String ctlModelName;    // "direct-normal-security", "sbo-normal-security", etc.
         public final String error;           // null si success=true
         public final String lastApplError;   // del nodo LastApplError del IED; puede ser null
+        /** AddCause numérico extraído de LastApplError (IEC 61850-7-3 Tabla 9); -1 si no se obtuvo. */
+        public final int addCause;
 
         private ControlResult(boolean success, int ctlModel, String ctlModelName,
-                               String error, String lastApplError) {
+                               String error, String lastApplError, int addCause) {
             this.success = success;
             this.ctlModel = ctlModel;
             this.ctlModelName = ctlModelName;
             this.error = error;
             this.lastApplError = lastApplError;
+            this.addCause = addCause;
+        }
+
+        /** Nombre estándar del AddCause, o null si no se obtuvo. */
+        public String addCauseName() {
+            return addCause >= 0 ? ADD_CAUSE_MAP.get(addCause) : null;
+        }
+
+        /**
+         * Explicación accionable de por qué el IED rechazó la orden, traducida al idioma
+         * activo. Retorna null si no hay AddCause o no hay sugerencia para esa causa.
+         */
+        public String diagnosis() {
+            if (addCause < 0) return null;
+            String key = "ctl.addcause." + addCause;
+            String txt = I18n.t(key);
+            return (txt == null || txt.equals(key)) ? null : txt;
         }
 
         static ControlResult ok(int ctlModel, String ctlModelName) {
-            return new ControlResult(true, ctlModel, ctlModelName, null, null);
+            return new ControlResult(true, ctlModel, ctlModelName, null, null, -1);
         }
 
         static ControlResult fail(int ctlModel, String ctlModelName,
                                    String error, String lastApplError) {
-            return new ControlResult(false, ctlModel, ctlModelName, error, lastApplError);
+            return new ControlResult(false, ctlModel, ctlModelName, error, lastApplError, -1);
         }
+
+        static ControlResult failWith(int ctlModel, String ctlModelName,
+                                   String error, ApplError ae) {
+            return new ControlResult(false, ctlModel, ctlModelName, error,
+                ae != null ? ae.raw : null, ae != null ? ae.addCause : -1);
+        }
+    }
+
+    /** Contenido del nodo LastApplError: texto crudo + AddCause numérico (-1 si no se pudo leer). */
+    static class ApplError {
+        final String raw;
+        final int addCause;
+        ApplError(String raw, int addCause) { this.raw = raw; this.addCause = addCause; }
     }
 
     /**
@@ -1658,6 +1709,17 @@ public class IEC61850Client implements ClientEventListener {
     private void fillControlStructure(FcModelNode operNode, boolean testFlag, String orIdent,
                                        boolean synchroCheck, boolean interlockCheck,
                                        int ctlNumOverride) {
+        fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck,
+                             ctlNumOverride, controlOrCat);
+    }
+
+    /**
+     * Variante con orCat explícito. Necesaria en el SBO de dos pasos: el OPERATE debe repetir
+     * el mismo origin del SELECT aunque el usuario haya cambiado el selector entremedio.
+     */
+    private void fillControlStructure(FcModelNode operNode, boolean testFlag, String orIdent,
+                                       boolean synchroCheck, boolean interlockCheck,
+                                       int ctlNumOverride, int orCat) {
         if (operNode.getChildren() == null) return;
         for (ModelNode child : operNode.getChildren()) {
             String name = child.getName();
@@ -1665,13 +1727,18 @@ public class IEC61850Client implements ClientEventListener {
                 if (child.getChildren() == null) continue;
                 for (ModelNode oc : child.getChildren()) {
                     if ("orCat".equals(oc.getName())) {
-                        // orCat = 3 (remote-control). Segun el modelo puede ser BdaInt8U o
-                        // BdaInt8 (enum INT8): antes solo se cubria BdaInt8U y quedaba en 0
-                        // (= "not-supported"), lo que NARI rechaza con addCause=Not-supported.
+                        // orCat configurable (default 3 = remote-control). Segun el modelo puede
+                        // ser BdaInt8U o BdaInt8 (enum INT8): antes solo se cubria BdaInt8U y
+                        // quedaba en 0 (= "not-supported"), lo que NARI rechaza con
+                        // addCause=Not-supported.
+                        // El nivel correcto depende de la autoridad de mando configurada en el
+                        // IED: los SIPROTEC 5 con autoridad "Estacion" exigen 2 (station-control)
+                        // y rechazan el 3, y viceversa.
                         if (oc instanceof BdaInt8U) {
-                            ((BdaInt8U) oc).setValue((short) 3);
+                            ((BdaInt8U) oc).setValue((short) orCat);
                         } else if (oc instanceof BasicDataAttribute) {
-                            setBasicDataAttributeValue((BasicDataAttribute) oc, "3");
+                            setBasicDataAttributeValue((BasicDataAttribute) oc,
+                                String.valueOf(orCat));
                         }
                     } else if ("orIdent".equals(oc.getName()) && oc instanceof BdaOctetString) {
                         byte[] b = (orIdent != null && !orIdent.isEmpty())
@@ -1703,6 +1770,15 @@ public class IEC61850Client implements ClientEventListener {
      * Se llama tras un control fallido para obtener la causa específica del IED.
      */
     private String readLastApplError(FcModelNode operNode) {
+        ApplError ae = readApplError(operNode);
+        return ae != null ? ae.raw : null;
+    }
+
+    /**
+     * Igual que {@link #readLastApplError} pero además extrae el AddCause numérico
+     * (IEC 61850-7-3 Tabla 9), que es lo que permite dar un diagnóstico concreto del rechazo.
+     */
+    private ApplError readApplError(FcModelNode operNode) {
         if (serverModel == null || association == null) return null;
         try {
             String operRef = operNode.getReference().toString(); // "LD/LN.DO.Oper"
@@ -1720,20 +1796,192 @@ public class IEC61850Client implements ClientEventListener {
                     if (!(laeNode instanceof FcModelNode)) continue;
                     try { association.getDataValues((FcModelNode) laeNode); } catch (Exception ignore) {}
                     StringBuilder sb = new StringBuilder();
+                    int addCause = -1;
                     if (laeNode.getChildren() != null) {
                         for (ModelNode child : laeNode.getChildren()) {
                             if ("origin".equals(child.getName())) continue; // estructura, no informativa
+                            if ("AddCause".equalsIgnoreCase(child.getName())
+                                    && child instanceof BasicDataAttribute) {
+                                addCause = getIntValue((BasicDataAttribute) child);
+                            }
                             String v = formatValue(child);
                             if (v != null && !v.isEmpty()) {
                                 sb.append(child.getName()).append("=").append(v).append(" ");
                             }
                         }
                     }
-                    if (sb.length() > 0) return sb.toString().trim();
+                    if (sb.length() > 0) return new ApplError(sb.toString().trim(), addCause);
                 }
             }
         } catch (Exception ignore) {}
         return null;
+    }
+
+    // ==================== PREFLIGHT DE CONTROL ====================
+
+    /**
+     * Una condición del IED que puede impedir que la orden prospere.
+     * {@code blocking=true} indica que, tal como está, el IED va a rechazar el comando.
+     */
+    public static class PreflightCheck {
+        public final String reference;   // referencia leída, p.ej. "LD/CSWI1.Loc.stVal"
+        public final String labelKey;    // clave i18n del nombre legible del chequeo
+        public final String value;       // valor leído, ya formateado
+        public final boolean blocking;   // true = va a rechazar la orden
+        public final String hintKey;     // clave i18n de la explicación; null si no aplica
+
+        PreflightCheck(String reference, String labelKey, String value,
+                       boolean blocking, String hintKey) {
+            this.reference = reference; this.labelKey = labelKey; this.value = value;
+            this.blocking = blocking; this.hintKey = hintKey;
+        }
+        public String label() { return I18n.t(labelKey); }
+        public String hint()  {
+            if (hintKey == null) return null;
+            String t = I18n.t(hintKey);
+            return (t == null || t.equals(hintKey)) ? null : t;
+        }
+    }
+
+    /**
+     * Lee del IED las condiciones que gobiernan la aceptación de una orden de mando y
+     * reporta cuáles la bloquearían, ANTES de enviar el SELECT/OPERATE.
+     *
+     * Se inspeccionan (los que existan en el modelo; los ausentes se omiten en silencio):
+     *   - Mod / Beh / Health del LN de control y del LLN0 de su Logical Device
+     *   - Loc, LocKey, LocSta del LN de control  → autoridad de mando (local/estación/remoto)
+     *   - EnaOpn / EnaCls del CILO del mismo LD  → enclavamiento
+     *   - BlkOpn / BlkCls del LN de control      → bloqueo de apertura/cierre
+     *
+     * @param operNode nodo Oper del DO de control
+     * @param ctlValStr valor que se pretende comandar; se usa para elegir entre los chequeos
+     *                  de apertura y los de cierre. Puede ser null (se evalúan ambos).
+     */
+    public java.util.List<PreflightCheck> preflightControl(FcModelNode operNode, String ctlValStr) {
+        java.util.List<PreflightCheck> out = new java.util.ArrayList<>();
+        if (serverModel == null || association == null || operNode == null) return out;
+
+        String operRef = operNode.getReference().toString();       // "LD/LN.DO.Oper"
+        int slash = operRef.indexOf('/');
+        int firstDot = operRef.indexOf('.');
+        if (slash < 0 || firstDot < 0) return out;
+        String ldName = operRef.substring(0, slash);               // "LD"
+        String lnRef  = operRef.substring(0, firstDot);            // "LD/LN"
+
+        // ¿Es una orden de apertura o de cierre? (false/off → abrir; true/on → cerrar)
+        Boolean closing = null;
+        if (ctlValStr != null) {
+            String v = ctlValStr.trim().toLowerCase();
+            if (v.equals("true") || v.equals("on") || v.equals("1"))       closing = Boolean.TRUE;
+            else if (v.equals("false") || v.equals("off") || v.equals("0")) closing = Boolean.FALSE;
+        }
+
+        // ── Modo / comportamiento / salud, en el LN de control y en el LLN0 del LD ──
+        for (String owner : new String[]{lnRef, ldName + "/LLN0"}) {
+            boolean isLn0 = owner.endsWith("/LLN0");
+            addEnumCheck(out, owner + ".Beh.stVal",
+                isLn0 ? "ctl.pre.beh.ld" : "ctl.pre.beh.ln",
+                MOD_BEH_MAP, new int[]{1}, "ctl.pre.hint.beh");
+            addEnumCheck(out, owner + ".Health.stVal",
+                isLn0 ? "ctl.pre.health.ld" : "ctl.pre.health.ln",
+                HEALTH_MAP, new int[]{1, 2}, "ctl.pre.hint.health");
+        }
+
+        // ── Autoridad de mando ──
+        addBoolCheck(out, lnRef + ".Loc.stVal",    "ctl.pre.loc",    false, "ctl.pre.hint.loc");
+        addBoolCheck(out, lnRef + ".LocKey.stVal", "ctl.pre.lockey", false, "ctl.pre.hint.lockey");
+        // LocSta=true significa autoridad a nivel ESTACIÓN: entonces el orCat correcto es 2,
+        // no 3 (remote-control). Solo se marca como bloqueante si no coincide con el orCat actual.
+        PreflightCheck locSta = readBool(lnRef + ".LocSta.stVal", "ctl.pre.locsta",
+            /*blockingWhen*/ null, null);
+        if (locSta != null) {
+            boolean staOn = "true".equalsIgnoreCase(locSta.value);
+            boolean mismatch = (staOn && controlOrCat != 2) || (!staOn && controlOrCat == 2);
+            out.add(new PreflightCheck(locSta.reference, "ctl.pre.locsta", locSta.value,
+                mismatch, mismatch ? "ctl.pre.hint.locsta" : null));
+        }
+
+        // ── Enclavamiento: CILO del mismo Logical Device ──
+        for (String cilo : findLnRefsByClass(ldName, "CILO")) {
+            if (closing == null || closing == Boolean.FALSE)
+                addBoolCheck(out, cilo + ".EnaOpn.stVal", "ctl.pre.enaopn", true, "ctl.pre.hint.ena");
+            if (closing == null || closing == Boolean.TRUE)
+                addBoolCheck(out, cilo + ".EnaCls.stVal", "ctl.pre.enacls", true, "ctl.pre.hint.ena");
+        }
+
+        // ── Bloqueo explícito de apertura/cierre en el propio LN ──
+        if (closing == null || closing == Boolean.FALSE)
+            addBoolCheck(out, lnRef + ".BlkOpn.stVal", "ctl.pre.blkopn", false, "ctl.pre.hint.blk");
+        if (closing == null || closing == Boolean.TRUE)
+            addBoolCheck(out, lnRef + ".BlkCls.stVal", "ctl.pre.blkcls", false, "ctl.pre.hint.blk");
+
+        return out;
+    }
+
+    /** Referencias "LD/prefijoCLASEinst" de todos los LN de una clase dentro de un LD. */
+    private java.util.List<String> findLnRefsByClass(String ldName, String lnClass) {
+        java.util.List<String> refs = new java.util.ArrayList<>();
+        try {
+            ModelNode ld = serverModel.getChild(ldName);
+            if (ld == null || ld.getChildren() == null) return refs;
+            for (ModelNode ln : ld.getChildren()) {
+                String n = ln.getName();
+                // El nombre del LN es prefijo+clase+instancia; basta con que contenga la clase.
+                if (n != null && n.toUpperCase().contains(lnClass)) refs.add(ldName + "/" + n);
+            }
+        } catch (Exception ignore) {}
+        return refs;
+    }
+
+    /** Lee un DA booleano y lo agrega a la lista si existe en el modelo. */
+    private void addBoolCheck(java.util.List<PreflightCheck> out, String ref, String labelKey,
+                              boolean blockingWhenFalse, String hintKey) {
+        PreflightCheck c = readBool(ref, labelKey, blockingWhenFalse, hintKey);
+        if (c != null) out.add(c);
+    }
+
+    /**
+     * @param blockingWhenFalse si es null no se evalúa como bloqueante (solo informativo);
+     *                          true  → bloquea cuando el valor es false (permisos: EnaOpn/EnaCls);
+     *                          false → bloquea cuando el valor es true  (bloqueos: Loc/BlkOpn/BlkCls).
+     */
+    private PreflightCheck readBool(String ref, String labelKey,
+                                    Boolean blockingWhenFalse, String hintKey) {
+        for (Fc fc : new Fc[]{Fc.ST, Fc.MX}) {
+            try {
+                ModelNode n = serverModel.findModelNode(ref, fc);
+                if (!(n instanceof FcModelNode)) continue;
+                try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
+                if (!(n instanceof BdaBoolean)) continue;
+                boolean v = ((BdaBoolean) n).getValue();
+                boolean blocking = false;
+                if (blockingWhenFalse != null) {
+                    blocking = blockingWhenFalse ? !v : v;
+                }
+                return new PreflightCheck(ref, labelKey, String.valueOf(v),
+                                          blocking, blocking ? hintKey : null);
+            } catch (Exception ignore) {}
+        }
+        return null;
+    }
+
+    /** Lee un DA entero enumerado y marca bloqueante si su valor no está entre los aceptables. */
+    private void addEnumCheck(java.util.List<PreflightCheck> out, String ref, String labelKey,
+                              Map<Integer, String> map, int[] okValues, String hintKey) {
+        for (Fc fc : new Fc[]{Fc.ST, Fc.CF, Fc.SP}) {
+            try {
+                ModelNode n = serverModel.findModelNode(ref, fc);
+                if (!(n instanceof FcModelNode)) continue;
+                try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
+                if (!(n instanceof BasicDataAttribute)) continue;
+                int v = getIntValue((BasicDataAttribute) n);
+                boolean ok = false;
+                for (int okv : okValues) if (v == okv) { ok = true; break; }
+                String shown = map.getOrDefault(v, String.valueOf(v));
+                out.add(new PreflightCheck(ref, labelKey, shown, !ok, !ok ? hintKey : null));
+                return;
+            } catch (Exception ignore) {}
+        }
     }
 
     /**
@@ -1781,7 +2029,7 @@ public class IEC61850Client implements ClientEventListener {
         // el MISMO ctlNum del SELECT (IEC 61850-7-2 §20.8); si no, se autoincrementa.
         PendingSelect ps = pendingSelect;
         if (ps != null && ps.operNode == operNode && ps.ctlNum >= 0) {
-            fillControlStructure(cancelNode, ps.testFlag, orIdent, false, false, ps.ctlNum);
+            fillControlStructure(cancelNode, ps.testFlag, orIdent, false, false, ps.ctlNum, ps.orCat);
         } else {
             fillControlStructure(cancelNode, false, orIdent);
         }
@@ -1792,11 +2040,11 @@ public class IEC61850Client implements ClientEventListener {
             if (ps != null && ps.operNode == operNode) pendingSelect = null;
             return ControlResult.ok(ctlModel, ctlModelName);
         } catch (ServiceError e) {
-            String lastErr = readLastApplError(operNode);
+            ApplError ae = readApplError(operNode);
             System.out.println("[ERROR] CANCEL rechazado: ServiceError " + e.getErrorCode()
-                + (lastErr != null ? " | LastApplError: " + lastErr : ""));
-            return ControlResult.fail(ctlModel, ctlModelName,
-                "CANCEL ServiceError: " + e.getErrorCode(), lastErr);
+                + (ae != null ? " | LastApplError: " + ae.raw : ""));
+            return ControlResult.failWith(ctlModel, ctlModelName,
+                "CANCEL ServiceError: " + e.getErrorCode(), ae);
         }
     }
 
@@ -1855,10 +2103,10 @@ public class IEC61850Client implements ClientEventListener {
                 System.out.println("[SBO] SELECT → " + operNode.getReference());
                 boolean selected = association.select(controlDo);
                 if (!selected) {
-                    String lastErr = readLastApplError(operNode);
-                    System.out.println("[SBO] SELECT rechazado. LastApplError: " + lastErr);
-                    return ControlResult.fail(ctlModel, ctlModelName,
-                        "SELECT rechazado por el IED", lastErr);
+                    ApplError ae = readApplError(operNode);
+                    System.out.println("[SBO] SELECT rechazado. LastApplError: " + (ae != null ? ae.raw : null));
+                    return ControlResult.failWith(ctlModel, ctlModelName,
+                        "SELECT rechazado por el IED", ae);
                 }
                 System.out.println("[SBO] SELECT aceptado. Enviando OPERATE...");
             }
@@ -1869,11 +2117,11 @@ public class IEC61850Client implements ClientEventListener {
             return ControlResult.ok(ctlModel, ctlModelName);
 
         } catch (ServiceError e) {
-            String lastErr = readLastApplError(operNode);
+            ApplError ae = readApplError(operNode);
             System.out.println("[ERROR] OPERATE falló: ServiceError " + e.getErrorCode()
-                + (lastErr != null ? " | LastApplError: " + lastErr : ""));
-            return ControlResult.fail(ctlModel, ctlModelName,
-                "ServiceError: " + e.getErrorCode(), lastErr);
+                + (ae != null ? " | LastApplError: " + ae.raw : ""));
+            return ControlResult.failWith(ctlModel, ctlModelName,
+                "ServiceError: " + e.getErrorCode(), ae);
         }
     }
 
@@ -1911,11 +2159,11 @@ public class IEC61850Client implements ClientEventListener {
             association.setDataValues(sbow);
             System.out.println("[SBOe] SELECT-WITH-VALUE aceptado. Enviando OPERATE...");
         } catch (ServiceError e) {
-            String lastErr = readLastApplError(operNode);
+            ApplError ae = readApplError(operNode);
             System.out.println("[SBOe] SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode()
-                + (lastErr != null ? " | LastApplError: " + lastErr : ""));
-            return ControlResult.fail(4, ctlModelName,
-                "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), lastErr);
+                + (ae != null ? " | LastApplError: " + ae.raw : ""));
+            return ControlResult.failWith(4, ctlModelName,
+                "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), ae);
         }
 
         // 2) OPERATE: escribir Oper con el MISMO ctlNum y T nuevo
@@ -1927,11 +2175,11 @@ public class IEC61850Client implements ClientEventListener {
                 + " = " + ctlValStr + (testFlag ? " [TEST MODE]" : ""));
             return ControlResult.ok(4, ctlModelName);
         } catch (ServiceError e) {
-            String lastErr = readLastApplError(operNode);
+            ApplError ae = readApplError(operNode);
             System.out.println("[ERROR] OPERATE (enhanced) falló: ServiceError " + e.getErrorCode()
-                + (lastErr != null ? " | LastApplError: " + lastErr : ""));
-            return ControlResult.fail(4, ctlModelName,
-                "ServiceError: " + e.getErrorCode(), lastErr);
+                + (ae != null ? " | LastApplError: " + ae.raw : ""));
+            return ControlResult.failWith(4, ctlModelName,
+                "ServiceError: " + e.getErrorCode(), ae);
         }
     }
 
@@ -1955,14 +2203,16 @@ public class IEC61850Client implements ClientEventListener {
         public final String ctlVal;
         public final boolean testFlag, synchroCheck, interlockCheck;
         public final String orIdent;
+        public final int orCat;           // origin.orCat usado en el SELECT: el OPERATE debe repetirlo
         public final long deadlineMs;     // instante de expiración = ahora + sboTimeout
 
         PendingSelect(FcModelNode operNode, int ctlModel, int ctlNum, String ctlVal,
                       boolean testFlag, boolean synchroCheck, boolean interlockCheck,
-                      String orIdent, long deadlineMs) {
+                      String orIdent, int orCat, long deadlineMs) {
             this.operNode = operNode; this.ctlModel = ctlModel; this.ctlNum = ctlNum;
             this.ctlVal = ctlVal; this.testFlag = testFlag; this.synchroCheck = synchroCheck;
-            this.interlockCheck = interlockCheck; this.orIdent = orIdent; this.deadlineMs = deadlineMs;
+            this.interlockCheck = interlockCheck; this.orIdent = orIdent; this.orCat = orCat;
+            this.deadlineMs = deadlineMs;
         }
         public boolean isExpired() { return System.currentTimeMillis() > deadlineMs; }
         public long remainingMs()  { return Math.max(0, deadlineMs - System.currentTimeMillis()); }
@@ -2038,12 +2288,12 @@ public class IEC61850Client implements ClientEventListener {
                 System.out.println("[SBOe] SELECT-WITH-VALUE (SBOw ctlNum=" + ctlNum + ") → " + sbow.getReference());
                 association.setDataValues(sbow);
             } catch (ServiceError e) {
-                String lastErr = readLastApplError(operNode);
-                return ControlResult.fail(4, ctlModelName,
-                    "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), lastErr);
+                ApplError ae = readApplError(operNode);
+                return ControlResult.failWith(4, ctlModelName,
+                    "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), ae);
             }
             pendingSelect = new PendingSelect(operNode, 4, ctlNum, ctlValStr, testFlag,
-                synchroCheck, interlockCheck, orIdent, deadline);
+                synchroCheck, interlockCheck, orIdent, controlOrCat, deadline);
             return ControlResult.ok(4, ctlModelName);
         } else { // ctlModel 2 (SBO normal)
             setOperCtlVal(operNode, ctlValStr);
@@ -2052,16 +2302,16 @@ public class IEC61850Client implements ClientEventListener {
                 System.out.println("[SBO] SELECT → " + operNode.getReference());
                 boolean selected = association.select(controlDo);
                 if (!selected) {
-                    String lastErr = readLastApplError(operNode);
-                    return ControlResult.fail(2, ctlModelName, "SELECT rechazado por el IED", lastErr);
+                    ApplError ae = readApplError(operNode);
+                    return ControlResult.failWith(2, ctlModelName, "SELECT rechazado por el IED", ae);
                 }
             } catch (ServiceError e) {
-                String lastErr = readLastApplError(operNode);
-                return ControlResult.fail(2, ctlModelName,
-                    "SELECT ServiceError: " + e.getErrorCode(), lastErr);
+                ApplError ae = readApplError(operNode);
+                return ControlResult.failWith(2, ctlModelName,
+                    "SELECT ServiceError: " + e.getErrorCode(), ae);
             }
             pendingSelect = new PendingSelect(operNode, 2, -1, ctlValStr, testFlag,
-                synchroCheck, interlockCheck, orIdent, deadline);
+                synchroCheck, interlockCheck, orIdent, controlOrCat, deadline);
             return ControlResult.ok(2, ctlModelName);
         }
     }
@@ -2092,7 +2342,7 @@ public class IEC61850Client implements ClientEventListener {
 
         if (ps.ctlModel == 4) {
             setOperCtlVal(operNode, ps.ctlVal);
-            fillControlStructure(operNode, ps.testFlag, ps.orIdent, ps.synchroCheck, ps.interlockCheck, ps.ctlNum);
+            fillControlStructure(operNode, ps.testFlag, ps.orIdent, ps.synchroCheck, ps.interlockCheck, ps.ctlNum, ps.orCat);
             try {
                 association.setDataValues(operNode);
                 System.out.println("[OK] OPERATE (enhanced, 2-pasos) ejecutado: " + operNode.getReference()
@@ -2100,13 +2350,13 @@ public class IEC61850Client implements ClientEventListener {
                 pendingSelect = null;
                 return ControlResult.ok(4, ctlModelName);
             } catch (ServiceError e) {
-                String lastErr = readLastApplError(operNode);
+                ApplError ae = readApplError(operNode);
                 pendingSelect = null;
-                return ControlResult.fail(4, ctlModelName, "ServiceError: " + e.getErrorCode(), lastErr);
+                return ControlResult.failWith(4, ctlModelName, "ServiceError: " + e.getErrorCode(), ae);
             }
         } else { // ctlModel 2
             setOperCtlVal(operNode, ps.ctlVal);
-            fillControlStructure(operNode, ps.testFlag, ps.orIdent, ps.synchroCheck, ps.interlockCheck);
+            fillControlStructure(operNode, ps.testFlag, ps.orIdent, ps.synchroCheck, ps.interlockCheck, -1, ps.orCat);
             try {
                 association.operate(controlDo);
                 System.out.println("[OK] OPERATE (SBO, 2-pasos) ejecutado: " + operNode.getReference()
@@ -2114,9 +2364,9 @@ public class IEC61850Client implements ClientEventListener {
                 pendingSelect = null;
                 return ControlResult.ok(2, ctlModelName);
             } catch (ServiceError e) {
-                String lastErr = readLastApplError(operNode);
+                ApplError ae = readApplError(operNode);
                 pendingSelect = null;
-                return ControlResult.fail(2, ctlModelName, "ServiceError: " + e.getErrorCode(), lastErr);
+                return ControlResult.failWith(2, ctlModelName, "ServiceError: " + e.getErrorCode(), ae);
             }
         }
     }

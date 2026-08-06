@@ -50,6 +50,14 @@ $sources | ForEach-Object { '"' + ($_ -replace '\\', '/') + '"' } | Out-File -Fi
 Remove-Item $argfile -ErrorAction SilentlyContinue
 
 if ($LASTEXITCODE -eq 0) {
+    # Copiar recursos al classpath de ejecucion. El .bat/.exe corren con
+    # classpath "classes;lib\*.jar" (sin src\main\resources), asi que los bundles de
+    # traduccion tienen que estar en classes\ o la app arranca sin textos traducidos.
+    $RESDIR = "$ROOT\src\main\resources"
+    if (Test-Path $RESDIR) {
+        Copy-Item -Path "$RESDIR\*" -Destination $CLASSDIR -Recurse -Force
+        Write-Host "Resources copied to classes\"
+    }
     Write-Host "Compilation successful!"
 } else {
     Write-Host "Compilation FAILED with exit code $LASTEXITCODE"
