@@ -54,6 +54,13 @@ public final class SessionManager {
                 eventBus.emit("client.connectionClosed", p);
                 stopPoller();
             }
+
+            @Override
+            public void onLog(String message) {
+                Map<String, Object> p = new LinkedHashMap<>();
+                p.put("message", message);
+                eventBus.emit("client.log", p);
+            }
         });
 
         boolean ok = newClient.connect(host, port);

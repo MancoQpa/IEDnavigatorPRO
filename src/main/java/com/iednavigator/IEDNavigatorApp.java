@@ -1474,6 +1474,11 @@ public class IEDNavigatorApp extends JFrame {
                     log(I18n.t("log.app.connclosed", reason));
                 });
             }
+
+            @Override
+            public void onLog(String message) {
+                log(message);
+            }
         });
     }
 

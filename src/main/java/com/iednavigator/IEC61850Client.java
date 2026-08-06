@@ -50,6 +50,9 @@ public class IEC61850Client implements ClientEventListener {
         void onValueChanged(String reference, String value, String type);
         void onError(String reference, String error);
         void onConnectionClosed(String reason);
+        // Diagnóstico de reconexión/fallback (antes solo iba a System.out/err — invisible
+        // en la GUI). Ver retryRetrieveModelWithoutDataSets()/retrieveModelManually().
+        void onLog(String message);
     }
 
     public static class CachedValue {
@@ -82,6 +85,28 @@ public class IEC61850Client implements ClientEventListener {
 
     // Executor para operaciones con timeout
     private ExecutorService connectionExecutor = Executors.newSingleThreadExecutor();
+
+    // Espera antes de reconectar dentro de retryRetrieveModelWithoutDataSets(). Algunos IEDs
+    // (confirmado con un Ingeteam Ingepac EF-ZTO real) solo aceptan una asociación MMS a la
+    // vez y quedan rechazando conexiones nuevas por un rato tras un reset abrupto — reintentar
+    // de inmediato solo repite el fallo.
+    private static final long RECONNECT_BACKOFF_MS = 4000;
+
+    /**
+     * Emite un mensaje de diagnóstico a consola y, si hay un listener registrado, a la GUI.
+     * Antes estos mensajes ([RETRY], [MANUAL], [WARN] ServiceError, etc.) solo iban a
+     * System.out/err y no eran visibles para quien no tuviera una consola adjunta a la app.
+     */
+    private void logDiag(String msg) {
+        System.out.println(msg);
+        if (valueChangeListener != null) {
+            try {
+                valueChangeListener.onLog(msg);
+            } catch (Exception ignored) {
+                // No dejar que un listener roto tumbe el flujo de conexión
+            }
+        }
+    }
 
     /**
      * Conecta al servidor IED con timeout
@@ -144,9 +169,8 @@ public class IEC61850Client implements ClientEventListener {
                 serverModel = association.retrieveModel();
                 System.out.println("[INFO] Model retrieved successfully - " + countNodes(serverModel) + " nodes");
             } catch (ServiceError serviceEx) {
-                System.err.println("[WARN] ServiceError during model retrieval:");
-                System.err.println("  Error code: " + serviceEx.getErrorCode());
-                System.err.println("  Message: " + serviceEx.getMessage());
+                logDiag("[WARN] ServiceError during model retrieval: code=" + serviceEx.getErrorCode()
+                    + " message=" + serviceEx.getMessage());
                 String msg = serviceEx.getMessage() != null ? serviceEx.getMessage() : "";
                 // Si el error es por DataSet inexistente, intentar extraer el modelo parcial ya
                 // construido por retrieveModel() antes de que updateDataSets() fallara.
@@ -156,22 +180,22 @@ public class IEC61850Client implements ClientEventListener {
                         && !partialModel.getChildren().isEmpty()) {
                     serverModel = partialModel;
                     connected = true;
-                    System.out.println("[INFO] Modelo parcial recuperado via reflexión ("
+                    logDiag("[INFO] Modelo parcial recuperado via reflexión ("
                         + countNodes(serverModel) + " nodos). DataSets omitidos.");
                     // No lanzar excepción — continuar con modelo parcial
                 } else {
                     // La conexión puede haberse roto (Connection reset) durante updateDataSets().
                     // Intentar reconectar y obtener modelo SIN DataSets.
-                    System.err.println("[INFO] Intentando reconexión para obtener modelo sin DataSets...");
+                    logDiag("[INFO] Intentando reconexión para obtener modelo sin DataSets...");
                     ServerModel retryModel = retryRetrieveModelWithoutDataSets(address, port);
                     if (retryModel != null) {
                         serverModel = retryModel;
                         connected = true;
-                        System.out.println("[INFO] Modelo recuperado via reconexión ("
+                        logDiag("[INFO] Modelo recuperado via reconexión ("
                             + countNodes(serverModel) + " nodos). DataSets omitidos.");
                     } else {
                         // No se pudo extraer modelo parcial → guardar asociación para fallback SCL
-                        System.err.println("[INFO] No se pudo recuperar modelo - conservando asociación para fallback SCL");
+                        logDiag("[INFO] No se pudo recuperar modelo - conservando asociación para fallback SCL");
                         pendingAssociation = association;
                         association = null;
                         connected = false;
@@ -183,15 +207,15 @@ public class IEC61850Client implements ClientEventListener {
                         && modelEx.getMessage().startsWith("SCL_FALLBACK:")) {
                     throw (IOException) modelEx;
                 }
-                System.err.println("[ERROR] Model retrieval failed: " + modelEx.getClass().getName());
-                System.err.println("  Message: " + modelEx.getMessage());
+                logDiag("[ERROR] Model retrieval failed: " + modelEx.getClass().getName()
+                    + " message=" + modelEx.getMessage());
                 modelEx.printStackTrace();
                 // Intentar reconectar y obtener modelo sin DataSets
                 ServerModel retryModel = retryRetrieveModelWithoutDataSets(address, port);
                 if (retryModel != null) {
                     serverModel = retryModel;
                     connected = true;
-                    System.out.println("[INFO] Modelo recuperado via reconexión tras excepción ("
+                    logDiag("[INFO] Modelo recuperado via reconexión tras excepción ("
                         + countNodes(serverModel) + " nodos)");
                 } else {
                     connected = false;
@@ -267,7 +291,7 @@ public class IEC61850Client implements ClientEventListener {
                 return (ServerModel) sm;
             }
         } catch (Exception e) {
-            System.err.println("[INFO] extractPartialModel via reflexión falló: " + e.getMessage());
+            logDiag("[INFO] extractPartialModel via reflexión falló: " + e.getMessage());
         }
         return null;
     }
@@ -288,7 +312,12 @@ public class IEC61850Client implements ClientEventListener {
                 try { association.close(); } catch (Exception ex) {}
                 association = null;
             }
-            System.out.println("[RETRY] Reconectando para obtener modelo sin DataSets...");
+
+            logDiag("[RETRY] Esperando " + RECONNECT_BACKOFF_MS + "ms antes de reconectar "
+                + "(algunos IEDs rechazan asociaciones nuevas justo después de un reset)...");
+            sleepBackoff(RECONNECT_BACKOFF_MS);
+
+            logDiag("[RETRY] Reconectando para obtener modelo sin DataSets...");
             ClientSap retrySap = new ClientSap();
             retrySap.setResponseTimeout(connectionTimeoutMs);
             retrySap.setMessageFragmentTimeout(5000);
@@ -298,15 +327,15 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 ServerModel fullModel = retryAssoc.retrieveModel();
                 association = retryAssoc;
-                System.out.println("[RETRY] retrieveModel() exitoso en segundo intento");
+                logDiag("[RETRY] retrieveModel() exitoso en segundo intento");
                 return fullModel;
             } catch (Exception e2) {
-                System.err.println("[RETRY] retrieveModel() falló otra vez: " + e2.getMessage());
+                logDiag("[RETRY] retrieveModel() falló otra vez: " + e2.getMessage());
                 // Intentar extraer modelo parcial ya construido
                 ServerModel partial = extractPartialModelFromAssociation(retryAssoc);
                 if (partial != null && partial.getChildren() != null && !partial.getChildren().isEmpty()) {
                     association = retryAssoc;
-                    System.out.println("[RETRY] Modelo parcial extraído: " + countNodes(partial) + " nodos");
+                    logDiag("[RETRY] Modelo parcial extraído: " + countNodes(partial) + " nodos");
                     return partial;
                 }
                 // La asociación se rompió — reconectar para intento manual
@@ -315,7 +344,9 @@ public class IEC61850Client implements ClientEventListener {
             }
 
             // Tercer intento: construir modelo manualmente via reflexión (sin DataSets)
-            System.out.println("[RETRY-MANUAL] Reconectando para construcción manual del modelo...");
+            logDiag("[RETRY-MANUAL] Esperando " + RECONNECT_BACKOFF_MS + "ms antes de reconectar...");
+            sleepBackoff(RECONNECT_BACKOFF_MS);
+            logDiag("[RETRY-MANUAL] Reconectando para construcción manual del modelo...");
             ClientSap manualSap = new ClientSap();
             manualSap.setResponseTimeout(connectionTimeoutMs);
             manualSap.setMessageFragmentTimeout(5000);
@@ -328,12 +359,20 @@ public class IEC61850Client implements ClientEventListener {
             try { retryAssoc.close(); } catch (Exception ex) {}
 
         } catch (Exception e) {
-            System.err.println("[RETRY] Reconexión falló: " + e.getMessage());
+            logDiag("[RETRY] Reconexión falló: " + e.getMessage());
             if (retryAssoc != null) {
                 try { retryAssoc.close(); } catch (Exception ex) {}
             }
         }
         return null;
+    }
+
+    private void sleepBackoff(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -363,10 +402,10 @@ public class IEC61850Client implements ClientEventListener {
 
             // 1) Obtener lista de Logical Devices
             List<String> ldNames = (List<String>) mRetrieveLDs.invoke(assoc);
-            System.out.println("[MANUAL] Logical Devices encontrados: " + ldNames.size() + " → " + ldNames);
+            logDiag("[MANUAL] Logical Devices encontrados: " + ldNames.size() + " → " + ldNames);
 
             if (ldNames == null || ldNames.isEmpty()) {
-                System.err.println("[MANUAL] No se encontraron Logical Devices");
+                logDiag("[MANUAL] No se encontraron Logical Devices");
                 return null;
             }
 
@@ -378,10 +417,10 @@ public class IEC61850Client implements ClientEventListener {
                 try {
                     List<String> lnNames = (List<String>) mRetrieveLNNames.invoke(assoc, ldName);
                     if (lnNames == null || lnNames.isEmpty()) {
-                        System.err.println("[MANUAL] LD '" + ldName + "' sin Logical Nodes — omitido");
+                        logDiag("[MANUAL] LD '" + ldName + "' sin Logical Nodes — omitido");
                         continue;
                     }
-                    System.out.println("[MANUAL] LD '" + ldName + "': " + lnNames.size() + " LN(s)");
+                    logDiag("[MANUAL] LD '" + ldName + "': " + lnNames.size() + " LN(s)");
 
                     List<LogicalNode> logicalNodes = new ArrayList<>();
                     for (String lnName : lnNames) {
@@ -397,7 +436,7 @@ public class IEC61850Client implements ClientEventListener {
                             Throwable cause = lnEx instanceof java.lang.reflect.InvocationTargetException
                                     ? ((java.lang.reflect.InvocationTargetException) lnEx).getTargetException()
                                     : lnEx;
-                            System.err.println("[MANUAL] Error en LN '" + ldName + "/" + lnName + "': "
+                            logDiag("[MANUAL] Error en LN '" + ldName + "/" + lnName + "': "
                                     + cause.getMessage() + " — omitido");
                         }
                     }
@@ -411,12 +450,12 @@ public class IEC61850Client implements ClientEventListener {
                     Throwable cause = ldEx instanceof java.lang.reflect.InvocationTargetException
                             ? ((java.lang.reflect.InvocationTargetException) ldEx).getTargetException()
                             : ldEx;
-                    System.err.println("[MANUAL] Error en LD '" + ldName + "': " + cause.getMessage() + " — omitido");
+                    logDiag("[MANUAL] Error en LD '" + ldName + "': " + cause.getMessage() + " — omitido");
                 }
             }
 
             if (logicalDevices.isEmpty()) {
-                System.err.println("[MANUAL] No se pudo obtener ningún Logical Device completo");
+                logDiag("[MANUAL] No se pudo obtener ningún Logical Device completo");
                 return null;
             }
 
@@ -426,12 +465,12 @@ public class IEC61850Client implements ClientEventListener {
             // 4) Inyectar el modelo en la asociación (método público)
             assoc.setServerModel(model);
 
-            System.out.println("[MANUAL] Modelo construido manualmente: " + logicalDevices.size()
+            logDiag("[MANUAL] Modelo construido manualmente: " + logicalDevices.size()
                     + " LD(s), " + totalNodes + " LN(s), sin DataSets");
             return model;
 
         } catch (Exception e) {
-            System.err.println("[MANUAL] Error construyendo modelo manualmente: " + e.getMessage());
+            logDiag("[MANUAL] Error construyendo modelo manualmente: " + e.getMessage());
             e.printStackTrace();
             return null;
         }
