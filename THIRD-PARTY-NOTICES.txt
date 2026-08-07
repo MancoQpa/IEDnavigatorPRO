@@ -49,3 +49,35 @@ COMPONENTE NO DISTRIBUIDO (se instala por separado):
   e instalarlo desde el sitio oficial:
       https://npcap.com/#download
   Licencia: Npcap License (Nmap Software LLC).
+
+MARCAS DE TERCEROS Y AUSENCIA DE AFILIACIÓN
+===========================================
+
+Todas las marcas, nombres comerciales, denominaciones de modelo y logotipos
+mencionados en este software, su documentación o sus registros pertenecen a sus
+respectivos titulares. En particular, y sin que la enumeración sea limitativa:
+
+  - SIPROTEC, DIGSI, SICAM, SIGUARD y SIMEAS son marcas registradas de
+    Siemens AG.
+  - Java es una marca registrada de Oracle Corporation.
+  - Npcap y Nmap son marcas de Nmap Software LLC.
+  - Los nombres de otros fabricantes de equipos de protección y control que
+    puedan aparecer pertenecen a sus respectivos titulares.
+
+IEDNavigator PRO es un desarrollo independiente. NO está afiliado, patrocinado,
+autorizado, certificado ni respaldado por Siemens AG ni por ningún otro
+fabricante de equipos de protección, control o automatización, ni por ninguna
+entidad de normalización.
+
+Cuando se menciona el nombre de un fabricante o de un modelo de equipo, es
+únicamente para identificar de forma referencial el equipo con el que se
+realizaron pruebas de interoperabilidad, o para describir el esquema de nombres
+que ese equipo expone en su modelo de datos. Tal mención no constituye
+afirmación de compatibilidad, homologación ni garantía de funcionamiento con
+ese equipo. La conformidad de cualquier dispositivo con la norma IEC 61850 sólo
+puede acreditarla su fabricante o un organismo de certificación.
+
+IEC e IEC 61850 son marcas de la International Electrotechnical Commission. Este
+software no reproduce el texto de la norma; su implementación se basa en
+bibliotecas de terceros y en información técnica de acceso público. La norma
+debe adquirirse de la IEC o de sus organismos nacionales.
