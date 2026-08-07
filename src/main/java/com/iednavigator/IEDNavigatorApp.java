@@ -380,8 +380,26 @@ public class IEDNavigatorApp extends JFrame {
         logArea.setBackground(new Color(0xF7F9FB));
         logArea.setForeground(new Color(0x37474F));
         logArea.setMargin(new Insets(4, 8, 4, 8));
+
+        // Menú contextual del Log: reemplaza al botón "Limpiar Log" que estaba en la barra
+        // superior, donde quedaba lejos del contenido sobre el que actúa.
+        JPopupMenu logMenu = new JPopupMenu();
+        JMenuItem miClearLog = new JMenuItem(I18n.t("toolbar.clearlog"));
+        miClearLog.addActionListener(e -> logArea.setText(""));
+        logMenu.add(miClearLog);
+        JMenuItem miCopyLog = new JMenuItem(I18n.t("log.menu.copy"));
+        miCopyLog.addActionListener(e -> {
+            String sel = logArea.getSelectedText();
+            String txt = (sel != null && !sel.isEmpty()) ? sel : logArea.getText();
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new java.awt.datatransfer.StringSelection(txt), null);
+        });
+        logMenu.add(miCopyLog);
+        logArea.setComponentPopupMenu(logMenu);
+
         JScrollPane logScroll = new JScrollPane(logArea);
         logScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.log")));
+        logScroll.setToolTipText(I18n.t("border.log.tip"));
         leftPanel.add(logScroll, BorderLayout.CENTER);
 
         // Tree del modelo con soporte Drag
@@ -955,29 +973,9 @@ public class IEDNavigatorApp extends JFrame {
         toolbar.add(lblTitle);
         toolbar.addSeparator(new Dimension(20, 0));
 
-        // Botones de toolbar
-        JButton btnNewConnection = new JButton(I18n.t("toolbar.newconn"));
-        btnNewConnection.setToolTipText(I18n.t("toolbar.newconn.tip"));
-        btnNewConnection.addActionListener(e -> {
-            rbClient.setSelected(true);
-            switchToClientMode();
-        });
-        toolbar.add(btnNewConnection);
-
-        JButton btnSimulate = new JButton(I18n.t("toolbar.simulate"));
-        btnSimulate.setToolTipText(I18n.t("toolbar.simulate.tip"));
-        btnSimulate.addActionListener(e -> {
-            rbServer.setSelected(true);
-            switchToServerMode();
-        });
-        toolbar.add(btnSimulate);
-
-        toolbar.addSeparator();
-
-        JButton btnClearLog = new JButton(I18n.t("toolbar.clearlog"));
-        btnClearLog.addActionListener(e -> logArea.setText(""));
-        toolbar.add(btnClearLog);
-
+        // Sin botones de acción: "Nueva Conexión" y "Simular IED" duplicaban exactamente los
+        // radios del panel Modo, y "Limpiar Log" pasó al menú contextual del panel de Log
+        // (ver createLogPanel), donde está junto al contenido sobre el que actúa.
         toolbar.add(Box.createHorizontalGlue());
 
         return toolbar;

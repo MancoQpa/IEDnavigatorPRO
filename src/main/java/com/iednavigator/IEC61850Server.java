@@ -379,7 +379,7 @@ public class IEC61850Server implements ServerEventListener {
             if (patchedEnums > 0) {
                 if (listener != null)
                     listener.onLog("[SCL] " + patchedEnums
-                        + " EnumVal sintéticos agregados (archivo Siemens con EnumTypes incompletos)");
+                        + " EnumVal sintéticos agregados (el archivo trae EnumTypes incompletos)");
                 System.out.println("[SERVER] Enum patch: " + patchedEnums + " EnumVal entries added");
             }
 

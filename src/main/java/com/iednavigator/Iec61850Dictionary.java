@@ -945,7 +945,7 @@ public class Iec61850Dictionary {
         da("vendor",  "Fabricante",               "Vendor",
            "Nombre del fabricante del IED o componente. Atributo de NamPlt (LPL). FC=DC.",
            "IEC 61850-7-3",
-           "NamPlt.vendor = 'Siemens AG'");
+           "NamPlt.vendor = <nombre del fabricante, leido del IED>");
 
         da("swRev",   "Versión de Software",      "Software Revision",
            "Versión del firmware/software del IED. Atributo de NamPlt. FC=DC.",
@@ -962,7 +962,7 @@ public class Iec61850Dictionary {
         da("model",   "Modelo",                   "Model",
            "Identificación del modelo del equipo. Atributo de NamPlt. FC=DC.",
            "IEC 61850-7-3",
-           "NamPlt.model = 'SIPROTEC 5 7SL86'");
+           "NamPlt.model = <modelo del equipo, leido del IED>");
 
         da("d",       "Descripción",              "Description",
            "Cadena de texto descriptiva del elemento (ASCII). FC=DC. " +
@@ -1340,12 +1340,12 @@ public class Iec61850Dictionary {
             "TotWh.actVal = 12345678 Wh = 12345.678 kWh");
         zh("frVal", "BCR 计数器的小数部分，用于提高分辨率。actVal + frVal/2^32 = 计数器实际值。");
         zh("vendor", "IED 或部件的厂商名称。NamPlt (LPL) 的属性。FC=DC。",
-            "NamPlt.vendor = 'Siemens AG'");
+            "NamPlt.vendor = <厂商名称，从 IED 读取>");
         zh("swRev", "IED 固件/软件版本。NamPlt 的属性。FC=DC。");
         zh("hwRev", "IED 硬件版本。NamPlt 的属性。FC=DC。");
         zh("serNum", "设备唯一序列号。NamPlt 的属性。FC=DC。");
         zh("model", "设备型号标识。NamPlt 的属性。FC=DC。",
-            "NamPlt.model = 'SIPROTEC 5 7SL86'");
+            "NamPlt.model = <设备型号，从 IED 读取>");
         zh("d", "元素的描述性文本字符串 (ASCII)。FC=DC。用于 LN 或 DO 的内部标注。");
         zh("dU", "LN 或 DO 的 Unicode 描述。支持非 ASCII 字符。FC=DC。");
         zh("db", "基于数值变化触发 (dchg) 的死区。以工程单位量程指定。FC=CF。",
@@ -1613,12 +1613,12 @@ public class Iec61850Dictionary {
             "TotWh.actVal = 12345678 Wh = 12345.678 kWh");
         pt("frVal", "Fração decimal do contador BCR para alta resolução. actVal + frVal/2^32 = valor real do contador.");
         pt("vendor", "Nome do fabricante do IED ou componente. Atributo de NamPlt (LPL). FC=DC.",
-            "NamPlt.vendor = 'Siemens AG'");
+            "NamPlt.vendor = <nome do fabricante, lido do IED>");
         pt("swRev", "Versão do firmware/software do IED. Atributo de NamPlt. FC=DC.");
         pt("hwRev", "Versão do hardware do IED. Atributo de NamPlt. FC=DC.");
         pt("serNum", "Número de série único do equipamento. Atributo de NamPlt. FC=DC.");
         pt("model", "Identificação do modelo do equipamento. Atributo de NamPlt. FC=DC.",
-            "NamPlt.model = 'SIPROTEC 5 7SL86'");
+            "NamPlt.model = <modelo do equipamento, lido do IED>");
         pt("d", "Cadeia de texto descritiva do elemento (ASCII). FC=DC. Usada para rotulagem interna do LN ou DO.");
         pt("dU", "Descrição em Unicode do LN ou DO. Permite caracteres não ASCII. FC=DC.");
         pt("db", "Banda morta para trigger por mudança de valor (dchg). Especificada na faixa da unidade de engenharia. FC=CF.",
@@ -1886,12 +1886,12 @@ public class Iec61850Dictionary {
             "TotWh.actVal = 12345678 Wh = 12345.678 kWh");
         en("frVal", "Decimal fraction of the BCR counter for high resolution. actVal + frVal/2^32 = actual counter value.");
         en("vendor", "Name of the IED or component manufacturer. NamPlt (LPL) attribute. FC=DC.",
-            "NamPlt.vendor = 'Siemens AG'");
+            "NamPlt.vendor = <manufacturer name, read from the IED>");
         en("swRev", "Firmware/software version of the IED. NamPlt attribute. FC=DC.");
         en("hwRev", "Hardware version of the IED. NamPlt attribute. FC=DC.");
         en("serNum", "Unique serial number of the equipment. NamPlt attribute. FC=DC.");
         en("model", "Model identification of the equipment. NamPlt attribute. FC=DC.",
-            "NamPlt.model = 'SIPROTEC 5 7SL86'");
+            "NamPlt.model = <equipment model, read from the IED>");
         en("d", "Descriptive text string of the element (ASCII). FC=DC. Used for internal labeling of the LN or DO.");
         en("dU", "Unicode description of the LN or DO. Allows non-ASCII characters. FC=DC.");
         en("db", "Deadband for change-triggered (dchg) reporting. Specified in the engineering-unit range. FC=CF.",
@@ -2036,13 +2036,17 @@ public class Iec61850Dictionary {
      * en el modelo. Los prefijos cuyo significado no pudo confirmarse quedan registrados
      * igual (para que la clase LN resuelva exacta) pero SIN inventar una expansión.
      */
-    private static final Map<String, String[]> VENDOR_PREFIX_SIPROTEC5 = new LinkedHashMap<>();
+    private static final Map<String, String[]> VENDOR_LN_PREFIXES = new LinkedHashMap<>();
 
-    /** Marca de fabricante que se muestra junto al prefijo. */
-    private static final String SIPROTEC5 = "Siemens SIPROTEC 5";
+    /**
+     * Etiqueta que encabeza el aviso de prefijo de fabricante. Deliberadamente genérica: la
+     * ayuda no nombra marcas. El fabricante y el modelo reales sí se muestran en la barra de
+     * estado, porque de ahí provienen — se leen del nameplate del IED al explorar el modelo.
+     */
+    private static String vendorBannerTitle() { return I18n.t("dict.vendor.title"); }
 
     private static void vp(String prefix, String expansion, String note) {
-        VENDOR_PREFIX_SIPROTEC5.put(prefix.toUpperCase(), new String[]{expansion, note});
+        VENDOR_LN_PREFIXES.put(prefix.toUpperCase(), new String[]{expansion, note});
     }
 
     static {
@@ -2085,17 +2089,17 @@ public class Iec61850Dictionary {
      * {@code <grupo funcional>[_<función>]}, donde la función suele llevar el código ANSI
      * delante (21 = distancia, 85 = teleprotección).
      */
-    private static final Map<String, String> VENDOR_LD_SIPROTEC5 = new LinkedHashMap<>();
+    private static final Map<String, String> VENDOR_LD_GROUPS = new LinkedHashMap<>();
     static {
-        VENDOR_LD_SIPROTEC5.put("APPLICATION",
+        VENDOR_LD_GROUPS.put("APPLICATION",
             "LD de aplicación: agrupa la configuración general del equipo y los bloques de "
             + "control de reportes (URCB/BRCB).");
-        VENDOR_LD_SIPROTEC5.put("CB",   "Grupo funcional Interruptor: mando, enclavamiento y posición.");
-        VENDOR_LD_SIPROTEC5.put("LN",   "Grupo funcional Línea: funciones de protección de la línea.");
-        VENDOR_LD_SIPROTEC5.put("POWS", "Grupo funcional Sistema de potencia: puntos de medida de intensidad y tensión.");
-        VENDOR_LD_SIPROTEC5.put("REC",  "Grupo funcional Registrador: perturbografía y registros de falta.");
-        VENDOR_LD_SIPROTEC5.put("BINIO","Grupo funcional Entradas/salidas binarias.");
-        VENDOR_LD_SIPROTEC5.put("MOD",  "Módulo de hardware del equipo (canales de E/S o de comunicación).");
+        VENDOR_LD_GROUPS.put("CB",   "Grupo funcional Interruptor: mando, enclavamiento y posición.");
+        VENDOR_LD_GROUPS.put("LN",   "Grupo funcional Línea: funciones de protección de la línea.");
+        VENDOR_LD_GROUPS.put("POWS", "Grupo funcional Sistema de potencia: puntos de medida de intensidad y tensión.");
+        VENDOR_LD_GROUPS.put("REC",  "Grupo funcional Registrador: perturbografía y registros de falta.");
+        VENDOR_LD_GROUPS.put("BINIO","Grupo funcional Entradas/salidas binarias.");
+        VENDOR_LD_GROUPS.put("MOD",  "Módulo de hardware del equipo (canales de E/S o de comunicación).");
     }
 
     /**
@@ -2106,7 +2110,7 @@ public class Iec61850Dictionary {
     static String[] vendorPrefix(String name) {
         if (name == null || name.isBlank()) return null;
         String up = name.trim().toUpperCase();
-        for (Map.Entry<String, String[]> e : VENDOR_PREFIX_SIPROTEC5.entrySet()) {
+        for (Map.Entry<String, String[]> e : VENDOR_LN_PREFIXES.entrySet()) {
             String p = e.getKey();
             if (!up.startsWith(p) || up.length() <= p.length()) continue;
             // Lo que queda tras el prefijo debe ser una clase LN conocida (+ instancia).
@@ -2125,14 +2129,14 @@ public class Iec61850Dictionary {
         String base = ldName.trim().toUpperCase();
         int us = base.indexOf('_');
         String group = (us > 0 ? base.substring(0, us) : base).replaceAll("\\d+$", "");
-        String desc = VENDOR_LD_SIPROTEC5.get(group);
+        String desc = VENDOR_LD_GROUPS.get(group);
         if (desc == null) return null;
         if (us > 0) {
             String fn = ldName.trim().substring(us + 1);
             String ansi = ansiHint(fn);
             desc = desc + " — subgrupo \"" + fn + "\"" + (ansi != null ? " (" + ansi + ")" : "") + ".";
         }
-        return desc + " [" + SIPROTEC5 + "]";
+        return desc + " [" + I18n.t("dict.vendor.scheme") + "]";
     }
 
     /** Traduce el código ANSI que SIPROTEC 5 antepone al nombre de la función, si lo lleva. */
@@ -2266,7 +2270,7 @@ public class Iec61850Dictionary {
         if (inferred != null) m.put("lnClass", inferred);
         String[] vendor = vendorPrefix(name);
         if (vendor != null) {
-            m.put("vendor", SIPROTEC5);
+            m.put("vendorScheme", I18n.t("dict.vendor.scheme"));
             m.put("vendorPrefix", vendor[0]);
             if (vendor[1] != null) m.put("vendorPrefixName", vendor[1]);
             if (vendor[2] != null) m.put("vendorPrefixNote", vendor[2]);
@@ -2396,7 +2400,7 @@ public class Iec61850Dictionary {
                     BorderFactory.createMatteBorder(0, 4, 0, 0, new Color(0x1565C0)),
                     new EmptyBorder(7, 10, 7, 10)));
                 vBanner.setAlignmentX(Component.LEFT_ALIGNMENT);
-                String txt = "<html><b>" + SIPROTEC5 + "</b> &nbsp;·&nbsp; "
+                String txt = "<html><b>" + vendorBannerTitle() + "</b> &nbsp;·&nbsp; "
                     + I18n.t("dict.vendor.prefix") + " <code>" + vendor[0] + "</code>";
                 if (vendor[1] != null) txt += " = <b>" + vendor[1] + "</b>";
                 if (vendor[2] != null) txt += "<br>" + vendor[2];
