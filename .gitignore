@@ -5,3 +5,6 @@ classes/
 *.class
 *.log
 temp_installer*/
+
+# Registros de sesión que escribe la app junto al ejecutable (ver SessionLog)
+logs/

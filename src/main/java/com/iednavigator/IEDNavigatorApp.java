@@ -85,6 +85,8 @@ public class IEDNavigatorApp extends JFrame {
     private DefaultTreeModel treeModel;
     private Map<String, DefaultMutableTreeNode> nodeMap = new HashMap<>();
     private JTextArea logArea;
+    /** Registro de la sesión en disco; null si no se pudo abrir (ver SessionLog). */
+    private SessionLog sessionLog;
 
     // Watchlist - nodos seleccionados para monitorear
     private Set<String> watchlist = new HashSet<>();
@@ -236,6 +238,16 @@ public class IEDNavigatorApp extends JFrame {
     // Info de conexion
     private JLabel lblConnectionInfo;
     public IEDNavigatorApp() {
+        // Se abre antes que nada para que el registro incluya el arranque completo. Si falla,
+        // sessionLog queda null y log() sigue funcionando sólo contra el panel.
+        sessionLog = SessionLog.start();
+        if (sessionLog != null) {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                SessionLog s = sessionLog;
+                if (s != null) s.close();
+            }, "session-log-close"));
+        }
+
         client = new IEC61850Client();
         server = new IEC61850Server();
 
@@ -395,6 +407,22 @@ public class IEDNavigatorApp extends JFrame {
                 .setContents(new java.awt.datatransfer.StringSelection(txt), null);
         });
         logMenu.add(miCopyLog);
+        // Acceso al registro en disco de esta sesión (ver SessionLog).
+        if (sessionLog != null) {
+            logMenu.addSeparator();
+            JMenuItem miOpenLogDir = new JMenuItem(I18n.t("log.menu.opendir"));
+            miOpenLogDir.setToolTipText(sessionLog.file().getAbsolutePath());
+            miOpenLogDir.addActionListener(e -> {
+                try {
+                    java.awt.Desktop.getDesktop().open(sessionLog.directory());
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this,
+                        I18n.t("log.menu.opendir.fail") + "\n" + sessionLog.directory().getAbsolutePath(),
+                        I18n.t("log.menu.opendir"), JOptionPane.INFORMATION_MESSAGE);
+                }
+            });
+            logMenu.add(miOpenLogDir);
+        }
         logArea.setComponentPopupMenu(logMenu);
 
         JScrollPane logScroll = new JScrollPane(logArea);
@@ -3215,7 +3243,19 @@ public class IEDNavigatorApp extends JFrame {
         lblStatus.setText(message);
     }
 
+    /**
+     * Anuncia en el panel dónde se está guardando el registro de esta sesión, para que sea
+     * descubrible sin tener que buscarlo. Se llama una vez, tras mostrar la ventana.
+     */
+    void announceSessionLog() {
+        if (sessionLog != null) log(I18n.t("log.session.file", sessionLog.file().getAbsolutePath()));
+        else                    log(I18n.t("log.session.none"));
+    }
+
     private void log(String message) {
+        // Primero a disco: el archivo es el registro autoritativo y debe quedar completo
+        // aunque el EDT esté ocupado o la aplicación termine de forma abrupta.
+        if (sessionLog != null) sessionLog.write(message);
         SwingUtilities.invokeLater(() -> {
             SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
             logArea.append("[" + sdf.format(new Date()) + "] " + message + "\n");
@@ -3371,6 +3411,7 @@ public class IEDNavigatorApp extends JFrame {
         SwingUtilities.invokeLater(() -> {
             IEDNavigatorApp app = new IEDNavigatorApp();
             app.setVisible(true);
+            app.announceSessionLog();
         });
     }
 }
