@@ -325,65 +325,178 @@ class ConnectionManager {
     }
 
     /**
-     * Guarda el CID descargado en disco
+     * Guarda el CID en disco. Hay dos orígenes posibles:
+     *
+     *  1. El archivo que el IED entrega por el servicio de archivos MMS
+     *     ({@code obtenerCidDelIed()}). Es el de máxima fidelidad, pero muchos equipos no
+     *     guardan el CID como archivo y entonces no hay nada que descargar.
+     *  2. Una reconstrucción generada desde el modelo de datos que el IED expuso al conectarse
+     *     (ver {@link SclExporter}). Está disponible siempre que haya un modelo recuperado,
+     *     que es el caso normal tras una conexión exitosa.
+     *
+     * Si están disponibles los dos, se le pregunta al usuario cuál quiere.
      */
     void guardarCid() {
-        if (downloadedCidData == null || downloadedCidData.length == 0) {
+        boolean hayDescargado = downloadedCidData != null && downloadedCidData.length > 0;
+        ServerModel modelo = (ctx.getClient() != null) ? ctx.getClient().getServerModel() : null;
+        boolean hayModelo = modelo != null && modelo.getChildren() != null
+                            && !modelo.getChildren().isEmpty();
+
+        if (!hayDescargado && !hayModelo) {
             JOptionPane.showMessageDialog(ctx.parentWindow(),
-                "No hay CID descargado.\nPrimero use 'Obtener CID' para descargar el archivo del IED.",
-                "Sin CID", JOptionPane.WARNING_MESSAGE);
+                I18n.t("cid.save.nosource"),
+                I18n.t("cid.save.nosource.title"), JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        JFileChooser fc = new JFileChooser();
-        fc.setDialogTitle("Guardar CID");
-
-        // Nombre sugerido
-        String suggestedName = downloadedCidFilename;
-        if (suggestedName != null) {
-            int lastSlash = suggestedName.lastIndexOf('/');
-            if (lastSlash >= 0) {
-                suggestedName = suggestedName.substring(lastSlash + 1);
-            }
+        boolean generar;
+        if (hayDescargado && hayModelo) {
+            String[] opts = { I18n.t("cid.save.src.file"), I18n.t("cid.save.src.model") };
+            int sel = JOptionPane.showOptionDialog(ctx.parentWindow(),
+                I18n.t("cid.save.src.msg"), I18n.t("cid.save.src.title"),
+                JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+                null, opts, opts[0]);
+            if (sel < 0) return;                 // cerró el diálogo sin elegir
+            generar = (sel == 1);
         } else {
-            suggestedName = "ied_config.cid";
+            generar = !hayDescargado;
         }
-        fc.setSelectedFile(new File(suggestedName));
 
+        if (generar) guardarCidGenerado(modelo);
+        else         guardarCidDescargado();
+    }
+
+    /** Escribe en disco el archivo tal cual lo entregó el IED por el servicio de archivos. */
+    private void guardarCidDescargado() {
+        String sugerido = downloadedCidFilename;
+        if (sugerido != null) {
+            int lastSlash = sugerido.lastIndexOf('/');
+            if (lastSlash >= 0) sugerido = sugerido.substring(lastSlash + 1);
+        } else {
+            sugerido = "ied_config.cid";
+        }
+        File file = pedirDestino(sugerido);
+        if (file == null) return;
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
+            fos.write(downloadedCidData);
+            ctx.log(I18n.t("log.cm.cidsaved", file.getAbsolutePath()));
+            JOptionPane.showMessageDialog(ctx.parentWindow(),
+                I18n.t("cid.save.ok", file.getAbsolutePath()),
+                I18n.t("cid.save.ok.title"), JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            ctx.log(I18n.t("log.cm.cidsaveerror", e.getMessage()));
+            JOptionPane.showMessageDialog(ctx.parentWindow(),
+                I18n.t("cid.save.error", e.getMessage()),
+                "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /** Reconstruye el SCL desde el modelo recuperado por MMS y lo guarda. */
+    private void guardarCidGenerado(ServerModel modelo) {
+        // El nombre del IED no siempre se puede deducir: en MMS los LD se llaman
+        // iedName+ldInst, y con un solo LD no hay prefijo común del que separarlos. Por eso se
+        // ofrece editable, con la mejor sugerencia disponible.
+        String sugerido = SclExporter.suggestIedName(modelo);
+        if (sugerido == null || sugerido.isBlank()) {
+            sugerido = (ctx.getClient() != null) ? ctx.getClient().getIedName() : "";
+        }
+        if (sugerido == null || sugerido.isBlank()) sugerido = "IED";
+
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(4, 6, 4, 6);
+        g.anchor = GridBagConstraints.WEST;
+        g.gridx = 0; g.gridy = 0; g.gridwidth = 2;
+        panel.add(new JLabel(I18n.t("cid.gen.warn")), g);
+        g.gridwidth = 1; g.gridy = 1;
+        panel.add(new JLabel(I18n.t("cid.gen.iedname")), g);
+        g.gridx = 1;
+        JTextField tfName = new JTextField(sugerido, 22);
+        panel.add(tfName, g);
+
+        if (JOptionPane.showConfirmDialog(ctx.parentWindow(), panel, I18n.t("cid.gen.title"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
+            return;
+        }
+        String escrito = tfName.getText().trim();
+        final String iedName = escrito.isEmpty() ? sugerido : escrito;
+
+        File file = pedirDestino(iedName + ".cid");
+        if (file == null) return;
+
+        ctx.log(I18n.t("log.cid.generating"));
+        try {
+            String host = (ctx.getClient() != null) ? ctx.getClient().getHost() : null;
+            // Fabricante / tipo / configRev: del nameplate que ya se leyó al conectar
+            String mfr = null, tipo = null, cfg = null;
+            String[] np = ctx.getLoadedIedNameplate();
+            if (np != null) {
+                if (np.length > 1) mfr  = np[1];
+                if (np.length > 2) tipo = np[2];
+                if (np.length > 3) cfg  = np[3];
+            }
+
+            SclExporter.Result r = SclExporter.export(modelo, host, iedName, mfr, tipo, cfg);
+            try (java.io.Writer w = new java.io.OutputStreamWriter(
+                    new java.io.FileOutputStream(file), java.nio.charset.StandardCharsets.UTF_8)) {
+                w.write(r.xml);
+            }
+
+            ctx.log(I18n.t("log.cid.generated", file.getAbsolutePath(),
+                    r.logicalDevices, r.logicalNodes, r.dataObjects));
+            if (!r.uncertainCdc.isEmpty()) {
+                ctx.log(I18n.t("log.cid.uncertain", r.uncertainCdc.size()));
+                for (String u : r.uncertainCdc) ctx.log("    - " + u);
+            }
+
+            StringBuilder msg = new StringBuilder();
+            msg.append(I18n.t("cid.gen.ok", file.getAbsolutePath())).append("\n\n");
+            msg.append(I18n.t("cid.gen.stats", r.logicalDevices, r.logicalNodes,
+                              r.dataObjects, r.dataSets, r.reportControls)).append("\n");
+            msg.append(I18n.t("cid.gen.templates", r.lnodeTypes, r.doTypes, r.daTypes)).append("\n\n");
+            if (!r.uncertainCdc.isEmpty()) {
+                msg.append(I18n.t("cid.gen.uncertain", r.uncertainCdc.size())).append("\n\n");
+            }
+            msg.append(I18n.t("cid.gen.limits"));
+            JOptionPane.showMessageDialog(ctx.parentWindow(), msg.toString(),
+                I18n.t("cid.save.ok.title"), JOptionPane.INFORMATION_MESSAGE);
+
+        } catch (Exception e) {
+            ctx.log(I18n.t("log.cid.error", e.getMessage()));
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(ctx.parentWindow(),
+                I18n.t("cid.save.error", e.getMessage()),
+                "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /** Diálogo de guardado con el filtro SCL, la extensión asegurada y aviso de sobrescritura. */
+    private File pedirDestino(String nombreSugerido) {
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle(I18n.t("cid.save.dialog.title"));
+        fc.setSelectedFile(new File(nombreSugerido));
         fc.setFileFilter(new FileFilter() {
             public boolean accept(File f) {
                 if (f.isDirectory()) return true;
-                String name = f.getName().toLowerCase();
-                return name.endsWith(".cid") || name.endsWith(".icd") || name.endsWith(".scl");
+                String n = f.getName().toLowerCase();
+                return n.endsWith(".cid") || n.endsWith(".icd") || n.endsWith(".scl");
             }
-            public String getDescription() {
-                return "SCL Files (*.cid, *.icd, *.scl)";
-            }
+            public String getDescription() { return "SCL Files (*.cid, *.icd, *.scl)"; }
         });
-
-        if (fc.showSaveDialog(ctx.parentWindow()) == JFileChooser.APPROVE_OPTION) {
-            File file = fc.getSelectedFile();
-
-            // Asegurar extension
-            if (!file.getName().toLowerCase().endsWith(".cid") &&
-                !file.getName().toLowerCase().endsWith(".icd") &&
-                !file.getName().toLowerCase().endsWith(".scl")) {
-                file = new File(file.getAbsolutePath() + ".cid");
-            }
-
-            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
-                fos.write(downloadedCidData);
-                ctx.log(I18n.t("log.cm.cidsaved", file.getAbsolutePath()));
-                JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    "CID guardado exitosamente:\n" + file.getAbsolutePath(),
-                    "Guardado", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception e) {
-                ctx.log(I18n.t("log.cm.cidsaveerror", e.getMessage()));
-                JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    "Error guardando archivo:\n" + e.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            }
+        if (fc.showSaveDialog(ctx.parentWindow()) != JFileChooser.APPROVE_OPTION) return null;
+        File file = fc.getSelectedFile();
+        String n = file.getName().toLowerCase();
+        if (!n.endsWith(".cid") && !n.endsWith(".icd") && !n.endsWith(".scl")) {
+            file = new File(file.getAbsolutePath() + ".cid");
         }
+        if (file.exists()) {
+            int ow = JOptionPane.showConfirmDialog(ctx.parentWindow(),
+                I18n.t("cid.save.overwrite", file.getName()),
+                I18n.t("cid.save.overwrite.title"), JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            if (ow != JOptionPane.YES_OPTION) return null;
+        }
+        return file;
     }
 
     void selectSclFile() {
