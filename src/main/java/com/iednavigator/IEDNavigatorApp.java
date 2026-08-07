@@ -2172,6 +2172,17 @@ public class IEDNavigatorApp extends JFrame {
             sbowInd.setForeground(new Color(60, 30, 0));
             sbowInd.setText(I18n.t("ctl.sbo.sending"));
             backgroundExecutor.submit(() -> {
+                // Si se opera sin pedir verificación de enclavamiento y el CILO no habilita
+                // la maniobra, se confirma antes de reservar el objeto en el IED.
+                if (!confirmInterlockBypass(operNode, ctlVal, ilk, dlg)) {
+                    SwingUtilities.invokeLater(() -> {
+                        busy[0] = false; reserved[0] = false; refreshButtons.run();
+                        sbowInd.setBackground(new Color(224, 224, 224));
+                        sbowInd.setForeground(Color.DARK_GRAY);
+                        sbowInd.setText(I18n.t("ctl.sbo.idle"));
+                    });
+                    return;
+                }
                 IEC61850Client.ControlResult cr;
                 int sboTo = client.getSboTimeoutMs(operNode);
                 try {
@@ -2202,13 +2213,10 @@ public class IEDNavigatorApp extends JFrame {
                         sbowInd.setBackground(new Color(189, 189, 189));
                         sbowInd.setForeground(Color.BLACK);
                         sbowInd.setText(I18n.t("ctl.sbo.rejected"));
-                        log(I18n.t("log.app.selecterror", ref, fcr.error,
-                            (fcr.lastApplError != null ? " | " + fcr.lastApplError : "")));
-                        JOptionPane.showMessageDialog(dlg,
-                            I18n.t("ctl.select.rejected.msg") + "\n\n  " + I18n.t("ctl.msg.node") + ": " + ref
-                            + "\n  " + I18n.t("ctl.msg.error") + ": " + fcr.error
-                            + (fcr.lastApplError != null ? "\n  LastApplError: " + fcr.lastApplError : ""),
-                            I18n.t("ctl.select.rejected"), JOptionPane.ERROR_MESSAGE);
+                        // Mismo reporte que el OPERATE: AddCause si lo hay, significado del
+                        // ServiceError si no, y preflight de las condiciones del IED.
+                        reportControlRejection(operNode, ref, ctlVal,
+                            "ctl.select.rejected.msg", "ctl.select.rejected", fcr, dlg);
                     }
                     refreshButtons.run();
                 });
@@ -2229,6 +2237,12 @@ public class IEDNavigatorApp extends JFrame {
             final String orIdent = tfOrIdent.getText().trim();
             busy[0] = true; refreshButtons.run();
             backgroundExecutor.submit(() -> {
+                // Sólo en el flujo directo: en SBO la confirmación ya se pidió en el SELECT,
+                // y el OPERATE repite los mismos Check de la selección vigente.
+                if (!isSbo && !confirmInterlockBypass(operNode, ctlVal, ilk, dlg)) {
+                    SwingUtilities.invokeLater(() -> { busy[0] = false; refreshButtons.run(); });
+                    return;
+                }
                 IEC61850Client.ControlResult cr;
                 try {
                     cr = isSbo ? client.executeControl(operNode)
@@ -2343,6 +2357,118 @@ public class IEDNavigatorApp extends JFrame {
         dlg.pack();
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
+    }
+
+    /**
+     * Si la orden se va a enviar SIN pedir verificación de enclavamiento y el CILO del IED no
+     * habilita la maniobra, pide confirmación explícita antes de continuar.
+     *
+     * El motivo: se comprobó en campo que un IED rechaza el cierre cuando el cliente pide la
+     * verificación ({@code interlkChk}) y lo acepta diez segundos después, con el mismo
+     * {@code CILO.EnaCls=false}, cuando el cliente no la pide. Es decir que en ese equipo el
+     * bit del {@code Check} decide si el enclavamiento se hace valer, y desmarcar la casilla
+     * alcanza para operar sin esa protección. El aviso vuelve eso una decisión consciente.
+     *
+     * Se llama DESDE EL HILO DE FONDO: la lectura al IED es bloqueante y la pregunta se hace
+     * en el EDT con invokeAndWait.
+     *
+     * @return true si se puede seguir; false si el usuario canceló.
+     */
+    private boolean confirmInterlockBypass(FcModelNode operNode, String ctlVal,
+                                           boolean interlockRequested, Component parent) {
+        if (interlockRequested) return true;          // la verificación sí se está pidiendo
+
+        Boolean blocking;
+        try {
+            blocking = client.interlockBlocking(operNode, ctlVal);
+        } catch (Exception e) {
+            return true;                              // sin dato no se estorba la operación
+        }
+        if (!Boolean.TRUE.equals(blocking)) return true;
+
+        final boolean[] proceed = {false};
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                String msg = I18n.t("ctl.ilk.bypass.msg") + "\n\n"
+                           + "  " + I18n.t("ctl.msg.node") + ": " + operNode.getReference() + "\n"
+                           + "  " + I18n.t("ctl.msg.value") + ": " + ctlVal + "\n\n"
+                           + I18n.t("ctl.ilk.bypass.ask");
+                Object[] opts = { I18n.t("ctl.ilk.bypass.cancel"), I18n.t("ctl.ilk.bypass.go") };
+                int sel = JOptionPane.showOptionDialog(parent, msg,
+                    I18n.t("ctl.ilk.bypass.title"), JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.WARNING_MESSAGE, null, opts, opts[0]);   // cancelar por defecto
+                proceed[0] = (sel == 1);
+            });
+        } catch (Exception e) {
+            return false;                             // ante duda, no operar
+        }
+
+        if (!proceed[0]) log(I18n.t("log.ctl.ilkbypass.cancelled", operNode.getReference().toString()));
+        else            log(I18n.t("log.ctl.ilkbypass.confirmed", operNode.getReference().toString()));
+        return proceed[0];
+    }
+
+    /**
+     * Reporta un rechazo de control. Lo usan las DOS rutas —el SELECT del SBO en dos pasos y
+     * el OPERATE— para que el diagnóstico sea el mismo en ambas.
+     *
+     * Antes el rechazo del SELECT mostraba sólo el código de error, y el preflight automático
+     * colgaba únicamente de la ruta del OPERATE. En un nodo SBO el enclavamiento se rechaza en
+     * el SELECT, así que quedaba sin explicación justo donde más hace falta: se confirmó en
+     * campo con un IED que rechaza el SBOw por enclavamiento devolviendo ACCESS_VIOLATION y
+     * sin publicar AddCause.
+     *
+     * @param headerKey clave i18n del encabezado ("OPERATE rechazado" / "SELECT rechazado")
+     * @param titleKey  clave i18n del título de la ventana
+     */
+    private void reportControlRejection(FcModelNode operNode, String ref, String ctlVal,
+                                        String headerKey, String titleKey,
+                                        IEC61850Client.ControlResult cr, Component parent) {
+        StringBuilder msg = new StringBuilder(I18n.t(headerKey)).append("\n\n");
+        msg.append("  ").append(I18n.t("ctl.msg.node")).append(": ").append(ref).append("\n");
+        msg.append("  ").append(I18n.t("ctl.msg.model")).append(": ").append(cr.ctlModelName).append("\n");
+        msg.append("  ").append(I18n.t("ctl.msg.error")).append(": ").append(cr.error);
+
+        if (cr.lastApplError != null) msg.append("\n  LastApplError: ").append(cr.lastApplError);
+
+        String causeName = cr.addCauseName();
+        if (causeName != null) {
+            msg.append("\n  AddCause: ").append(cr.addCause).append(" — ").append(causeName);
+        } else if (cr.serviceErrorName() != null) {
+            // El IED no publicó AddCause: se muestra al menos el significado del ServiceError.
+            msg.append("\n  ServiceError: ").append(cr.serviceError)
+               .append(" — ").append(cr.serviceErrorName());
+        }
+
+        String diag = cr.diagnosis();
+        if (diag != null) {
+            msg.append("\n\n").append(I18n.t("ctl.diag")).append(":\n  ").append(diag);
+            if (cr.diagnosisIsFallback()) {
+                msg.append("\n  ").append(I18n.t("ctl.diag.fallback"));
+            }
+        }
+
+        log(I18n.t("log.app.controlerror", ref, cr.error,
+            (cr.lastApplError != null ? " | " + cr.lastApplError : "")
+            + (causeName != null ? " | AddCause=" + cr.addCause + " (" + causeName + ")" : "")
+            + (causeName == null && cr.serviceErrorName() != null
+                 ? " | ServiceError=" + cr.serviceError + " (" + cr.serviceErrorName() + ")" : "")
+            + (diag != null ? " | " + diag : "")));
+
+        JOptionPane.showMessageDialog(parent, msg.toString(),
+            I18n.t(titleKey), JOptionPane.ERROR_MESSAGE);
+
+        // Tras el rechazo, leer del IED qué condiciones podrían estar bloqueando la orden.
+        // Es lo que cierra el diagnóstico cuando el equipo no publica AddCause.
+        backgroundExecutor.submit(() -> {
+            final java.util.List<IEC61850Client.PreflightCheck> checks =
+                client.preflightControl(operNode, ctlVal);
+            boolean anyBlocking = false;
+            for (IEC61850Client.PreflightCheck c : checks) if (c.blocking) anyBlocking = true;
+            if (anyBlocking) {
+                SwingUtilities.invokeLater(() -> showPreflightDialog(ref, checks));
+            }
+        });
     }
 
     /**
@@ -2463,38 +2589,8 @@ public class IEDNavigatorApp extends JFrame {
                 JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg, dlgTitle, dlgType);
                 updateSingleNodeInTree(ref.substring(0, ref.lastIndexOf('.')));
             } else {
-                StringBuilder msg = new StringBuilder(I18n.t("ctl.oper.rejected.msg") + "\n\n");
-                msg.append("  ").append(I18n.t("ctl.msg.node")).append(": ").append(ref).append("\n");
-                msg.append("  ").append(I18n.t("ctl.msg.model")).append(": ").append(cr.ctlModelName).append("\n");
-                msg.append("  ").append(I18n.t("ctl.msg.error")).append(": ").append(cr.error);
-                if (cr.lastApplError != null) msg.append("\n  LastApplError: ").append(cr.lastApplError);
-                // AddCause traducido a una explicación accionable (IEC 61850-7-3 Tabla 9)
-                String causeName = cr.addCauseName();
-                String diag = cr.diagnosis();
-                if (causeName != null) {
-                    msg.append("\n  AddCause: ").append(cr.addCause).append(" — ").append(causeName);
-                }
-                if (diag != null) {
-                    msg.append("\n\n").append(I18n.t("ctl.diag")).append(":\n  ").append(diag);
-                }
-                log(I18n.t("log.app.controlerror", ref, cr.error,
-                    (cr.lastApplError != null ? " | " + cr.lastApplError : "")
-                    + (causeName != null ? " | AddCause=" + cr.addCause + " (" + causeName + ")" : "")
-                    + (diag != null ? " | " + diag : "")));
-                JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg.toString(),
-                    I18n.t("ctl.rejected.title"), JOptionPane.ERROR_MESSAGE);
-
-                // Tras un rechazo, leer las condiciones del IED para localizar la causa.
-                backgroundExecutor.submit(() -> {
-                    final java.util.List<IEC61850Client.PreflightCheck> checks =
-                        client.preflightControl(operNode, ctlVal);
-                    boolean anyBlocking = false;
-                    for (IEC61850Client.PreflightCheck c : checks) if (c.blocking) anyBlocking = true;
-                    if (anyBlocking) {
-                        final java.util.List<IEC61850Client.PreflightCheck> f = checks;
-                        SwingUtilities.invokeLater(() -> showPreflightDialog(ref, f));
-                    }
-                });
+                reportControlRejection(operNode, ref, ctlVal,
+                    "ctl.oper.rejected.msg", "ctl.rejected.title", cr, IEDNavigatorApp.this);
             }
         });
     }

@@ -1567,15 +1567,23 @@ public class IEC61850Client implements ClientEventListener {
         public final String lastApplError;   // del nodo LastApplError del IED; puede ser null
         /** AddCause numérico extraído de LastApplError (IEC 61850-7-3 Tabla 9); -1 si no se obtuvo. */
         public final int addCause;
+        /**
+         * Código de ServiceError devuelto por el IED; -1 si el rechazo no vino por esa vía.
+         * No todos los equipos publican LastApplError al rechazar un control: se confirmó en
+         * campo un IED que rechaza el SBOw con ACCESS_VIOLATION (3) y sin AddCause. En ese
+         * caso este código es la única pista que da el equipo.
+         */
+        public final int serviceError;
 
         private ControlResult(boolean success, int ctlModel, String ctlModelName,
-                               String error, String lastApplError, int addCause) {
+                               String error, String lastApplError, int addCause, int serviceError) {
             this.success = success;
             this.ctlModel = ctlModel;
             this.ctlModelName = ctlModelName;
             this.error = error;
             this.lastApplError = lastApplError;
             this.addCause = addCause;
+            this.serviceError = serviceError;
         }
 
         /** Nombre estándar del AddCause, o null si no se obtuvo. */
@@ -1583,31 +1591,79 @@ public class IEC61850Client implements ClientEventListener {
             return addCause >= 0 ? ADD_CAUSE_MAP.get(addCause) : null;
         }
 
+        /** Nombre del ServiceError según iec61850bean, o null si no hubo código. */
+        public String serviceErrorName() {
+            return serviceError >= 0 ? SERVICE_ERROR_MAP.get(serviceError) : null;
+        }
+
         /**
          * Explicación accionable de por qué el IED rechazó la orden, traducida al idioma
-         * activo. Retorna null si no hay AddCause o no hay sugerencia para esa causa.
+         * activo.
+         *
+         * Prioriza el AddCause, que es la causa que el estándar reserva para los controles.
+         * Si el IED no lo publicó, cae al significado del ServiceError, que es más genérico
+         * pero sigue orientando (p. ej. ACCESS_VIOLATION suele ser enclavamiento o autoridad).
+         * Retorna null si no hay ninguna de las dos.
          */
         public String diagnosis() {
-            if (addCause < 0) return null;
-            String key = "ctl.addcause." + addCause;
+            String txt = lookup("ctl.addcause.", addCause);
+            if (txt != null) return txt;
+            return lookup("ctl.svcerr.", serviceError);
+        }
+
+        /** true si la explicación proviene del ServiceError y no del AddCause. */
+        public boolean diagnosisIsFallback() {
+            return lookup("ctl.addcause.", addCause) == null
+                && lookup("ctl.svcerr.", serviceError) != null;
+        }
+
+        private static String lookup(String prefix, int code) {
+            if (code < 0) return null;
+            String key = prefix + code;
             String txt = I18n.t(key);
             return (txt == null || txt.equals(key)) ? null : txt;
         }
 
         static ControlResult ok(int ctlModel, String ctlModelName) {
-            return new ControlResult(true, ctlModel, ctlModelName, null, null, -1);
+            return new ControlResult(true, ctlModel, ctlModelName, null, null, -1, -1);
         }
 
         static ControlResult fail(int ctlModel, String ctlModelName,
                                    String error, String lastApplError) {
-            return new ControlResult(false, ctlModel, ctlModelName, error, lastApplError, -1);
+            return new ControlResult(false, ctlModel, ctlModelName, error, lastApplError, -1, -1);
         }
 
         static ControlResult failWith(int ctlModel, String ctlModelName,
                                    String error, ApplError ae) {
-            return new ControlResult(false, ctlModel, ctlModelName, error,
-                ae != null ? ae.raw : null, ae != null ? ae.addCause : -1);
+            return failWith(ctlModel, ctlModelName, error, ae, -1);
         }
+
+        static ControlResult failWith(int ctlModel, String ctlModelName,
+                                   String error, ApplError ae, int serviceError) {
+            return new ControlResult(false, ctlModel, ctlModelName, error,
+                ae != null ? ae.raw : null, ae != null ? ae.addCause : -1, serviceError);
+        }
+    }
+
+    /** ServiceError de iec61850bean: código → nombre de la constante. */
+    private static final Map<Integer, String> SERVICE_ERROR_MAP = new LinkedHashMap<>();
+    static {
+        SERVICE_ERROR_MAP.put(1,  "instance-not-available");
+        SERVICE_ERROR_MAP.put(2,  "instance-in-use");
+        SERVICE_ERROR_MAP.put(3,  "access-violation");
+        SERVICE_ERROR_MAP.put(4,  "access-not-allowed-in-current-state");
+        SERVICE_ERROR_MAP.put(5,  "parameter-value-inappropriate");
+        SERVICE_ERROR_MAP.put(6,  "parameter-value-inconsistent");
+        SERVICE_ERROR_MAP.put(7,  "class-not-supported");
+        SERVICE_ERROR_MAP.put(8,  "instance-locked-by-other-client");
+        SERVICE_ERROR_MAP.put(9,  "control-must-be-selected");
+        SERVICE_ERROR_MAP.put(10, "type-conflict");
+        SERVICE_ERROR_MAP.put(11, "failed-due-to-communications-constraint");
+        SERVICE_ERROR_MAP.put(12, "failed-due-to-server-constraint");
+        SERVICE_ERROR_MAP.put(13, "application-unreachable");
+        SERVICE_ERROR_MAP.put(14, "connection-lost");
+        SERVICE_ERROR_MAP.put(22, "timeout");
+        SERVICE_ERROR_MAP.put(23, "unknown");
     }
 
     /** Contenido del nodo LastApplError: texto crudo + AddCause numérico (-1 si no se pudo leer). */
@@ -1918,6 +1974,50 @@ public class IEC61850Client implements ClientEventListener {
         return out;
     }
 
+    /**
+     * ¿El enclavamiento del IED está bloqueando la maniobra que se pretende comandar?
+     *
+     * Lectura puntual del CILO del mismo Logical Device: sólo el permiso que corresponde al
+     * sentido comandado ({@code EnaCls} para cerrar, {@code EnaOpn} para abrir). Es mucho más
+     * liviano que {@link #preflightControl} porque sirve para decidir en el momento de enviar.
+     *
+     * Se lee del modelo y NO depende de los bits {@code Check} de la orden, que es justamente
+     * el punto: un IED puede aceptar la maniobra si el cliente no pide la verificación de
+     * enclavamiento, aunque el CILO no la habilite.
+     *
+     * @return {@code TRUE} si el enclavamiento no habilita la maniobra, {@code FALSE} si la
+     *         habilita, y {@code null} si el modelo no expone el CILO o no se pudo leer.
+     */
+    public Boolean interlockBlocking(FcModelNode operNode, String ctlValStr) {
+        if (serverModel == null || association == null || operNode == null) return null;
+        String operRef = operNode.getReference().toString();
+        int slash = operRef.indexOf('/');
+        if (slash < 0) return null;
+        String ldName = operRef.substring(0, slash);
+
+        // Sentido comandado: true/on/1 → cerrar; false/off/0 → abrir.
+        Boolean closing = null;
+        if (ctlValStr != null) {
+            String v = ctlValStr.trim().toLowerCase();
+            if (v.equals("true") || v.equals("on") || v.equals("1"))        closing = Boolean.TRUE;
+            else if (v.equals("false") || v.equals("off") || v.equals("0")) closing = Boolean.FALSE;
+        }
+        if (closing == null) return null;      // sin sentido definido no hay permiso que mirar
+
+        String daName = closing ? "EnaCls" : "EnaOpn";
+        Boolean result = null;
+        for (String cilo : findLnRefsByClass(ldName, "CILO")) {
+            PreflightCheck c = readBool(cilo + "." + daName + ".stVal",
+                                        closing ? "ctl.pre.enacls" : "ctl.pre.enaopn",
+                                        Boolean.TRUE, null);
+            if (c == null) continue;
+            boolean permite = "true".equalsIgnoreCase(c.value);
+            if (!permite) return Boolean.TRUE;  // basta un CILO que no habilite
+            result = Boolean.FALSE;
+        }
+        return result;
+    }
+
     /** Referencias "LD/prefijoCLASEinst" de todos los LN de una clase dentro de un LD. */
     private java.util.List<String> findLnRefsByClass(String ldName, String lnClass) {
         java.util.List<String> refs = new java.util.ArrayList<>();
@@ -1965,7 +2065,15 @@ public class IEC61850Client implements ClientEventListener {
         return null;
     }
 
-    /** Lee un DA entero enumerado y marca bloqueante si su valor no está entre los aceptables. */
+    /**
+     * Lee un DA entero enumerado y marca bloqueante si su valor no está entre los aceptables.
+     *
+     * Un valor que NO figura en el mapa del enumerado (típicamente 0, que no es válido ni para
+     * Mod/Beh ni para Health) se trata como desconocido y NO se marca bloqueante: no se puede
+     * distinguir "el equipo no lo implementa" de "está realmente mal", y marcarlo llenaría el
+     * informe de falsas alarmas. Sólo bloquea un valor válido que esté fuera del conjunto
+     * aceptable —por ejemplo Health=3 (Alarm) o Beh=5 (off)—, que sí es información real.
+     */
     private void addEnumCheck(java.util.List<PreflightCheck> out, String ref, String labelKey,
                               Map<Integer, String> map, int[] okValues, String hintKey) {
         for (Fc fc : new Fc[]{Fc.ST, Fc.CF, Fc.SP}) {
@@ -1975,10 +2083,16 @@ public class IEC61850Client implements ClientEventListener {
                 try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
                 if (!(n instanceof BasicDataAttribute)) continue;
                 int v = getIntValue((BasicDataAttribute) n);
+                String name = map.get(v);
+                if (name == null) {
+                    // Valor fuera del enumerado: se informa sin marcarlo como bloqueante.
+                    out.add(new PreflightCheck(ref, labelKey,
+                            I18n.t("ctl.pre.unknownval", v), false, null));
+                    return;
+                }
                 boolean ok = false;
                 for (int okv : okValues) if (v == okv) { ok = true; break; }
-                String shown = map.getOrDefault(v, String.valueOf(v));
-                out.add(new PreflightCheck(ref, labelKey, shown, !ok, !ok ? hintKey : null));
+                out.add(new PreflightCheck(ref, labelKey, name, !ok, !ok ? hintKey : null));
                 return;
             } catch (Exception ignore) {}
         }
@@ -2044,7 +2158,7 @@ public class IEC61850Client implements ClientEventListener {
             System.out.println("[ERROR] CANCEL rechazado: ServiceError " + e.getErrorCode()
                 + (ae != null ? " | LastApplError: " + ae.raw : ""));
             return ControlResult.failWith(ctlModel, ctlModelName,
-                "CANCEL ServiceError: " + e.getErrorCode(), ae);
+                "CANCEL ServiceError: " + e.getErrorCode(), ae, e.getErrorCode());
         }
     }
 
@@ -2121,7 +2235,7 @@ public class IEC61850Client implements ClientEventListener {
             System.out.println("[ERROR] OPERATE falló: ServiceError " + e.getErrorCode()
                 + (ae != null ? " | LastApplError: " + ae.raw : ""));
             return ControlResult.failWith(ctlModel, ctlModelName,
-                "ServiceError: " + e.getErrorCode(), ae);
+                "ServiceError: " + e.getErrorCode(), ae, e.getErrorCode());
         }
     }
 
@@ -2163,7 +2277,7 @@ public class IEC61850Client implements ClientEventListener {
             System.out.println("[SBOe] SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode()
                 + (ae != null ? " | LastApplError: " + ae.raw : ""));
             return ControlResult.failWith(4, ctlModelName,
-                "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), ae);
+                "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), ae, e.getErrorCode());
         }
 
         // 2) OPERATE: escribir Oper con el MISMO ctlNum y T nuevo
@@ -2179,7 +2293,7 @@ public class IEC61850Client implements ClientEventListener {
             System.out.println("[ERROR] OPERATE (enhanced) falló: ServiceError " + e.getErrorCode()
                 + (ae != null ? " | LastApplError: " + ae.raw : ""));
             return ControlResult.failWith(4, ctlModelName,
-                "ServiceError: " + e.getErrorCode(), ae);
+                "ServiceError: " + e.getErrorCode(), ae, e.getErrorCode());
         }
     }
 
@@ -2290,7 +2404,7 @@ public class IEC61850Client implements ClientEventListener {
             } catch (ServiceError e) {
                 ApplError ae = readApplError(operNode);
                 return ControlResult.failWith(4, ctlModelName,
-                    "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), ae);
+                    "SELECT-WITH-VALUE rechazado: ServiceError " + e.getErrorCode(), ae, e.getErrorCode());
             }
             pendingSelect = new PendingSelect(operNode, 4, ctlNum, ctlValStr, testFlag,
                 synchroCheck, interlockCheck, orIdent, controlOrCat, deadline);
@@ -2308,7 +2422,7 @@ public class IEC61850Client implements ClientEventListener {
             } catch (ServiceError e) {
                 ApplError ae = readApplError(operNode);
                 return ControlResult.failWith(2, ctlModelName,
-                    "SELECT ServiceError: " + e.getErrorCode(), ae);
+                    "SELECT ServiceError: " + e.getErrorCode(), ae, e.getErrorCode());
             }
             pendingSelect = new PendingSelect(operNode, 2, -1, ctlValStr, testFlag,
                 synchroCheck, interlockCheck, orIdent, controlOrCat, deadline);
@@ -2352,7 +2466,7 @@ public class IEC61850Client implements ClientEventListener {
             } catch (ServiceError e) {
                 ApplError ae = readApplError(operNode);
                 pendingSelect = null;
-                return ControlResult.failWith(4, ctlModelName, "ServiceError: " + e.getErrorCode(), ae);
+                return ControlResult.failWith(4, ctlModelName, "ServiceError: " + e.getErrorCode(), ae, e.getErrorCode());
             }
         } else { // ctlModel 2
             setOperCtlVal(operNode, ps.ctlVal);
@@ -2366,7 +2480,7 @@ public class IEC61850Client implements ClientEventListener {
             } catch (ServiceError e) {
                 ApplError ae = readApplError(operNode);
                 pendingSelect = null;
-                return ControlResult.failWith(2, ctlModelName, "ServiceError: " + e.getErrorCode(), ae);
+                return ControlResult.failWith(2, ctlModelName, "ServiceError: " + e.getErrorCode(), ae, e.getErrorCode());
             }
         }
     }
