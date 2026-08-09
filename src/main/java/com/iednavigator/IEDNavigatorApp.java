@@ -2578,26 +2578,31 @@ public class IEDNavigatorApp extends JFrame {
 
                 String fbInfo, fbLog, dlgTitle;
                 int dlgType;
+                // El encabezado del log distingue la maniobra verificada de la que el IED
+                // aceptó sin que el equipo se moviera: son resultados distintos y "[CONTROL OK]"
+                // dejaba esa diferencia al final de la línea.
+                String logKey = "log.app.controlok";
                 if (testFlag) {
                     fbInfo = "\n\n" + I18n.t("ctl.fb.test");
-                    fbLog = " [TEST, sin verificación]";
+                    fbLog = " " + I18n.t("log.app.fb.test");
                     dlgTitle = I18n.t("ctl.res.accepted.test");
                     dlgType = JOptionPane.INFORMATION_MESSAGE;
                 } else if (fbf != null && fbf.verifiable && fbf.confirmed) {
                     String secs = String.format("%.1f", fbf.elapsedMs / 1000.0);
                     fbInfo = "\n\n" + I18n.t("ctl.fb.confirmed", fbf.observed, secs);
-                    fbLog = " | posición confirmada: stVal=" + fbf.observed + " en " + secs + "s";
+                    fbLog = " " + I18n.t("log.app.fb.confirmed", fbf.observed, secs);
                     dlgTitle = I18n.t("ctl.res.confirmed");
                     dlgType = JOptionPane.INFORMATION_MESSAGE;
                 } else if (fbf != null && fbf.verifiable) {
                     String secs = String.format("%.0f", fbf.elapsedMs / 1000.0);
                     fbInfo = "\n\n" + I18n.t("ctl.fb.noconf", secs, fbf.observed);
-                    fbLog = " | SIN confirmación de posición (último stVal=" + fbf.observed + ")";
+                    fbLog = " " + I18n.t("log.app.fb.noconf", fbf.observed, secs);
                     dlgTitle = I18n.t("ctl.res.accepted.noconf");
                     dlgType = JOptionPane.WARNING_MESSAGE;
+                    logKey = "log.app.controlnoconf";
                 } else {
                     fbInfo = "\n\n" + I18n.t("ctl.fb.noverif");
-                    fbLog = " (aceptado; sin stVal verificable)";
+                    fbLog = " " + I18n.t("log.app.fb.noverif");
                     dlgTitle = I18n.t("ctl.res.accepted");
                     dlgType = JOptionPane.INFORMATION_MESSAGE;
                 }
@@ -2609,7 +2614,7 @@ public class IEDNavigatorApp extends JFrame {
                     + (isSbo ? " (SELECT → OPERATE)" : "")
                     + (testFlag ? "\n  " + I18n.t("ctl.msg.testmode") : "")
                     + checkInfo + fbInfo;
-                log(I18n.t("log.app.controlok", ref, ctlVal,
+                log(I18n.t(logKey, ref, ctlVal,
                     (testFlag ? " [TEST]" : ""),
                     (synchroCheck ? " [SYNCHRO]" : ""),
                     (interlockCheck ? " [INTERLOCK]" : ""),
