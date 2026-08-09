@@ -2082,6 +2082,29 @@ public class Iec61850Dictionary {
                                      "REBI_", "DEF_", "DISB_", "GFLG_", "RCDG_", "RCDR_"}) {
             vp(p, null, null);
         }
+
+        // ── Familia SIPROTEC 4 (7SJ6xx, 6MD6x) ──────────────────────────────
+        // Nombra sus nodos como <designación de aparato><CLASE><instancia>: Q0CSWI1,
+        // Q0XCBR1, Q0CILO1. La designación es de la instalación (IEC 81346), no
+        // vocabulario del fabricante. Los más largos van primero para que Q10 no lo
+        // capture Q1 (igual el control de clase lo impediría, pero queda explícito).
+        vp("Q0", "Interruptor de potencia",
+           "Designación de aparato del vano. Que Q0 sea el interruptor lo confirma el propio "
+           + "modelo: es el prefijo que comparten el XCBR, el CSWI y el CILO del mismo "
+           + "Logical Device de mando.");
+        for (String p : new String[]{"Q10", "Q9", "Q8", "Q5", "Q2", "Q1"}) {
+            vp(p, null,
+               "Designación de aparato del vano: seccionador, puesta a tierra u otro elemento, "
+               + "según el unifilar de la instalación.");
+        }
+        vp("USER", "Libre configuración",
+           "Bloque de señales que define la ingeniería de la instalación, no el fabricante. "
+           + "Acompaña a clases genéricas (GGIO, GAPC), así que la clase no dice qué hace: "
+           + "el significado está en la documentación del proyecto.");
+        // Registrados sólo para que la clase resuelva exacta; sin expansión inventada.
+        for (String p : new String[]{"GOOSE", "SC_", "pd"}) {
+            vp(p, null, null);
+        }
     }
 
     /**
@@ -2100,6 +2123,15 @@ public class Iec61850Dictionary {
         VENDOR_LD_GROUPS.put("REC",  "Grupo funcional Registrador: perturbografía y registros de falta.");
         VENDOR_LD_GROUPS.put("BINIO","Grupo funcional Entradas/salidas binarias.");
         VENDOR_LD_GROUPS.put("MOD",  "Módulo de hardware del equipo (canales de E/S o de comunicación).");
+
+        // SIPROTEC 4: cinco Logical Devices fijos, iguales en toda la familia. No llevan
+        // sufijo funcional, así que la parte de código ANSI de arriba no aplica acá.
+        VENDOR_LD_GROUPS.put("CTRL", "Mando del vano: CSWI, CILO y XCBR del aparato, más las señales "
+            + "de control. Es el LD donde vive el nodo que se opera.");
+        VENDOR_LD_GROUPS.put("PROT", "Funciones de protección del equipo y el XCBR que ellas manejan.");
+        VENDOR_LD_GROUPS.put("MEAS", "Medidas operativas: intensidad, tensión, potencia y energía.");
+        VENDOR_LD_GROUPS.put("DR",   "Registrador de perturbaciones (RDRE).");
+        VENDOR_LD_GROUPS.put("EXT",  "Señales externas y de libre configuración del proyecto.");
     }
 
     /**
