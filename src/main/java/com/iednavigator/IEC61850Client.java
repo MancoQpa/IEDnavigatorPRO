@@ -1965,13 +1965,71 @@ public class IEC61850Client implements ClientEventListener {
                 addBoolCheck(out, cilo + ".EnaCls.stVal", "ctl.pre.enacls", true, "ctl.pre.hint.ena");
         }
 
-        // ── Bloqueo explícito de apertura/cierre en el propio LN ──
-        if (closing == null || closing == Boolean.FALSE)
-            addBoolCheck(out, lnRef + ".BlkOpn.stVal", "ctl.pre.blkopn", false, "ctl.pre.hint.blk");
-        if (closing == null || closing == Boolean.TRUE)
-            addBoolCheck(out, lnRef + ".BlkCls.stVal", "ctl.pre.blkcls", false, "ctl.pre.hint.blk");
+        // ── Bloqueo explícito de apertura/cierre ──
+        // Viven en el aparato (XCBR/XSWI), no en el CSWI que se opera: ni el modelo
+        // SIPROTEC 4 (Ed.1) ni el SIPROTEC 5 los declaran en CSWI. Se mira igual el LN
+        // operado, por si se opera el XCBR directamente o el equipo sí los expone ahí.
+        java.util.LinkedHashSet<String> blkOwners = new java.util.LinkedHashSet<>();
+        blkOwners.add(lnRef);
+        blkOwners.addAll(findLnRefsByClass(ldName, "XCBR"));
+        blkOwners.addAll(findLnRefsByClass(ldName, "XSWI"));
+        for (String owner : blkOwners) {
+            if (closing == null || closing == Boolean.FALSE)
+                addBoolCheck(out, owner + ".BlkOpn.stVal", "ctl.pre.blkopn", false, "ctl.pre.hint.blk");
+            if (closing == null || closing == Boolean.TRUE)
+                addBoolCheck(out, owner + ".BlkCls.stVal", "ctl.pre.blkcls", false, "ctl.pre.hint.blk");
+        }
+
+        // ── Posición actual = posición comandada ──
+        // Un equipo rechaza la orden si el aparato ya está donde se lo quiere llevar.
+        // En posición intermedia o inválida no se evalúa: ahí la maniobra sí tiene sentido.
+        PreflightCheck setActual = checkSetEqualsActual(operRef, ctlValStr);
+        if (setActual != null) out.add(setActual);
 
         return out;
+    }
+
+    /**
+     * ¿El aparato ya está en la posición que se pretende comandar?
+     *
+     * Es un rechazo que no depende del enclavamiento —los equipos lo aplican también con
+     * la verificación desactivada— así que conviene anticiparlo: es gratis y evita leer un
+     * código de error genérico cuando la causa es que no había nada que maniobrar.
+     *
+     * @return el chequeo, o {@code null} si no aplica (valor no binario, sin stVal legible,
+     *         o posición intermedia/inválida, donde la comparación no tiene sentido)
+     */
+    private PreflightCheck checkSetEqualsActual(String operRef, String ctlValStr) {
+        String wanted = normalizeOnOff(ctlValStr);
+        if (wanted == null || serverModel == null || association == null) return null;
+        try {
+            int lastDot = operRef.lastIndexOf('.');
+            if (lastDot < 0) return null;
+            String doRef = operRef.substring(0, lastDot);
+
+            // Sólo para posición de aparato. En una orden de pulso —reposición de LED,
+            // disparo por GGIO— que el valor ya coincida no impide nada, y avisar ahí
+            // sería una falsa alarma.
+            int slash = operRef.indexOf('/');
+            int firstDot = operRef.indexOf('.');
+            if (slash < 0 || firstDot < 0) return null;
+            String lnUp = operRef.substring(slash + 1, firstDot).toUpperCase();
+            String doName = doRef.substring(firstDot + 1).toUpperCase();
+            boolean isSwitchPos = doName.equals("POS")
+                || lnUp.contains("CSWI") || lnUp.contains("XCBR") || lnUp.contains("XSWI");
+            if (!isSwitchPos) return null;
+            ModelNode stDo = serverModel.findModelNode(doRef, Fc.ST);
+            ModelNode stVal = (stDo != null) ? stDo.getChild("stVal") : null;
+            if (!(stVal instanceof FcModelNode) || !(stVal instanceof BasicDataAttribute)) return null;
+            try { association.getDataValues((FcModelNode) stVal); } catch (Exception ignore) {}
+            String actual = normalizeStVal(stVal);
+            if (actual == null) return null;
+            if (!actual.equals("on") && !actual.equals("off")) return null;  // intermediate / bad
+            boolean same = actual.equals(wanted);
+            return new PreflightCheck(doRef + ".stVal", "ctl.pre.setactual", actual,
+                                      same, same ? "ctl.pre.hint.setactual" : null);
+        } catch (Exception ignore) {}
+        return null;
     }
 
     /**
