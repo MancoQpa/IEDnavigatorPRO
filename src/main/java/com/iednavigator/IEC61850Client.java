@@ -547,6 +547,7 @@ public class IEC61850Client implements ClientEventListener {
         clientSap = null;
         serverModel = null;
         connected = false;
+        heartbeatNode = null;
         valueCache.clear();
 
         // Shutdown executor if needed
@@ -691,6 +692,98 @@ public class IEC61850Client implements ClientEventListener {
         } catch (ServiceError e) {
             throw new IOException("ServiceError: " + e.getErrorCode(), e);
         }
+    }
+
+    // ==================== LATIDO DE ENLACE ====================
+
+    /** Atributo barato que se relee para comprobar que la asociación sigue viva. */
+    private volatile FcModelNode heartbeatNode;
+
+    /**
+     * Comprueba que la asociación siga viva leyendo un atributo mínimo del IED.
+     *
+     * El estado "conectado" es pasivo: sólo cambia cuando la librería avisa que el socket
+     * falló. Si el equipo desaparece sin cerrar ordenadamente —reinicio, cable, pérdida de
+     * camino— no llega ni FIN ni RST, y el hilo lector se queda esperando indefinidamente.
+     * Mientras tanto, si nadie escribe sobre el socket, nada delata la caída: la interfaz
+     * puede quedar en "Conectado" durante minutos. Este latido es esa escritura.
+     *
+     * Un {@code ServiceError} NO se toma como caída: significa que el equipo contestó,
+     * aunque sea para rechazar la lectura. Sólo el fallo de transporte cierra la asociación.
+     *
+     * @return true si el enlace responde (o si no hay un nodo apto para probarlo, en cuyo
+     *         caso no se puede afirmar que esté caído); false si se dio por caído.
+     */
+    public boolean heartbeat() {
+        if (!isConnected() || association == null || serverModel == null) return false;
+
+        FcModelNode node = heartbeatNode;
+        if (node == null) {
+            node = resolveHeartbeatNode();
+            heartbeatNode = node;
+        }
+        if (node == null) return true;   // sin nodo de prueba no se concluye nada
+
+        try {
+            association.getDataValues(node);
+            return true;
+        } catch (ServiceError e) {
+            // Un ServiceError normalmente significa que el equipo contestó, aunque sea para
+            // rechazar la lectura: el enlace está vivo. Pero la librería reporta como
+            // ServiceError también los casos en que NADIE contestó —el timeout de respuesta
+            // es el código 22—, y esos sí son caída de enlace. Distinguirlos es todo el punto.
+            if (!esFalloDeEnlace(e)) return true;
+            IOException io = new IOException(e.getMessage(), e);
+            logDiag("[LATIDO] Sin respuesta del IED: " + e.getMessage());
+            associationClosed(io);
+            return false;
+        } catch (Exception e) {
+            IOException io = (e instanceof IOException)
+                ? (IOException) e : new IOException(e.getMessage(), e);
+            logDiag("[LATIDO] Sin respuesta del IED: " + io.getMessage());
+            associationClosed(io);
+            return false;
+        }
+    }
+
+    /**
+     * ¿Este ServiceError dice que el equipo no está, o que no quiso responder eso?
+     *
+     * Los tres códigos de abajo son los únicos que no implican una respuesta del equipo. El
+     * resto —ACCESS_VIOLATION, INSTANCE_NOT_AVAILABLE y compañía— llegan por la asociación,
+     * así que la prueban viva.
+     */
+    static boolean esFalloDeEnlace(ServiceError e) {
+        int c = e.getErrorCode();
+        return c == ServiceError.TIMEOUT
+            || c == ServiceError.CONNECTION_LOST
+            || c == ServiceError.APPLICATION_UNREACHABLE;
+    }
+
+    /**
+     * Elige un atributo para el latido: el primero que exista entre unos pocos candidatos
+     * del LLN0 de cada Logical Device. Son atributos presentes en cualquier equipo y
+     * baratos de leer; se prefiere ST sobre DC porque no todos exponen el nameplate completo.
+     */
+    private FcModelNode resolveHeartbeatNode() {
+        if (serverModel == null || serverModel.getChildren() == null) return null;
+        String[][] candidatos = {
+            {"LLN0.Beh.stVal",      "ST"},
+            {"LLN0.Mod.stVal",      "ST"},
+            {"LLN0.Health.stVal",   "ST"},
+            {"LLN0.NamPlt.configRev", "DC"},
+        };
+        for (ModelNode ld : serverModel.getChildren()) {
+            String ldName = ld.getName();
+            if (ldName == null) continue;
+            for (String[] c : candidatos) {
+                try {
+                    ModelNode n = serverModel.findModelNode(ldName + "/" + c[0], Fc.fromString(c[1]));
+                    if (n instanceof FcModelNode) return (FcModelNode) n;
+                } catch (Exception ignore) { }
+            }
+        }
+        return null;
     }
 
     // ── Mapas de decodificación de enums IEC 61850-7-3 / IEC 61850-7-4 ─────────
@@ -1260,6 +1353,7 @@ public class IEC61850Client implements ClientEventListener {
         connected = false;
         serverModel = null;
         association = null;
+        heartbeatNode = null;   // pertenece al modelo que se acaba de descartar
 
         if (valueChangeListener != null) {
             valueChangeListener.onConnectionClosed(e != null ? e.getMessage() : "Connection closed");

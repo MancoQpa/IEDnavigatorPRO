@@ -40,6 +40,13 @@ class PollingManager {
     private final Context ctx;
     private ScheduledExecutorService pollExecutor;
 
+    /** Fallo de transporte detectado en el ciclo en curso; null si el ciclo fue limpio. */
+    private Exception linkFailure;
+    /** Evita repetir el aviso de "sin nodos que leer" en cada vuelta del ciclo. */
+    private boolean idleReported;
+    /** Evita repetir el aviso de lectura fallida en cada vuelta del ciclo. */
+    private boolean readFailReported;
+
     // ─── Constructor ─────────────────────────────────────────────────────────────────
 
     PollingManager(Context ctx) {
@@ -95,6 +102,7 @@ class PollingManager {
 
         int readCount = 0;
         Set<String> watchlist = ctx.getWatchlist();
+        linkFailure = null;
 
         if (!watchlist.isEmpty()) {
             readCount = pollWatchlistItems(client, model, watchlist);
@@ -107,9 +115,44 @@ class PollingManager {
                     client.readNodeValues(node);
                     readCount++;
                 } catch (Exception e) {
-                    // Continuar con otros nodos
+                    if (isTransportFailure(e)) { linkFailure = e; break; }
+                    // Un nodo que el equipo rechaza no interrumpe el ciclo.
                 }
             }
+        }
+
+        // ── Una lectura falló de un modo que sugiere que no hay enlace ──
+        // Antes se descartaban todas las excepciones por igual, así que una conexión muerta
+        // no producía ninguna señal: el ciclo seguía corriendo en silencio. Pero un nodo
+        // puede fallar por lento o pesado sin que el enlace tenga nada de malo, así que no
+        // se da por perdida la conexión: se confirma con el latido, que es una lectura
+        // mínima. Si esa también falla, el problema no era el nodo.
+        if (linkFailure != null) {
+            final String detalle = String.valueOf(linkFailure.getMessage());
+            if (!client.heartbeat()) {
+                SwingUtilities.invokeLater(() -> ctx.log(I18n.t("log.polling.linkfail", detalle)));
+                return;   // heartbeat() ya notificó el cierre
+            }
+            if (!readFailReported) {
+                readFailReported = true;
+                SwingUtilities.invokeLater(() -> ctx.log(I18n.t("log.polling.readfail", detalle)));
+            }
+        } else {
+            readFailReported = false;
+        }
+
+        // ── El ciclo no tuvo nada que leer ──
+        // Pasa con la watchlist vacía y el árbol colapsado: no hay atributos visibles. Sin
+        // lecturas no hay tráfico, y sin tráfico una caída del IED es indetectable. Se avisa
+        // una sola vez —el ciclo se repite cada pocos segundos— y se comprueba el enlace.
+        if (readCount == 0) {
+            if (!idleReported) {
+                idleReported = true;
+                SwingUtilities.invokeLater(() -> ctx.log(I18n.t("log.polling.idle")));
+            }
+            if (!client.heartbeat()) return;   // heartbeat() ya avisó del cierre
+        } else {
+            idleReported = false;
         }
 
         final int finalCount = readCount;
@@ -123,6 +166,26 @@ class PollingManager {
                 ctx.log(I18n.t("log.polling.count", finalCount, mode));
             }
         });
+    }
+
+    /**
+     * ¿Este fallo hace sospechar que no hay enlace, o es cosa de ese nodo?
+     *
+     * readNodeValues() envuelve el ServiceError en IOException, así que el tipo por sí solo
+     * no alcanza. Y el ServiceError tampoco: la librería reporta el timeout de respuesta
+     * como ServiceError, o sea que un "error de servicio" puede significar tanto que el
+     * equipo rechazó la lectura —enlace vivo— como que no contestó nadie. Sólo los códigos
+     * de {@link IEC61850Client#esFalloDeEnlace} indican lo segundo.
+     *
+     * Es sospecha, no veredicto: quien decide es el latido.
+     */
+    private static boolean isTransportFailure(Exception e) {
+        if (!(e instanceof java.io.IOException)) return false;
+        Throwable causa = e.getCause();
+        if (causa instanceof ServiceError) {
+            return IEC61850Client.esFalloDeEnlace((ServiceError) causa);
+        }
+        return true;   // IOException sin ServiceError debajo: falló el transporte
     }
 
     private int pollWatchlistItems(IEC61850Client client, ServerModel model, Set<String> watchlist) {
@@ -142,7 +205,8 @@ class PollingManager {
                     count++;
                 }
             } catch (Exception e) {
-                // Continuar con otros
+                if (isTransportFailure(e)) { linkFailure = e; break; }
+                // Un nodo que el equipo rechaza no interrumpe el ciclo.
             }
         }
         return count;
