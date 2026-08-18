@@ -111,6 +111,38 @@ public class IEC61850Client implements ClientEventListener {
     // de inmediato solo repite el fallo.
     private static final long RECONNECT_BACKOFF_MS = 4000;
 
+    // Ruta por la que se obtuvo el modelo vigente: "directo" si retrieveModel() funcionó al
+    // primer intento, o el fallback que lo salvó. Se fija en el punto donde se consigue el
+    // modelo, nunca en los llamadores, para que la ruta más específica no quede pisada.
+    private volatile String modelPath = "?";
+
+    /**
+     * Registra la forma del modelo recién recuperado: cuántos Logical Devices, cuántos Logical
+     * Nodes, cuántos nodos en total, por qué ruta y cuánto tardó.
+     *
+     * Hasta acá el conteo sólo quedaba escrito cuando corría la ruta [MANUAL]. En una conexión
+     * directa exitosa no se registraba nada, así que no se podía armar una tabla comparable
+     * entre equipos ni contrastar qué dispara el fallback —si la cantidad de nodos lógicos o el
+     * volumen de datos por nodo—: los dos únicos casos medidos daban una respuesta ambigua y
+     * ninguno de los dos había dejado el dato completo.
+     *
+     * Una línea por conexión, en formato fijo y armada por concatenación: sin MessageFormat de
+     * por medio no hay separador de miles que vuelva ilegible un conteo de cinco cifras.
+     */
+    private void logModelShape(long elapsedMs) {
+        if (serverModel == null) return;
+        int lds = 0;
+        int lns = 0;
+        if (serverModel.getChildren() != null) {
+            for (ModelNode ld : serverModel.getChildren()) {
+                lds++;
+                if (ld.getChildren() != null) lns += ld.getChildren().size();
+            }
+        }
+        logDiag("[MODELO] " + lds + " LD, " + lns + " LN, " + countNodes(serverModel)
+            + " nodos | via " + modelPath + " | " + elapsedMs + " ms");
+    }
+
     /**
      * Emite un mensaje de diagnóstico a consola y, si hay un listener registrado, a la GUI.
      * Antes estos mensajes ([RETRY], [MANUAL], [WARN] ServiceError, etc.) solo iban a
@@ -184,8 +216,10 @@ public class IEC61850Client implements ClientEventListener {
             // LAZY LOADING: igual que la APK
             // NOTA: retrieveModel() en iec61850bean solicita TODOS los DataSets definidos.
             // Si el servidor tiene Reports que referencian DataSets inexistentes, fallará.
+            long modelStart = System.currentTimeMillis();
             try {
                 serverModel = association.retrieveModel();
+                modelPath = "directo";
                 System.out.println("[INFO] Model retrieved successfully - " + countNodes(serverModel) + " nodes");
             } catch (ServiceError serviceEx) {
                 logDiag("[WARN] ServiceError during model retrieval: code=" + serviceEx.getErrorCode()
@@ -199,6 +233,7 @@ public class IEC61850Client implements ClientEventListener {
                         && !partialModel.getChildren().isEmpty()) {
                     serverModel = partialModel;
                     connected = true;
+                    modelPath = "parcial-reflexión";
                     logDiag("[INFO] Modelo parcial recuperado via reflexión ("
                         + countNodes(serverModel) + " nodos). DataSets omitidos.");
                     // No lanzar excepción — continuar con modelo parcial
@@ -247,6 +282,9 @@ public class IEC61850Client implements ClientEventListener {
             }
 
             connected = true;
+            // Una sola línea por conexión, después de que cualquiera de las rutas haya dejado
+            // el modelo puesto: así la salida es comparable entre equipos y entre rutas.
+            logModelShape(System.currentTimeMillis() - modelStart);
             System.out.println("[OK] Connected to " + host + ":" + port);
 
             return true;
@@ -281,6 +319,7 @@ public class IEC61850Client implements ClientEventListener {
         pendingAssociation = null;
         serverModel = model;
         connected = true;
+        modelPath = "scl-externo";
         System.out.println("[INFO] SCL fallback: modelo externo inyectado (" + countNodes(model) + " nodos)");
         return true;
     }
@@ -346,6 +385,7 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 ServerModel fullModel = retryAssoc.retrieveModel();
                 association = retryAssoc;
+                modelPath = "reconexión";
                 logDiag("[RETRY] retrieveModel() exitoso en segundo intento");
                 return fullModel;
             } catch (Exception e2) {
@@ -354,6 +394,7 @@ public class IEC61850Client implements ClientEventListener {
                 ServerModel partial = extractPartialModelFromAssociation(retryAssoc);
                 if (partial != null && partial.getChildren() != null && !partial.getChildren().isEmpty()) {
                     association = retryAssoc;
+                    modelPath = "reconexión-parcial";
                     logDiag("[RETRY] Modelo parcial extraído: " + countNodes(partial) + " nodos");
                     return partial;
                 }
@@ -373,6 +414,7 @@ public class IEC61850Client implements ClientEventListener {
             ServerModel manualModel = retrieveModelManually(retryAssoc);
             if (manualModel != null) {
                 association = retryAssoc;
+                modelPath = "manual";
                 return manualModel;
             }
             try { retryAssoc.close(); } catch (Exception ex) {}
