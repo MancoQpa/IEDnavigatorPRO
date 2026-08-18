@@ -204,6 +204,20 @@
   .card h3{font-size:16px; margin-bottom:8px;}
   .card p{font-size:13.5px; color:var(--text-mid); margin:0;}
 
+  /* Tabla de equipos verificados. El contenedor scrollea solo, para que en pantallas
+     angostas la tabla no empuje el ancho de la pagina. */
+  .equip-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius);
+              background:var(--navy-800); padding:6px 22px 4px;}
+  .equip{width:100%; border-collapse:collapse; font-size:13.5px; min-width:520px;}
+  .equip th{text-align:left; font-family:'IBM Plex Mono'; font-size:11px; color:var(--text-low);
+            letter-spacing:.05em; padding:14px 0 10px; border-bottom:1px solid var(--line);}
+  .equip td{padding:13px 0; border-bottom:1px solid var(--line-soft); vertical-align:top;
+            color:var(--text-mid);}
+  .equip tr:last-child td{border-bottom:none;}
+  .equip td:first-child, .equip th:first-child{padding-right:28px; white-space:nowrap;}
+  .equip td:first-child{color:var(--text-hi);}
+  .equip-note{margin-top:16px; font-size:12.5px; color:var(--text-low); max-width:760px;}
+
   /* install */
   .steps{counter-reset:step; border-left:1px solid var(--line); padding-left:0; margin-left:6px;}
   .step{position:relative; padding:0 0 32px 34px; counter-increment:step;}
@@ -243,6 +257,7 @@
     <div class="brand"><img src="icon.jpg" alt="IEDNavigator PRO">IEDNavigator<span style="color:var(--amber)">PRO</span></div>
     <div class="navlinks">
       <a href="#features"><span lang="es">Funciones</span><span lang="en">Features</span></a>
+      <a href="#equipment"><span lang="es">Equipos</span><span lang="en">Equipment</span></a>
       <a href="#install"><span lang="es">Instalación</span><span lang="en">Install</span></a>
       <a href="#license"><span lang="es">Licencia</span><span lang="en">License</span></a>
       <a href="https://github.com/MancoQpa/IEDnavigatorPRO">GitHub</a>
@@ -426,7 +441,7 @@
       <div class="card">
         <div class="k">02</div>
         <h3><span lang="es">Control de maniobra</span><span lang="en">Switching control</span></h3>
-        <p><span lang="es">SBO en dos pasos con seguridad reforzada, implementado manualmente conforme a IEC 61850-7-2 §20. Verificado contra un relé NARI PCS-9611S real.</span><span lang="en">Two-step SBO with enhanced security, implemented per IEC 61850-7-2 §20. Verified against a real NARI PCS-9611S relay.</span></p>
+        <p><span lang="es">SBO en dos pasos con seguridad reforzada, implementado manualmente conforme a IEC 61850-7-2 §20, con verificación de posición tras la orden.</span><span lang="en">Two-step SBO with enhanced security, implemented per IEC 61850-7-2 §20, with position verification after the command.</span></p>
       </div>
       <div class="card">
         <div class="k">03</div>
@@ -460,9 +475,61 @@
     </div>
   </section>
 
+  <section id="equipment" class="wrap">
+    <div class="section-head">
+      <div class="section-tag">02 <span lang="es">— EQUIPOS VERIFICADOS</span><span lang="en">— VERIFIED EQUIPMENT</span></div>
+      <h2><span lang="es">Probado contra IEDs reales</span><span lang="en">Tested against real IEDs</span></h2>
+      <p><span lang="es">Equipos reales contra los que se ejercitó la herramienta, con lo que se verificó en cada uno. Los nombres identifican el producto: no implican compatibilidad declarada, homologación ni respaldo de ningún fabricante.</span><span lang="en">Real devices the tool has been exercised against, and what was verified on each. Names identify the product: they imply no declared compatibility, certification or endorsement by any manufacturer.</span></p>
+    </div>
+    <div class="equip-wrap">
+      <table class="equip">
+        <thead>
+          <tr>
+            <th><span lang="es">EQUIPO</span><span lang="en">DEVICE</span></th>
+            <th><span lang="es">QUÉ SE VERIFICÓ</span><span lang="en">WHAT WAS VERIFIED</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Siemens SIPROTEC 5</td>
+            <td><span lang="es">Exploración de modelo y <strong>maniobra SBO con seguridad reforzada en campo</strong>, con verificación de posición</span><span lang="en">Model discovery and <strong>SBO with enhanced security operated in the field</strong>, with position verification</span></td>
+          </tr>
+          <tr>
+            <td>NARI PCS-9611S</td>
+            <td><span lang="es">Exploración de modelo y control SBO en laboratorio</span><span lang="en">Model discovery and SBO control in the lab</span></td>
+          </tr>
+          <tr>
+            <td>ZIV 2IRX</td>
+            <td><span lang="es">Exploración de modelo y <strong>mando directo</strong> (<code class="inline">ctlModel</code> = 3)</span><span lang="en">Model discovery and <strong>direct control</strong> (<code class="inline">ctlModel</code> = 3)</span></td>
+          </tr>
+          <tr>
+            <td>ABB REC670</td>
+            <td><span lang="es">Exploración de modelo, bloques de control de reporte y verificación previa de condiciones</span><span lang="en">Model discovery, report control blocks and pre-command condition checks</span></td>
+          </tr>
+          <tr>
+            <td>Ingeteam Ingepac EF-ZTO</td>
+            <td><span lang="es">Exploración de modelo</span><span lang="en">Model discovery</span></td>
+          </tr>
+          <tr>
+            <td>Efacec</td>
+            <td><span lang="es">Exploración de modelo</span><span lang="en">Model discovery</span></td>
+          </tr>
+          <tr>
+            <td>TPUS420</td>
+            <td><span lang="es">Exploración de modelo</span><span lang="en">Model discovery</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="equip-note">
+      <span lang="es"><em>Exploración de modelo</em> significa que la herramienta recuperó y navegó el modelo de datos del equipo; no implica que se haya operado nada sobre él. El ABB REC670 y el Ingeteam están retirados de servicio y se usan como banco de pruebas: sirven para verificar funcionamiento, no para afirmaciones de rendimiento.</span>
+      <span lang="en"><em>Model discovery</em> means the tool retrieved and browsed the device's data model; it does not imply anything was operated on it. The ABB REC670 and the Ingeteam are retired from service and used as test-bench units: they support functional verification, not performance claims.</span>
+    </p>
+  </section>
+
   <section id="install" class="wrap">
     <div class="section-head">
-      <div class="section-tag">02 <span lang="es">— INSTALACIÓN</span><span lang="en">— INSTALLATION</span></div>
+      <div class="section-tag">03 <span lang="es">— INSTALACIÓN</span><span lang="en">— INSTALLATION</span></div>
       <h2><span lang="es">Arriba en tres pasos</span><span lang="en">Up and running in three steps</span></h2>
     </div>
     <div class="steps">
