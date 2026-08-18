@@ -276,19 +276,24 @@ class ReportsPanel {
 
         ServerModel model = modelSupplier.get();
         if (model == null) {
-            log.accept("No hay modelo cargado para obtener RCBs");
+            log.accept(I18n.t("log.rep.nomodel"));
             return;
         }
 
         try {
-            log.accept("Buscando RCBs en el modelo...");
+            log.accept(I18n.t("log.rep.searching"));
+            int lds = 0;
+            int ldsConLln0 = 0;
             for (ModelNode ld : model.getChildren()) {
                 String ldName = ld.getName();
+                lds++;
+                if (ld.getChild("LLN0") != null) ldsConLln0++;
                 for (ModelNode ln : ld.getChildren()) {
                     if (ln.getChildren() == null) continue;
                     String lnName = ln.getName();
                     if (lnName.equals("LLN0")) {
-                        log.accept("LN " + ldName + "/" + lnName + " tiene " + ln.getChildren().size() + " hijos");
+                        log.accept(I18n.t("log.rep.lnchildren", ldName + "/" + lnName,
+                            String.valueOf(ln.getChildren().size())));
                     }
                     for (ModelNode node : ln.getChildren()) {
                         searchForRcbs(node, ldName, lnName);
@@ -306,13 +311,33 @@ class ReportsPanel {
                     }
                 }
             }
-            log.accept("RCBs encontrados: " + rcbMap.size());
-            if (rcbMap.isEmpty()) {
-                log.accept("Nota: Este IED puede no tener RCBs configurados, o pueden estar en una estructura diferente.");
-            }
+            log.accept(I18n.t("log.rep.rcbfound", String.valueOf(rcbMap.size())));
+            if (rcbMap.isEmpty()) log.accept(rcbAbsenceMessage(lds, ldsConLln0));
         } catch (Exception e) {
-            log.accept("Error obteniendo RCBs: " + e.getMessage());
+            log.accept(I18n.t("log.rep.error", String.valueOf(e.getMessage())));
         }
+    }
+
+    /**
+     * Explica un conteo de RCBs en cero distinguiendo lo que el IED no tiene de lo que el
+     * modelo no pudo traer.
+     *
+     * Los bloques de control de reporte cuelgan del LLN0 de cada Logical Device. Si el modelo
+     * no trae ningún LLN0, el cero no dice nada del equipo: dice que falta justo la parte
+     * donde habría que mirar. Pasó contra un ZIV cuyo LLN0 se perdía entero porque el modelo
+     * traía una FC fuera del catálogo de la librería (ver com/beanit/.../Fc.java): el registro
+     * informaba "RCBs encontrados: 0" sobre un equipo que tenía catorce, y el mensaje que
+     * seguía —"puede no tener RCBs configurados"— apuntaba al equipo en vez de al modelo.
+     */
+    static String rcbAbsenceMessage(int lds, int ldsConLln0) {
+        if (ldsConLln0 == 0) {
+            return I18n.t("log.rep.rcb.nolln0", String.valueOf(lds));
+        }
+        if (ldsConLln0 < lds) {
+            return I18n.t("log.rep.rcb.partial",
+                String.valueOf(lds - ldsConLln0), String.valueOf(lds));
+        }
+        return I18n.t("log.rep.rcb.none", String.valueOf(lds));
     }
 
     private void searchForRcbs(ModelNode node, String ldName, String lnName) {
