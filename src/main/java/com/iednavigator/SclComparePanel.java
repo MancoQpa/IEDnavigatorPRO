@@ -133,6 +133,16 @@ class SclComparePanel {
                 I18n.t("tab.sclcmp"), JOptionPane.WARNING_MESSAGE);
             return;
         }
+        // Revisar los archivos antes de comparar: si uno está vacío, en cero o no es XML, el
+        // parser tira un error suyo que no ayuda a entender qué pasó.
+        String problema = SclCompare.describeFileProblem(fileA);
+        if (problema == null) problema = SclCompare.describeFileProblem(fileB);
+        if (problema != null) {
+            log.accept("[CompararSCL] " + problema);
+            JOptionPane.showMessageDialog(parent, problema,
+                I18n.t("tab.sclcmp"), JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         try {
             lastDiffs = SclCompare.compare(fileA, fileB, chkIgnoreName.isSelected());
             diffTableModel.setRowCount(0);

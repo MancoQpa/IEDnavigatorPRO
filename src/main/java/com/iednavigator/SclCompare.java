@@ -23,6 +23,79 @@ import java.util.*;
  */
 public class SclCompare {
 
+    /** Cuánto se mira del archivo antes de decidir que no es XML. */
+    private static final int SNIFF_BYTES = 512;
+
+    /**
+     * Revisa un archivo antes de dárselo al parser y devuelve el problema en términos del
+     * archivo, o {@code null} si parece XML utilizable.
+     *
+     * Sin esto, un archivo perdido llega al parser XML y lo que sale al registro es el texto
+     * crudo del parser: «El contenido no está permitido en el prólogo». Eso describe lo que le
+     * pasó al parser, no lo que le pasa al archivo, y manda a buscar un bug donde no lo hay —
+     * quedó cuatro veces en el registro del 09-08 antes de que se entendiera que los archivos
+     * estaban en cero.
+     *
+     * El caso de los ceros merece nombre propio: tamaño correcto y contenido íntegramente
+     * nulo es la firma de una copia desde pendrive o carpeta de red donde se reservó el
+     * espacio y nunca se volcaron los datos. No se recupera; hay que reexportar del equipo o
+     * recopiar del medio original, y eso es lo que conviene que diga el mensaje.
+     *
+     * @return clave i18n ya resuelta con sus argumentos, o null si no hay nada que objetar
+     */
+    static String describeFileProblem(File f) {
+        if (f == null || !f.isFile()) {
+            return I18n.t("scl.file.unreadable", f == null ? "?" : f.getName());
+        }
+        long len = f.length();
+        if (len == 0) {
+            return I18n.t("scl.file.empty", f.getName());
+        }
+        try (java.io.InputStream in = new java.io.BufferedInputStream(new java.io.FileInputStream(f))) {
+            // Primer byte distinto de cero: corta apenas lo encuentra, así un archivo sano
+            // cuesta una sola lectura y sólo se recorre entero el que efectivamente está nulo.
+            byte[] buf = new byte[8192];
+            boolean todoCeros = true;
+            byte[] inicio = new byte[SNIFF_BYTES];
+            int inicioLen = 0;
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                if (inicioLen < SNIFF_BYTES) {
+                    int copiar = Math.min(n, SNIFF_BYTES - inicioLen);
+                    System.arraycopy(buf, 0, inicio, inicioLen, copiar);
+                    inicioLen += copiar;
+                }
+                for (int i = 0; i < n; i++) {
+                    if (buf[i] != 0) { todoCeros = false; break; }
+                }
+                if (!todoCeros) break;
+            }
+            if (todoCeros) {
+                return I18n.t("scl.file.zeros", f.getName(), String.valueOf(len));
+            }
+            if (!pareceXml(inicio, inicioLen)) {
+                return I18n.t("scl.file.notxml", f.getName());
+            }
+        } catch (java.io.IOException e) {
+            return I18n.t("scl.file.unreadable", f.getName());
+        }
+        return null;
+    }
+
+    /** ¿El primer carácter con contenido es '<'? Salta BOM y espacios, que son válidos antes del prólogo. */
+    private static boolean pareceXml(byte[] inicio, int len) {
+        int i = 0;
+        if (len >= 3 && (inicio[0] & 0xFF) == 0xEF && (inicio[1] & 0xFF) == 0xBB && (inicio[2] & 0xFF) == 0xBF) {
+            i = 3;   // BOM UTF-8
+        }
+        for (; i < len; i++) {
+            byte b = inicio[i];
+            if (b == ' ' || b == '\t' || b == '\r' || b == '\n') continue;
+            return b == '<';
+        }
+        return false;   // sólo espacios en los primeros bytes
+    }
+
     public static class Difference {
         public final String category;
         public final String element;
