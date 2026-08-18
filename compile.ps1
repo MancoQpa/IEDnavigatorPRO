@@ -36,6 +36,12 @@ $CP = $jars -join ';'
 $sources = Get-ChildItem -Path "$SRCDIR\com\iednavigator" -Recurse -Filter '*.java' |
     Where-Object { $_.FullName -notmatch '\\bridge\\' } | ForEach-Object { $_.FullName }
 
+# com\beanit\: parches que sombrean clases de iec61850bean-1.9.0 (ver Fc.java).
+# Tienen que compilarse a classes\, que va antes que lib\*.jar en el classpath de ejecucion.
+if (Test-Path "$SRCDIR\com\beanit") {
+    $sources += Get-ChildItem -Path "$SRCDIR\com\beanit" -Recurse -Filter '*.java' | ForEach-Object { $_.FullName }
+}
+
 Write-Host "Compiling Java files..."
 Write-Host "JAVA_HOME: $env:JAVA_HOME"
 Write-Host "Classpath has $($jars.Count) jars"

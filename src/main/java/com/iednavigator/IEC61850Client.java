@@ -1382,33 +1382,103 @@ public class IEC61850Client implements ClientEventListener {
     /**
      * Busca archivos SCL/CID/ICD en el IED
      */
+    /** Profundidad maxima del barrido recursivo de directorios. */
+    private static final int SCL_SEARCH_MAX_DEPTH = 4;
+    /** Tope de directorios a listar, para no castigar al IED en arboles grandes. */
+    private static final int SCL_SEARCH_MAX_DIRS = 200;
+
     public List<String> findSclFiles() throws IOException {
+        // Barrido recursivo desde la raiz. Cubre los ZIV, que publican el CID activo en
+        // <NombreIED><LD>/SCL/validated/, ruta que ninguna lista fija de directorios acierta.
+        List<String> sclFiles = walkForSclFiles(new String[]{""});
+
+        // Solo si la raiz no dio nada se prueban los directorios historicos. No se usan como
+        // semilla junto con la raiz porque algunos IEDs (el ZIV entre ellos) aceptan cualquier
+        // prefijo inexistente y devuelven el contenido de la raiz: al recorrer ocho semillas
+        // el mismo CID aparecia 37 veces bajo rutas ficticias como /icd/COMTRADE/SCL/validated/.
+        if (sclFiles.isEmpty()) {
+            sclFiles = walkForSclFiles(new String[]{"/", "/config", "/CONFIG", "/scl", "/SCL", "/icd", "/ICD"});
+        }
+
+        // Un CID en .../notvalidated/ es un archivo en espera de validacion, no el activo:
+        // se deja al final para que la seleccion automatica no lo prefiera.
+        sclFiles.sort(Comparator.comparingInt(p -> p.toLowerCase().contains("notvalidated") ? 1 : 0));
+
+        return sclFiles;
+    }
+
+    /** Recorre el arbol de archivos del IED desde las semillas dadas y junta los SCL/CID/ICD/SCD. */
+    private List<String> walkForSclFiles(String[] seedDirs) {
         List<String> sclFiles = new ArrayList<>();
 
-        // Directorios comunes donde los IEDs guardan archivos de configuracion
-        String[] searchDirs = {"", "/", "/config", "/CONFIG", "/scl", "/SCL", "/icd", "/ICD"};
+        Set<String> visited = new HashSet<>();
+        Deque<String> pending = new ArrayDeque<>(Arrays.asList(seedDirs));
+        Map<String, Integer> depth = new HashMap<>();
+        for (String seed : seedDirs) depth.put(seed, 0);
 
-        for (String dir : searchDirs) {
+        int listed = 0;
+        while (!pending.isEmpty() && listed < SCL_SEARCH_MAX_DIRS) {
+            String dir = pending.poll();
+            if (!visited.add(dir)) continue;
+
+            List<FileInformation> files;
             try {
-                List<FileInformation> files = listFiles(dir);
-                if (files != null) {
-                    for (FileInformation fi : files) {
-                        String name = fi.getFilename().toLowerCase();
-                        if (name.endsWith(".cid") || name.endsWith(".icd") ||
-                            name.endsWith(".scd") || name.endsWith(".scl")) {
-                            String fullPath = dir.isEmpty() ? fi.getFilename() : dir + "/" + fi.getFilename();
-                            sclFiles.add(fullPath);
-                            System.out.println("[INFO] Found SCL file: " + fullPath);
-                        }
+                files = listFiles(dir);
+                listed++;
+            } catch (Exception e) {
+                // Directorio inexistente o sin permiso: se ignora y se sigue
+                System.out.println("[DEBUG] Cannot list " + dir + ": " + e.getMessage());
+                continue;
+            }
+            if (files == null) continue;
+
+            int currentDepth = depth.getOrDefault(dir, 0);
+            for (FileInformation fi : files) {
+                String entry = fi.getFilename();
+                if (entry == null || entry.isEmpty()) continue;
+
+                String fullPath = resolveIedPath(dir, entry);
+
+                // Los IEDs marcan los directorios con '/' final en el nombre
+                if (entry.endsWith("/")) {
+                    if (currentDepth + 1 <= SCL_SEARCH_MAX_DEPTH && !visited.contains(fullPath)) {
+                        depth.put(fullPath, currentDepth + 1);
+                        pending.add(fullPath);
+                    }
+                    continue;
+                }
+
+                String name = entry.toLowerCase();
+                if (name.endsWith(".cid") || name.endsWith(".icd") ||
+                    name.endsWith(".scd") || name.endsWith(".scl")) {
+                    if (!sclFiles.contains(fullPath)) {
+                        sclFiles.add(fullPath);
+                        System.out.println("[INFO] Found SCL file: " + fullPath);
                     }
                 }
-            } catch (Exception e) {
-                // Ignorar errores de directorios que no existen
-                System.out.println("[DEBUG] Cannot list " + dir + ": " + e.getMessage());
             }
         }
 
+        if (listed >= SCL_SEARCH_MAX_DIRS) {
+            System.out.println("[WARN] Busqueda de SCL detenida en " + SCL_SEARCH_MAX_DIRS + " directorios");
+        }
+
         return sclFiles;
+    }
+
+    /**
+     * Compone la ruta de una entrada devuelta por getFileDirectory().
+     * Algunos IEDs devuelven el nombre relativo al directorio consultado y otros la ruta
+     * completa; este metodo cubre ambos casos sin duplicar el prefijo.
+     */
+    private String resolveIedPath(String dir, String entry) {
+        if (dir == null || dir.isEmpty() || "/".equals(dir)) {
+            return entry;
+        }
+        if (entry.startsWith(dir)) {
+            return entry;
+        }
+        return dir.endsWith("/") ? dir + entry : dir + "/" + entry;
     }
 
     /**
