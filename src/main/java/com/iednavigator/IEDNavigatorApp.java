@@ -3287,6 +3287,11 @@ public class IEDNavigatorApp extends JFrame {
     void announceSessionLog() {
         if (sessionLog != null) log(I18n.t("log.session.file", sessionLog.file().getAbsolutePath()));
         else                    log(I18n.t("log.session.none"));
+
+        // Las Functional Constraints que la librería no reconoce se avisan por consola; sin
+        // esto no llegan al panel ni al archivo, que es donde se leen después (ver el fix del
+        // 04-08, que enrutó los diagnósticos de reconexión por el mismo motivo).
+        com.beanit.iec61850bean.Fc.setUnknownFcListener(this::log);
     }
 
     private void log(String message) {

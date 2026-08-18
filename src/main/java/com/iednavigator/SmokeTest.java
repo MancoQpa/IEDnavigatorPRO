@@ -41,6 +41,11 @@ public class SmokeTest {
         System.out.println("-- Server/Client class load --");
         testServerClientLoad();
 
+        // --- Nivel 4: el parche del enum Fc gana el classpath ---
+        System.out.println();
+        System.out.println("-- Parche de Functional Constraints --");
+        testFcShadow();
+
         // --- Resumen ---
         System.out.println();
         System.out.println("==============================");
@@ -162,6 +167,52 @@ public class SmokeTest {
         } catch (AssertionError e) {
             fail("SclParser.parse assertion", e);
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Nivel 4: el shadow de Fc gana el classpath
+    // ---------------------------------------------------------------
+
+    /**
+     * El parche de src/main/java/com/beanit/iec61850bean/Fc.java sólo hace efecto si se
+     * resuelve antes que la clase homónima del jar, y eso depende de que "classes" preceda a
+     * "lib\*.jar" en el classpath. Nada lo garantiza, y en lib\ hay 335 .class sueltos de la
+     * propia librería: si algún lanzador agregara lib\ como directorio, el parche quedaría
+     * desactivado en silencio y volveríamos a perder Logical Nodes enteros sin enterarnos.
+     * Estas tres comprobaciones cuestan nada y lo delatan.
+     */
+    private static void testFcShadow() {
+        try {
+            if (com.beanit.iec61850bean.Fc.fromString("SC") == null) {
+                throw new AssertionError("FC=SC no reconocida: corre el enum del jar, no el parche");
+            }
+            pass("el parche de Fc gana el classpath (SC reconocida)");
+        } catch (Throwable t) { fail("parche de Fc activo", t); }
+
+        try {
+            com.beanit.iec61850bean.Fc f = com.beanit.iec61850bean.Fc.fromString("QQ");
+            if (f == null) {
+                throw new AssertionError("una FC desconocida devolvió null: vuelve la NPE que "
+                    + "se lleva el Logical Node entero");
+            }
+            if (f != com.beanit.iec61850bean.Fc.UNKNOWN) {
+                throw new AssertionError("se esperaba UNKNOWN y llegó " + f);
+            }
+            pass("una FC desconocida cae en UNKNOWN, no en null");
+        } catch (Throwable t) { fail("FC desconocida sin null", t); }
+
+        try {
+            // Los 15 originales tienen que conservar su ordinal: la librería serializa e
+            // indexa por él, así que reordenarlos rompería cosas lejos de acá.
+            String[] orig = {"ST","MX","SP","SV","CF","DC","SG","SE","SR","OR","BL","EX","CO","RP","BR"};
+            for (int i = 0; i < orig.length; i++) {
+                com.beanit.iec61850bean.Fc f = com.beanit.iec61850bean.Fc.valueOf(orig[i]);
+                if (f.ordinal() != i) {
+                    throw new AssertionError(orig[i] + " tiene ordinal " + f.ordinal() + ", esperaba " + i);
+                }
+            }
+            pass("los 15 valores originales conservan su ordinal");
+        } catch (Throwable t) { fail("ordinales originales", t); }
     }
 
     // ---------------------------------------------------------------
