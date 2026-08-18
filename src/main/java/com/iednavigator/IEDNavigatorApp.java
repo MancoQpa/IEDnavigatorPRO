@@ -2512,6 +2512,9 @@ public class IEDNavigatorApp extends JFrame {
             html.append("</body></html>");
             JOptionPane.showMessageDialog(this, html.toString(),
                 I18n.t("ctl.pre.title"), JOptionPane.INFORMATION_MESSAGE);
+            // También se registra: un preflight que no pudo leer nada es un resultado, y
+            // antes esta rama se iba sin dejar rastro en el registro de sesión.
+            log(I18n.t("ctl.pre.title") + " — " + ref + ": " + I18n.t("log.pre.none"));
             return;
         }
 
@@ -2544,8 +2547,37 @@ public class IEDNavigatorApp extends JFrame {
         JOptionPane.showMessageDialog(this, html.toString(), I18n.t("ctl.pre.title"),
             blocking > 0 ? JOptionPane.WARNING_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
 
-        log(I18n.t("ctl.pre.title") + " — " + ref + ": "
-            + checks.size() + " / " + blocking + " " + I18n.t("ctl.pre.blocked"));
+        log(preflightLogLine(ref, checks));
+    }
+
+    /**
+     * Arma la línea de registro del preflight, autosuficiente para quien la lea después.
+     *
+     * Antes decía siempre "N / M " seguido de {@code ctl.pre.blocked}, con dos defectos. Usaba
+     * el texto de "hay condiciones que van a bloquear la orden" aunque no hubiera ninguna —una
+     * falsa alarma escrita en el registro autoritativo—, y terminaba en dos puntos sin nada
+     * detrás, porque esa clave está redactada para encabezar la tabla del diálogo. En el
+     * registro no hay tabla: quien reconstruye una jornada desde el log se quedaba justo sin el
+     * único dato que importa, cuál condición bloqueaba. Pasó con un ABB REC670 el 18-08.
+     *
+     * Ahora la rama se elige por el conteo y las bloqueantes se nombran con su referencia y su
+     * valor, igual que hace el banco de pruebas.
+     */
+    static String preflightLogLine(String ref,
+                                   java.util.List<IEC61850Client.PreflightCheck> checks) {
+        StringBuilder culpables = new StringBuilder();
+        int blocking = 0;
+        for (IEC61850Client.PreflightCheck c : checks) {
+            if (!c.blocking) continue;
+            blocking++;
+            if (culpables.length() > 0) culpables.append(", ");
+            culpables.append(c.reference).append('=').append(c.value);
+        }
+        String detalle = blocking > 0
+            ? I18n.t("log.pre.blocked", String.valueOf(checks.size()),
+                     String.valueOf(blocking), culpables.toString())
+            : I18n.t("log.pre.ok", String.valueOf(checks.size()));
+        return I18n.t("ctl.pre.title") + " — " + ref + ": " + detalle;
     }
 
     /** Escapa el texto para insertarlo en las etiquetas HTML de Swing. */
