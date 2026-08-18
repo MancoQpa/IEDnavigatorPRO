@@ -151,7 +151,8 @@ public class GoosePublisher {
             }
         }, 0, heartbeatInterval, TimeUnit.MILLISECONDS);
 
-        log(I18n.t("log.pub.started", heartbeatInterval));
+        // String.valueOf y no el número: MessageFormat le pondría separador de miles.
+        log(I18n.t("log.pub.started", String.valueOf(heartbeatInterval)));
     }
 
     /**

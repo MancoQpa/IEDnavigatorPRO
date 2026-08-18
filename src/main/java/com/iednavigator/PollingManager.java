@@ -81,7 +81,8 @@ class PollingManager {
             }
         }, 0, interval, TimeUnit.MILLISECONDS);
 
-        ctx.log(I18n.t("log.polling.started", interval));
+        // String.valueOf y no el int: MessageFormat mostraba "2.000ms" para 2000 ms.
+        ctx.log(I18n.t("log.polling.started", String.valueOf(interval)));
     }
 
     void stop() {

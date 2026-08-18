@@ -902,7 +902,8 @@ class GoosePanel {
         }
         if (gcb.maxTime > 0) {
             pub.setHeartbeatInterval(gcb.maxTime);
-            logGoose(I18n.t("log.goose.maxtime", gcb.maxTime,
+            // String.valueOf y no el número: MessageFormat mostraba "5.000ms" para 5000 ms.
+            logGoose(I18n.t("log.goose.maxtime", String.valueOf(gcb.maxTime),
                 (gcb.minTime > 0 ? " | MinTime=" + gcb.minTime + "ms" : "")));
         }
 

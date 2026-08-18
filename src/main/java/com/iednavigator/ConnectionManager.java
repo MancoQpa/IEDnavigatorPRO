@@ -8,6 +8,7 @@ import javax.swing.filechooser.FileFilter;
 import java.awt.*;
 import java.io.File;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
@@ -560,7 +561,8 @@ class ConnectionManager {
                     ctx.parseGoCBsFromScl(file, selectedIED);
 
                     long elapsed = System.currentTimeMillis() - startTime;
-                    ctx.log(I18n.t("log.cm.parsingdone", elapsed, success));
+                    // String.valueOf y no el long: MessageFormat le pondría separador de miles.
+                    ctx.log(I18n.t("log.cm.parsingdone", String.valueOf(elapsed), success));
                     ctx.log(I18n.t("log.cm.gocbsfoundscl", ctx.getSclGoCBs().size()));
 
                     final int finalSelectedIED = selectedIED;
@@ -667,6 +669,25 @@ class ConnectionManager {
         }
     }
 
+    /**
+     * Duración legible y sin sorpresas de locale.
+     *
+     * {@link I18n#t(String, Object...)} pasa por {@code MessageFormat}, que formatea los números
+     * con el locale de la interfaz. Con es-PY un {@code {0}} de 22251 salía "22.251ms": el punto
+     * es separador de miles, pero se lee como decimal, así que una conexión de 22 segundos
+     * quedaba registrada de un modo que se lee como 22 milisegundos. Pasó de verdad, y sobre un
+     * registro que después se usa como evidencia.
+     *
+     * Por eso el número se arma acá, con {@link Locale#ROOT}, y el patrón traducido recibe el
+     * texto ya hecho —incluida la unidad—. Arriba del segundo se muestran las dos escalas: los
+     * segundos para leer de un vistazo, y los milisegundos porque son los que se comparan entre
+     * sesiones.
+     */
+    static String formatDuration(long ms) {
+        if (ms < 1000) return ms + " ms";
+        return String.format(Locale.ROOT, "%.2f s (%d ms)", ms / 1000.0, ms);
+    }
+
     private void connect() {
         String host = ctx.getTfHost().trim();
         if (host.isEmpty()) {
@@ -696,7 +717,7 @@ class ConnectionManager {
                 ctx.getClient().connect(host, port);
 
                 long elapsed = System.currentTimeMillis() - startTime;
-                ctx.log(I18n.t("log.cm.connestablished", elapsed));
+                ctx.log(I18n.t("log.cm.connestablished", formatDuration(elapsed)));
 
                 // Detectar interfaz local usada para la conexion
                 String localIp = detectLocalInterface(host);
