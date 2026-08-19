@@ -115,6 +115,16 @@ public class Iec61850Dictionary {
            "IEC 61850-7-4 §6.2.2",
            "CILO1.EnaOpn (habilitar apertura), CILO1.EnaCls (habilitar cierre)");
 
+        ln("CBAY",  "Control de Vano",              "Bay Control",
+           "Gobierna el vano completo, por encima de los controladores de cada aparato: " +
+           "de dónde se aceptan las órdenes (local, estación, remoto) y qué se bloquea a " +
+           "nivel de vano. En equipos que lo instancian, la autoridad de mando se lee acá y " +
+           "no en el CSWI, así que es el nodo a revisar cuando una orden se rechaza sin que " +
+           "el enclavamiento del aparato la esté bloqueando.",
+           "IEC 61850-7-4 §5.3.2",
+           "CBAY1.Loc (mando local), CBAY1.LocSwPos (posición del selector), " +
+           "CBAY1.BlkCmd (bloqueo de órdenes)");
+
         ln("CALH",  "Gestión de Alarmas",           "Alarm Handling",
            "Procesa y prioriza alarmas de proceso y sistema. Puede agrupar, filtrar y " +
            "escalar alarmas, y lleva registro histórico de eventos.",
@@ -2105,6 +2115,29 @@ public class Iec61850Dictionary {
         for (String p : new String[]{"GOOSE", "SC_", "pd"}) {
             vp(p, null, null);
         }
+
+        // ── Familia de control de vano serie 670 ────────────────────────────
+        // Nombra sus nodos como <bloque de función><CLASE><instancia>: SP16GGIO9, MVGGIO3.
+        // Las expansiones de abajo NO salen de documentación del fabricante sino de lo que
+        // el propio modelo del equipo declara — el mismo criterio con el que Q0 llevó
+        // expansión y Q1…Q10 no. Se anota entre paréntesis qué lo confirma.
+        vp("SP16", "16 puntos simples",
+           "Bloque que expone dieciséis señales binarias sobre una clase genérica. Lo "
+           + "confirma el propio modelo: cada instancia declara Ind, Ind2 … Ind16 más una "
+           + "indicación agrupada GrInd. La clase genérica no dice qué representa cada "
+           + "señal; eso lo define la ingeniería del proyecto.");
+        vp("MV", "Valor medido",
+           "Bloque que expone una magnitud analógica sobre una clase genérica. Lo confirma "
+           + "el modelo: cada instancia declara AnIn. Qué magnitud es y en qué unidad, lo "
+           + "define la ingeniería del proyecto.");
+        vp("DRP", null,
+           "Acompaña al registrador de perturbaciones (clase RDRE), que ya describe la "
+           + "función. Se registra para que la clase resuelva exacta, sin atribuirle al "
+           + "prefijo un significado propio.");
+        vp("Q", null,
+           "Designación de aparato o vano (IEC 81346), igual que en las demás familias que "
+           + "usan esta convención. Sobre la clase CBAY corresponde al vano completo, no a "
+           + "un aparato en particular.");
     }
 
     /**
