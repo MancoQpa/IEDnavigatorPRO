@@ -2152,6 +2152,22 @@ public class IEC61850Client implements ClientEventListener {
         // ── Autoridad de mando ──
         addBoolCheck(out, lnRef + ".Loc.stVal",    "ctl.pre.loc",    false, "ctl.pre.hint.loc");
         addBoolCheck(out, lnRef + ".LocKey.stVal", "ctl.pre.lockey", false, "ctl.pre.hint.lockey");
+
+        // ── Autoridad y bloqueo a nivel de vano (CBAY) ──
+        // En algunas familias la autoridad de mando no está en el LN que se opera sino en un
+        // nodo de vano, a otro nivel: el CSWI no declara Loc y el preflight lo omitía en
+        // silencio —correcto ante un atributo ausente— informando menos condiciones de las
+        // que realmente gobiernan la orden. Se busca el CBAY del mismo Logical Device.
+        for (String bay : findLnRefsByClass(ldName, "CBAY")) {
+            addBoolCheck(out, bay + ".Loc.stVal",    "ctl.pre.loc.bay", false, "ctl.pre.hint.loc.bay");
+            addBoolCheck(out, bay + ".BlkCmd.stVal", "ctl.pre.blkcmd",  false, "ctl.pre.hint.blkcmd");
+            // Rem se informa sin marcarlo bloqueante: que el vano declare el mando remoto
+            // deshabilitado es dato para quien opera, pero no está verificado que sea
+            // exactamente el complemento de Loc en todas las implementaciones, y marcar
+            // bloqueante lo que no se comprobó es lo que llena de falsas alarmas el informe.
+            PreflightCheck rem = readBool(bay + ".Rem.stVal", "ctl.pre.rem", null, null);
+            if (rem != null) out.add(rem);
+        }
         // LocSta=true significa autoridad a nivel ESTACIÓN: entonces el orCat correcto es 2,
         // no 3 (remote-control). Solo se marca como bloqueante si no coincide con el orCat actual.
         PreflightCheck locSta = readBool(lnRef + ".LocSta.stVal", "ctl.pre.locsta",
