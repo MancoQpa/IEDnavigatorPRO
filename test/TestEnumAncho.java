@@ -157,6 +157,60 @@ public class TestEnumAncho {
             check("todos los anchos presentes se reconocen", todosReconocidos, porLaApp.keySet().toString());
         }
 
+        System.out.println("\n== getValueString() de la libreria no cubre todos los anchos ==");
+        // Medido, no deducido: iec61850bean devuelve el numero para BdaInt8 y BdaInt32, y
+        // null para BdaInt8U, BdaInt16 y BdaInt16U. Como el parche de enums empuja casi todos
+        // los enumerados a BdaInt16, el efecto en la aplicacion era que NINGUN enumerado
+        // mostraba valor en el arbol —ni Mod, ni Beh, ni Health— mientras un booleano al lado
+        // si lo mostraba. Si algun dia la libreria lo implementa, este banco lo avisa.
+        BdaInt8 g8 = (BdaInt8) bda("BdaInt8");     g8.setValue((byte) 5);
+        BdaInt16 g16 = (BdaInt16) bda("BdaInt16"); g16.setValue((short) 5);
+        BdaInt32 g32 = (BdaInt32) bda("BdaInt32"); g32.setValue(5);
+        check("BdaInt8.getValueString() devuelve el numero", "5".equals(g8.getValueString()),
+              String.valueOf(g8.getValueString()));
+        check("BdaInt16.getValueString() devuelve null", g16.getValueString() == null,
+              "hueco de la libreria — es la razon del fallback");
+        check("BdaInt32.getValueString() devuelve el numero", "5".equals(g32.getValueString()),
+              String.valueOf(g32.getValueString()));
+
+        System.out.println("\n== formatEnumValue tolera el valor sin asignar ==");
+        // Regresion encontrada probando en la aplicacion, no en un banco: al ensanchar el
+        // guard, formatEnumValue paso a entrar donde antes salia temprano, y reventaba con
+        // NPE en rawValue.trim() cuando getValueString() devuelve null — que es lo normal
+        // mientras el servidor no arranco. Tiraba abajo buildTree entero y dejaba el arbol
+        // vacio. El guard roto estaba tapando un segundo bug.
+        Method mFormat = gp.getDeclaredMethod("formatEnumValue", ModelNode.class, String.class);
+        mFormat.setAccessible(true);
+        Object panel = construirGoosePanel(gp);
+        if (panel == null) {
+            check("se pudo construir un GoosePanel para la prueba", false, "no se pudo instanciar");
+        } else {
+            // Primero: que el montaje reproduzca la condicion. Si el enum saliera vacio,
+            // formatEnumValue se iria por el return temprano y el caso de abajo pasaria sin
+            // haber tocado rawValue — o sea, sin probar nada.
+            Method mOpts = gp.getDeclaredMethod("getEnumOptionsForNode", ModelNode.class);
+            mOpts.setAccessible(true);
+            Object opciones = mOpts.invoke(panel, bda("BdaInt16"));
+            check("el montaje devuelve un enum NO vacio",
+                  opciones instanceof Map && !((Map<?, ?>) opciones).isEmpty(),
+                  String.valueOf(opciones));
+            // Y de paso: sobre un BdaInt16 el guard viejo habria devuelto null aca.
+            try {
+                // Con el ordinal en 3 y el enum del montaje, tiene que salir "3 [test]"
+                // aunque getValueString() devuelva null: ese es el fallback.
+                BdaInt16 n3 = (BdaInt16) bda("BdaInt16"); n3.setValue((short) 3);
+                Object r3 = mFormat.invoke(panel, n3, (String) null);
+                check("con rawValue null resuelve por el ordinal", "3 [test]".equals(r3),
+                      String.valueOf(r3));
+                Object r = mFormat.invoke(panel, bda("BdaInt16"), (String) null);
+                check("rawValue null no lanza NPE", true, "devolvio " + r);
+            } catch (Exception e) {
+                Throwable causa = e.getCause() != null ? e.getCause() : e;
+                check("rawValue null no lanza NPE", false,
+                      causa.getClass().getSimpleName() + ": " + causa.getMessage());
+            }
+        }
+
         System.out.println("\n== una excepcion no declarada degrada en false, no tumba al llamador ==");
         // Hallazgo 7: el count de un SDO/DA/BDA puede ser el nombre de otro DA (array de
         // tamano dinamico, valido por IEC 61850-6). SclParser le hace Integer.parseInt y sale
@@ -199,6 +253,56 @@ public class TestEnumAncho {
 
         System.out.printf("%n%d pasaron, %d fallaron%n", ok, fallas);
         if (fallas > 0) System.exit(1);
+    }
+
+    /**
+     * GoosePanel necesita un Context, que es una interfaz grande y de paquete. Se la implementa
+     * con un Proxy dinamico que devuelve valores neutros: alcanza para llegar a
+     * formatEnumValue(), que es lo unico que se quiere ejercitar aca.
+     */
+    private static Object construirGoosePanel(Class<?> gp) {
+        try {
+            Class<?> ctxIf = Class.forName("com.iednavigator.GoosePanel$Context");
+            // Los cuatro mapas se pueblan para que getEnumOptionsForNode() devuelva un enum
+            // NO vacio sobre TESTLD/LLN0.Mod.stVal. Es la condicion exacta del bug: si el
+            // mapa volviera vacio, formatEnumValue saldria por el return temprano y el banco
+            // pasaria sin haber ejercitado nada.
+            Map<String, String> lnClassToLnType = new java.util.HashMap<>();
+            lnClassToLnType.put("LLN0", "LNT_TEST");
+            Map<String, Map<String, String>> lnTypeDoTypes = new java.util.HashMap<>();
+            Map<String, String> doMap = new java.util.HashMap<>();
+            doMap.put("Mod", "DOT_TEST");
+            lnTypeDoTypes.put("LNT_TEST", doMap);
+            Map<String, String> daEnumType = new java.util.HashMap<>();
+            daEnumType.put("DOT_TEST.stVal", "ET_TEST");
+            Map<String, java.util.LinkedHashMap<Integer, String>> enumTypes = new java.util.HashMap<>();
+            java.util.LinkedHashMap<Integer, String> modVals = new java.util.LinkedHashMap<>();
+            modVals.put(1, "on"); modVals.put(2, "blocked"); modVals.put(3, "test"); modVals.put(5, "off");
+            enumTypes.put("ET_TEST", modVals);
+
+            Object ctx = java.lang.reflect.Proxy.newProxyInstance(
+                    ctxIf.getClassLoader(), new Class<?>[]{ctxIf},
+                    (proxy, metodo, argumentos) -> {
+                        switch (metodo.getName()) {
+                            case "getSclLnClassToLnType": return lnClassToLnType;
+                            case "getSclLnTypeDoTypes":   return lnTypeDoTypes;
+                            case "getSclDaEnumType":      return daEnumType;
+                            case "getSclEnumTypes":       return enumTypes;
+                        }
+                        Class<?> r = metodo.getReturnType();
+                        if (r == boolean.class) return false;
+                        if (r == int.class) return 0;
+                        if (r == List.class) return new java.util.ArrayList<>();
+                        if (r == Map.class) return new java.util.HashMap<>();
+                        return null;
+                    });
+            java.lang.reflect.Constructor<?> c = gp.getDeclaredConstructor(ctxIf);
+            c.setAccessible(true);
+            return c.newInstance(ctx);
+        } catch (Throwable t) {
+            System.out.println("     (no se pudo construir GoosePanel: " + t + ")");
+            return null;
+        }
     }
 
     private static void contarAnchos(ModelNode root, Map<String, Integer> acc) {

@@ -1830,6 +1830,25 @@ public class IEDNavigatorApp extends JFrame {
     private LinkedHashMap<Integer, String> getEnumOptionsForNode(ModelNode node) {
         return goosePanel != null ? goosePanel.getEnumOptionsForNode(node) : null;
     }
+
+    /**
+     * El nodo sobre el que hay que decidir si algo es un enumerado. Para un Data Object el
+     * enumerado no esta en el DO sino en su stVal, asi que se baja al hijo; para cualquier
+     * otro nodo se devuelve el mismo que entro. Es el criterio que ya usaba el armado del
+     * menu contextual, extraido para que el dialogo de edicion decida igual.
+     */
+    private ModelNode nodoDeEnum(ModelNode node) {
+        if (node instanceof FcDataObject) {
+            for (ModelNode child : node.getChildren()) {
+                if ("stVal".equalsIgnoreCase(child.getName())
+                        && GoosePanel.esEnteroDeEnum(child)
+                        && getEnumOptionsForNode(child) != null) {
+                    return child;
+                }
+            }
+        }
+        return node;
+    }
     private String formatEnumValue(ModelNode node, String rawValue) {
         return goosePanel != null ? goosePanel.formatEnumValue(node, rawValue) : rawValue;
     }
@@ -1891,12 +1910,20 @@ public class IEDNavigatorApp extends JFrame {
             } else if (info.node instanceof BdaTapCommand) {
                 // Mostrar dropdown para TapCommand
                 newValue = showTapCommandDialog(info.name, currentValue);
-            } else if (GoosePanel.esEnteroDeEnum(info.node)) {
+            } else if (GoosePanel.esEnteroDeEnum(nodoDeEnum(info.node))) {
                 // Puede ser un enum (bType="Enum"). El ancho del entero lo elige SclParser
                 // segun el rango de ordinales del EnumType, asi que no siempre es BdaInt8.
+                //
+                // Si lo seleccionado es el Data Object, el enumerado vive en su stVal: se
+                // opera sobre el hijo, que es lo mismo que ya hacia buildServerPopupForNode()
+                // para decidir el menu. Sin esto el menu ofrece "Establecer valor (enum)..."
+                // y el dialogo cae igual al campo de texto libre — se veia en la aplicacion
+                // al hacer clic derecho sobre un DO Mod.
+                ModelNode objetivo = nodoDeEnum(info.node);
+                if (objetivo != info.node) ref = objetivo.getReference().toString();
                 int currentOrd = 0;
-                try { currentOrd = GoosePanel.enumOrdinalOf(info.node); } catch (Exception ignore) {}
-                LinkedHashMap<Integer, String> enumVals = getEnumOptionsForNode(info.node);
+                try { currentOrd = GoosePanel.enumOrdinalOf(objetivo); } catch (Exception ignore) {}
+                LinkedHashMap<Integer, String> enumVals = getEnumOptionsForNode(objetivo);
                 if (enumVals != null && !enumVals.isEmpty()) {
                     newValue = showEnumDialog(info.name, currentOrd, enumVals);
                 } else {

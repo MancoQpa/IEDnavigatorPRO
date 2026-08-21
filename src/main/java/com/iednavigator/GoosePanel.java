@@ -1800,7 +1800,29 @@ class GoosePanel {
     }
 
     String formatEnumValue(ModelNode node, String rawValue) {
+        // getValueString() devuelve null para un atributo al que todavia no se le asigno
+        // valor, y el arbol del modelo se construye antes de que arranque el servidor, asi
+        // que aca llega null de rutina.
+        //
+        // Esto no se veia mientras el guard de getEnumOptionsForNode era solo BdaInt8: para
+        // un BdaInt16 devolvia null y se salia en la linea de abajo sin llegar a tocar
+        // rawValue. Al ensanchar el guard quedo al descubierto — un NPE que tiraba abajo la
+        // construccion del arbol entero y dejaba el panel vacio. Lo destapo probar en la
+        // aplicacion: ningun banco lo habia ejercitado con el valor sin asignar.
         LinkedHashMap<Integer, String> enumVals = getEnumOptionsForNode(node);
+        if (rawValue == null) {
+            // getValueString() de iec61850bean NO esta implementado para todos los anchos:
+            // devuelve el numero para BdaInt8 y BdaInt32, y null para BdaInt8U, BdaInt16 y
+            // BdaInt16U. Medido sobre la libreria, no deducido.
+            //
+            // Como el parche de enums del propio proyecto empuja casi todos los enumerados a
+            // BdaInt16, el efecto era que NINGUN enumerado mostraba valor en el arbol —ni
+            // Mod, ni Beh, ni Health— mientras un booleano al lado si lo mostraba. Se lee el
+            // ordinal por el mismo camino que usa el dialogo de edicion, con lo que un Int16
+            // pasa a comportarse igual que un Int8, que es lo que la libreria hace sola.
+            if (enumVals == null || enumVals.isEmpty() || !esEnteroDeEnum(node)) return null;
+            rawValue = String.valueOf(enumOrdinalOf(node));
+        }
         if (enumVals == null || enumVals.isEmpty()) return rawValue;
         try {
             int ord = Integer.parseInt(rawValue.trim());
