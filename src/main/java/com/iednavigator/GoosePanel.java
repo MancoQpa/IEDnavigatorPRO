@@ -1743,8 +1743,35 @@ class GoosePanel {
         return noInst.isEmpty() ? lnFull : noInst;
     }
 
+    /**
+     * Un atributo con bType="Enum" en el SCL no llega necesariamente como BdaInt8: SclParser
+     * elige el ancho del entero segun el rango de ordinales que declare el EnumType. Medido
+     * sobre los archivos reales de fabricante que la libreria abre, TODOS exponen Mod, Beh y
+     * Health como BdaInt16 y ninguno como BdaInt8 — o sea que el guard angosto dejaba afuera
+     * justamente el caso normal, y lo hacia en silencio.
+     *
+     * Se excluye BdaInt64 a proposito: un ordinal de enumerado no necesita 64 bits y el parser
+     * no elige ese ancho para un Enum, asi que aceptarlo solo ampliaria la superficie sin caso.
+     */
+    static boolean esEnteroDeEnum(ModelNode node) {
+        return node instanceof BdaInt8   || node instanceof BdaInt8U
+            || node instanceof BdaInt16  || node instanceof BdaInt16U
+            || node instanceof BdaInt32  || node instanceof BdaInt32U;
+    }
+
+    /** Ordinal actual del nodo, sea cual sea el ancho con que la libreria lo haya instanciado. */
+    static int enumOrdinalOf(ModelNode node) {
+        if (node instanceof BdaInt8)   return ((BdaInt8) node).getValue();
+        if (node instanceof BdaInt8U)  return ((BdaInt8U) node).getValue();
+        if (node instanceof BdaInt16)  return ((BdaInt16) node).getValue();
+        if (node instanceof BdaInt16U) return ((BdaInt16U) node).getValue();
+        if (node instanceof BdaInt32)  return ((BdaInt32) node).getValue();
+        if (node instanceof BdaInt32U) return (int) ((BdaInt32U) node).getValue();
+        return 0;
+    }
+
     LinkedHashMap<Integer, String> getEnumOptionsForNode(ModelNode node) {
-        if (!(node instanceof BdaInt8) && !(node instanceof BdaInt8U)) return null;
+        if (!esEnteroDeEnum(node)) return null;
         String ref = node.getReference().toString();
         int slashIdx = ref.indexOf('/');
         if (slashIdx < 0) return null;

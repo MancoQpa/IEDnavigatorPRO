@@ -1625,7 +1625,7 @@ public class IEDNavigatorApp extends JFrame {
                     if (child instanceof BdaBoolean) isBoolean = true;
                     else if (child instanceof BdaDoubleBitPos) isDbpos = true;
                     else if (child instanceof BdaTapCommand) isTapCmd = true;
-                    else if (child instanceof BdaInt8 || child instanceof BdaInt8U) {
+                    else if (GoosePanel.esEnteroDeEnum(child)) {
                         precomputedEnumVals = getEnumOptionsForNode(child);
                         if (precomputedEnumVals != null) isEnum = true;
                     }
@@ -1891,13 +1891,11 @@ public class IEDNavigatorApp extends JFrame {
             } else if (info.node instanceof BdaTapCommand) {
                 // Mostrar dropdown para TapCommand
                 newValue = showTapCommandDialog(info.name, currentValue);
-            } else if (info.node instanceof BdaInt8 || info.node instanceof BdaInt8U) {
-                // Puede ser un enum (bType="Enum" → BdaInt8 en iec61850bean)
+            } else if (GoosePanel.esEnteroDeEnum(info.node)) {
+                // Puede ser un enum (bType="Enum"). El ancho del entero lo elige SclParser
+                // segun el rango de ordinales del EnumType, asi que no siempre es BdaInt8.
                 int currentOrd = 0;
-                try {
-                    if (info.node instanceof BdaInt8) currentOrd = ((BdaInt8) info.node).getValue();
-                    else currentOrd = ((BdaInt8U) info.node).getValue();
-                } catch (Exception ignore) {}
+                try { currentOrd = GoosePanel.enumOrdinalOf(info.node); } catch (Exception ignore) {}
                 LinkedHashMap<Integer, String> enumVals = getEnumOptionsForNode(info.node);
                 if (enumVals != null && !enumVals.isEmpty()) {
                     newValue = showEnumDialog(info.name, currentOrd, enumVals);
