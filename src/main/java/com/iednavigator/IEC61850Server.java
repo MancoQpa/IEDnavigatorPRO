@@ -553,6 +553,24 @@ public class IEC61850Server implements ServerEventListener {
             e.printStackTrace();
             if (listener != null) listener.onError("IO error: " + e.getMessage());
             return false;
+        } catch (RuntimeException e) {
+            // La libreria lanza excepciones NO declaradas ante ciertos archivos validos. El
+            // caso conocido: el atributo count de un SDO/DA/BDA puede ser el nombre de otro DA
+            // —array de tamano dinamico, permitido por IEC 61850-6— y SclParser le hace
+            // Integer.parseInt, con lo que sale una NumberFormatException. Sin esta rama se
+            // propaga fuera del metodo y tumba al llamador en vez de devolver false.
+            //
+            // Se informa como fallo de PROCESAMIENTO y no como archivo invalido: el archivo
+            // puede estar perfectamente bien y ser la libreria la que no lo contempla. Es el
+            // mismo criterio con el que el comparador SCL dejo de repetir el texto crudo del
+            // parser, y con el que las notas de la v4.12 encuadraron la FC fuera de catalogo.
+            System.err.println("[ERROR] SCL processing error: " + e);
+            e.printStackTrace();
+            if (listener != null) {
+                listener.onError("SCL processing error: " + e.getClass().getSimpleName()
+                        + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+            }
+            return false;
         }
     }
 
@@ -594,6 +612,11 @@ public class IEC61850Server implements ServerEventListener {
 
         } catch (SclParseException e) {
             System.err.println("[ERROR] SCL parse error: " + e.getMessage());
+            return false;
+        } catch (RuntimeException e) {
+            // Misma razon que en loadSclFile: la libreria puede lanzar excepciones no
+            // declaradas ante archivos validos, y sin esta rama se propagan al llamador.
+            System.err.println("[ERROR] SCL processing error: " + e);
             return false;
         }
     }
