@@ -71,11 +71,11 @@ public class IEC61850Server implements ServerEventListener {
             String expandedPath = expandSclArrays(sclPath);
             File expandedFile = new File(expandedPath);
 
-            // Paso 1: Parsear con SclParser (devuelve 1 modelo por AccessPoint)
-            try (FileInputStream fis = new FileInputStream(expandedFile)) {
-                parsedModels = SclParser.parse(fis);
-                currentSclPath = sclPath;  // guardar ruta original como clave de cache
-            }
+            // Paso 1: Parsear con SclParser (devuelve 1 modelo por AccessPoint).
+            // Tolerante: un valor inicial que la librería no sabe convertir se descarta en vez
+            // de perder el archivo entero.
+            parsedModels = parseSclTolerante(expandedFile);
+            currentSclPath = sclPath;  // guardar ruta original como clave de cache
 
             if (parsedModels == null || parsedModels.isEmpty()) return iedNames;
 
@@ -426,6 +426,105 @@ public class IEC61850Server implements ServerEventListener {
         }
     }
 
+    /** Tope de valores iniciales inválidos que se descartan antes de darse por vencido. */
+    private static final int MAX_VALORES_DESCARTADOS = 200;
+
+    /**
+     * Parsea un SCL descartando, uno por uno, los valores iniciales que la librería no sabe
+     * convertir, en vez de perder el archivo entero por uno solo.
+     *
+     * El caso que lo motivó: un atributo booleano cuyo &lt;Val&gt; es una referencia a otro objeto
+     * —convención interna de algún fabricante, no válida en SCL—. La librería aborta la carga
+     * completa con "invalid boolean configured value: ...", y con eso se pierden todos los IEDs
+     * del archivo por un valor inicial. La herramienta de referencia del mercado abre esos
+     * mismos archivos mostrando un indicador de errores: degrada en vez de abortar, que es el
+     * comportamiento a copiar.
+     *
+     * Perder el archivo por esto no tiene sentido: es un VALOR INICIAL, no la estructura del
+     * modelo. El atributo queda con el valor por defecto de su tipo, que es la degradación
+     * correcta.
+     *
+     * No es específico de ningún fabricante: el valor culpable viene en el mensaje de la propia
+     * excepción, así que el mecanismo sirve para cualquier archivo con el mismo defecto.
+     *
+     * Portado del simulador; ver HALLAZGOS_DESDE_EL_SIMULADOR.md, hallazgo 2.
+     */
+    private List<ServerModel> parseSclTolerante(File archivo) throws SclParseException, IOException {
+        byte[] actual = java.nio.file.Files.readAllBytes(archivo.toPath());
+        int descartados = 0;
+
+        while (true) {
+            try {
+                return SclParser.parse(new java.io.ByteArrayInputStream(actual));
+            } catch (SclParseException e) {
+                String malo = extraerValorInvalido(e.getMessage());
+                if (malo == null || descartados >= MAX_VALORES_DESCARTADOS) throw e;
+
+                byte[] siguiente = dropValsConTexto(actual, malo);
+                if (siguiente == null) throw e;   // no había ninguno: no insistir
+
+                descartados++;
+                actual = siguiente;
+                String aviso = "[SCL] valor inicial inválido descartado: \"" + malo
+                        + "\" (" + descartados + ")";
+                if (listener != null) listener.onLog(aviso);
+                System.out.println("[SERVER] " + aviso);
+            }
+        }
+    }
+
+    /**
+     * Saca del mensaje de la excepción el valor que no se pudo convertir.
+     * Formato de la librería: "invalid &lt;tipo&gt; configured value: &lt;valor&gt;".
+     */
+    private String extraerValorInvalido(String mensaje) {
+        if (mensaje == null) return null;
+        final String marca = "configured value: ";
+        int i = mensaje.indexOf(marca);
+        if (i < 0) return null;
+        String valor = mensaje.substring(i + marca.length()).trim();
+        return valor.isEmpty() ? null : valor;
+    }
+
+    /**
+     * Devuelve el XML sin los &lt;Val&gt; cuyo texto sea exactamente el dado, o null si no había
+     * ninguno — para no reintentar en vano y quedarse en el lazo.
+     */
+    private byte[] dropValsConTexto(byte[] xml, String texto) {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            Document doc = factory.newDocumentBuilder()
+                    .parse(new java.io.ByteArrayInputStream(xml));
+
+            NodeList vals = doc.getElementsByTagNameNS("*", "Val");
+            if (vals.getLength() == 0) vals = doc.getElementsByTagName("Val");
+
+            List<Element> aBorrar = new ArrayList<>();
+            for (int i = 0; i < vals.getLength(); i++) {
+                Element val = (Element) vals.item(i);
+                if (texto.equals(val.getTextContent().trim())) aBorrar.add(val);
+            }
+            if (aBorrar.isEmpty()) return null;
+
+            for (Element val : aBorrar) {
+                org.w3c.dom.Node parent = val.getParentNode();
+                if (parent != null) parent.removeChild(val);
+            }
+
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+            transformer.setOutputProperty(OutputKeys.INDENT, "no");
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            transformer.transform(new DOMSource(doc), new StreamResult(out));
+            return out.toByteArray();
+
+        } catch (Exception e) {
+            System.err.println("[SERVER] dropValsConTexto falló: " + e.getMessage());
+            return null;
+        }
+    }
+
     /**
      * Quita los &lt;Val&gt; sin contenido.
      *
@@ -639,10 +738,12 @@ public class IEC61850Server implements ServerEventListener {
             String expandedPath = expandSclArrays(sclPath);
             File expandedFile = new File(expandedPath);
 
-            // Parsear SCL usando InputStream (igual que la APK)
+            // Parsear SCL. Tolerante, igual que getAvailableIEDs(): si las dos rutas no
+            // descartaran lo mismo, el selector mostraría un IED que después no se puede
+            // levantar.
             long startTime = System.currentTimeMillis();
-            try (FileInputStream fis = new FileInputStream(expandedFile)) {
-                List<ServerModel> models = SclParser.parse(fis);
+            {
+                List<ServerModel> models = parseSclTolerante(expandedFile);
 
                 long parseTime = System.currentTimeMillis() - startTime;
                 System.out.println("[SERVER] SCL parsed in " + parseTime + "ms");

@@ -53,6 +53,16 @@ public class TestPreprocesadoScl {
      * Mod/Beh/Health. Los parámetros permiten inyectar cada defecto por separado.
      */
     private static String modelo(String valMod, String valCtl, boolean valVacio, String rptMax) {
+        return modelo(valMod, valCtl, valVacio, rptMax, null);
+    }
+
+    /**
+     * @param valBooleano si no es null, se pone como valor inicial de un atributo BOOLEAN.
+     *                    Sirve para inyectar el hallazgo 2: un booleano cuyo valor inicial es
+     *                    una referencia a otro objeto, que la librería no sabe convertir.
+     */
+    private static String modelo(String valMod, String valCtl, boolean valVacio, String rptMax,
+                                 String valBooleano) {
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<SCL xmlns=\"http://www.iec.ch/61850/2003/SCL\">\n");
@@ -68,6 +78,10 @@ public class TestPreprocesadoScl {
         }
         if (valVacio) {
             sb.append("        <DOI name=\"Health\"><DAI name=\"stVal\"><Val></Val></DAI></DOI>\n");
+        }
+        if (valBooleano != null) {
+            sb.append("        <DOI name=\"Ind\"><DAI name=\"general\"><Val>")
+              .append(valBooleano).append("</Val></DAI></DOI>\n");
         }
         if (rptMax != null) {
             sb.append("        <ReportControl name=\"rcb01\" datSet=\"DS1\" rptID=\"r\" confRev=\"1\" buffered=\"false\">\n");
@@ -87,10 +101,14 @@ public class TestPreprocesadoScl {
         sb.append("      <DO name=\"Mod\" type=\"T_INC\"/>\n");
         sb.append("      <DO name=\"Beh\" type=\"T_INC\"/>\n");
         sb.append("      <DO name=\"Health\" type=\"T_INC\"/>\n");
+        sb.append("      <DO name=\"Ind\" type=\"T_SPS\"/>\n");
         sb.append("    </LNodeType>\n");
         sb.append("    <DOType id=\"T_INC\" cdc=\"INC\">\n");
         sb.append("      <DA name=\"stVal\" bType=\"Enum\" type=\"T_MOD\" fc=\"ST\"/>\n");
         sb.append("      <DA name=\"ctlModel\" bType=\"Enum\" type=\"T_CTL\" fc=\"CF\"/>\n");
+        sb.append("    </DOType>\n");
+        sb.append("    <DOType id=\"T_SPS\" cdc=\"SPS\">\n");
+        sb.append("      <DA name=\"general\" bType=\"BOOLEAN\" fc=\"ST\"/>\n");
         sb.append("    </DOType>\n");
         // El EnumType de Mod define el ordinal 1 SOLO con etiqueta: es el caso del hallazgo 1.
         sb.append("    <EnumType id=\"T_MOD\">\n");
@@ -149,10 +167,24 @@ public class TestPreprocesadoScl {
         Path h4b = escribir("scl_h4b", modelo("1", null, false, "500"));
         check("carga con RptEnabled max=500", !cargar(h4b).isEmpty(), "fuera de 1..99 por arriba");
 
-        System.out.println("\n== los cuatro defectos juntos en un mismo archivo ==");
-        Path todos = escribir("scl_todos", modelo("1", "status-only", true, "0"));
+        System.out.println("\n== hallazgo 2: valor inicial que la libreria no sabe convertir ==");
+        // Un booleano cuyo <Val> es una referencia a otro objeto. La libreria aborta la carga
+        // ENTERA por ese unico valor inicial; se descarta el <Val> y se reintenta, con lo que
+        // el atributo queda en su valor por defecto — que es la degradacion correcta, porque
+        // lo que se pierde es un valor inicial y no la estructura del modelo.
+        Path h2 = escribir("scl_h2", modelo("on", null, false, null, "CTRL/GAPC1.Op1.ST.general"));
+        check("carga con un booleano cuyo valor es una referencia", !cargar(h2).isEmpty(),
+              "antes: invalid boolean configured value: ...");
+
+        // Un valor bueno no se toca: si el descarte fuera indiscriminado, esto tambien caeria.
+        Path h2ok = escribir("scl_h2ok", modelo("on", null, false, null, "true"));
+        check("un booleano con valor valido sigue cargando", !cargar(h2ok).isEmpty(), null);
+
+        System.out.println("\n== los cinco defectos juntos en un mismo archivo ==");
+        Path todos = escribir("scl_todos",
+                modelo("1", "status-only", true, "0", "CTRL/GAPC1.Op1.ST.general"));
         List<String> rt = cargar(todos);
-        check("carga con los cuatro a la vez", !rt.isEmpty(), rt.toString());
+        check("carga con los cinco a la vez", !rt.isEmpty(), rt.toString());
 
         System.out.println("\n== la salvaguarda: no se toca lo que no es un enumerado ==");
         // Un texto no numerico que el documento NO define en ningun EnumType no debe
