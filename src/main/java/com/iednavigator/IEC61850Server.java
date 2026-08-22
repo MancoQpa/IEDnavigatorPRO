@@ -374,7 +374,7 @@ public class IEC61850Server implements ServerEventListener {
 
             if (listener != null) listener.onLog("[SCL] Arrays con count encontrados: " + totalExpanded);
 
-            // Parche de EnumTypes incompletos (Siemens SIPROTEC5 omite ordinals estándar)
+            // Parche de EnumTypes incompletos (hay familias que omiten ordinales estándar)
             int patchedEnums = patchMissingEnumOrdinals(doc);
             if (patchedEnums > 0) {
                 if (listener != null)
@@ -383,7 +383,27 @@ public class IEC61850Server implements ServerEventListener {
                 System.out.println("[SERVER] Enum patch: " + patchedEnums + " EnumVal entries added");
             }
 
-            if (totalExpanded == 0 && patchedEnums == 0) return sclPath;
+            // <Val/> sin contenido: la librería intenta convertir "" al tipo del atributo y
+            // aborta la carga entera ("invalid INT32U configured value: "). Hay archivos que
+            // traen cientos. Quitarlos equivale a que el DAI no declare valor inicial, que es
+            // justamente lo que el archivo quiere decir.
+            int emptyVals = dropEmptyVals(doc);
+            if (emptyVals > 0) {
+                if (listener != null)
+                    listener.onLog("[SCL] " + emptyVals + " <Val> vacíos descartados");
+                System.out.println("[SERVER] Empty <Val> dropped: " + emptyVals);
+            }
+
+            // RptEnabled max fuera de 1..99: la librería aborta. Hay archivos que declaran
+            // max="0", que además es inútil: ningún cliente podría habilitar ese RCB.
+            int rptFixed = patchReportControlMax(doc);
+            if (rptFixed > 0) {
+                if (listener != null)
+                    listener.onLog("[SCL] " + rptFixed + " RptEnabled con max fuera de rango corregidos");
+                System.out.println("[SERVER] RptEnabled max fixed: " + rptFixed);
+            }
+
+            if (totalExpanded == 0 && patchedEnums == 0 && emptyVals == 0 && rptFixed == 0) return sclPath;
 
             // Escribir a archivo temporal preservando namespace
             File tempFile = File.createTempFile("ied_expanded_", ".cid");
@@ -407,67 +427,186 @@ public class IEC61850Server implements ServerEventListener {
     }
 
     /**
-     * Corrige EnumTypes incompletos típicos de CIDs Siemens SIPROTEC5.
+     * Quita los &lt;Val&gt; sin contenido.
      *
-     * iec61850bean lanza SclParseException("unknown enum value: N") cuando un DAI/Val
-     * contiene un ordinal entero no definido en el EnumType referenciado.
-     * Siemens exporta Behavior con solo ord={1,3,5} omitiendo "blocked"(2) y "test/blocked"(4),
-     * y ctlModel con solo ord={0} o {0,1}, entre otros casos.
+     * Un &lt;Val/&gt; vacío hace que la librería intente convertir "" al tipo del atributo y aborte
+     * la carga entera. Quitarlo equivale a que el DAI no declare valor inicial —que es lo que
+     * el archivo quiere decir— y el atributo queda con el valor por defecto de su tipo.
      *
-     * Algoritmo:
-     *   1. Recolecta todos los enteros que aparecen en elementos <Val> del documento.
-     *   2. Para cada <EnumType>, agrega <EnumVal ord="N">_N</EnumVal> para cada N
-     *      que no esté definido (nunca modifica entradas existentes).
+     * Portado del simulador; ver HALLAZGOS_DESDE_EL_SIMULADOR.md, hallazgo 3.
+     */
+    private int dropEmptyVals(Document doc) {
+        NodeList vals = doc.getElementsByTagNameNS("*", "Val");
+        if (vals.getLength() == 0) vals = doc.getElementsByTagName("Val");
+
+        // NodeList es viva: hay que juntar primero y borrar después.
+        List<Element> aBorrar = new ArrayList<>();
+        for (int i = 0; i < vals.getLength(); i++) {
+            Element val = (Element) vals.item(i);
+            String texto = val.getTextContent();
+            if (texto == null || texto.trim().isEmpty()) aBorrar.add(val);
+        }
+        for (Element val : aBorrar) {
+            org.w3c.dom.Node parent = val.getParentNode();
+            if (parent != null) parent.removeChild(val);
+        }
+        return aBorrar.size();
+    }
+
+    /**
+     * Deja el atributo max de RptEnabled dentro del rango que la librería exige (1..99).
      *
-     * Es conservador y sobre-inclusivo (agrega entradas que quizás no se usan),
-     * pero eso no causa errores — solo un modelo con más opciones que las reales.
+     * Detalle que cuesta encontrar: el atributo culpable está en &lt;RptEnabled&gt;, NO en
+     * &lt;ReportControl&gt;. Parchear ReportControl no cambia nada. Un max de 0 significa que
+     * ningún cliente puede habilitar ese bloque de reporte, así que corregirlo a 1 no pierde
+     * nada que el archivo quisiera expresar.
      *
-     * @return número total de EnumVal sintéticos agregados
+     * Portado del simulador; ver HALLAZGOS_DESDE_EL_SIMULADOR.md, hallazgo 4.
+     */
+    private int patchReportControlMax(Document doc) {
+        NodeList rcs = doc.getElementsByTagNameNS("*", "ReportControl");
+        if (rcs.getLength() == 0) rcs = doc.getElementsByTagName("ReportControl");
+
+        int patched = 0;
+        for (int i = 0; i < rcs.getLength(); i++) {
+            Element rc = (Element) rcs.item(i);
+
+            Element rptEnabled = null;
+            org.w3c.dom.NodeList children = rc.getChildNodes();
+            for (int j = 0; j < children.getLength(); j++) {
+                org.w3c.dom.Node child = children.item(j);
+                if (child.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE
+                        && "RptEnabled".equals(child.getLocalName() != null
+                                ? child.getLocalName() : child.getNodeName())) {
+                    rptEnabled = (Element) child;
+                    break;
+                }
+            }
+
+            if (rptEnabled == null) {
+                String nsUri = rc.getNamespaceURI();
+                rptEnabled = (nsUri != null && !nsUri.isEmpty())
+                        ? doc.createElementNS(nsUri, "RptEnabled")
+                        : doc.createElement("RptEnabled");
+                rptEnabled.setAttribute("max", "1");
+                rc.appendChild(rptEnabled);
+                patched++;
+                continue;
+            }
+
+            int max = 0;
+            try {
+                String raw = rptEnabled.getAttribute("max").trim();
+                if (!raw.isEmpty()) max = Integer.parseInt(raw);
+            } catch (NumberFormatException ignored) {}
+
+            if (max < 1 || max > 99) {
+                rptEnabled.setAttribute("max", "1");
+                patched++;
+            }
+        }
+        return patched;
+    }
+
+    /**
+     * Completa los EnumType a los que les faltan valores que el propio documento usa.
+     *
+     * La versión anterior comparaba por ORDINAL —"¿este EnumType ya define el ord 1?"— y eso
+     * no cubre el caso más común en archivos reales. Verificado sobre el bytecode de
+     * SclParser, no sobre el mensaje de error: para resolver un &lt;Val&gt; recorre los EnumVal
+     * comparando contra EnumVal.getId(), o sea el TEXTO del elemento, y usa el ord del que
+     * coincida. No hay fallback por ordinal. Entonces un archivo cuyos EnumVal son etiquetas
+     * ("on", "blocked") y cuyos DAI traen &lt;Val&gt;1&lt;/Val&gt; seguía sin cargar: el ordinal 1 ya
+     * estaba definido —como "on"— así que el parche lo salteaba.
+     *
+     * Ahora se compara por texto. Y hay una segunda mitad: los valores SIMBÓLICOS. Un
+     * EnumType truncado puede no declarar "status-only" aunque el documento lo use cientos de
+     * veces. Para sintetizarlo hace falta su ordinal y no se puede inventar —el ord del
+     * EnumVal que coincide ES el valor que se guarda—, así que se aprende del propio
+     * documento recorriendo todos los EnumVal de todos los EnumType.
+     *
+     * Dos salvaguardas, sin las cuales esto haría daño:
+     *   - un texto que aparezca con ordinales CONTRADICTORIOS en distintos EnumType se
+     *     descarta: sin ordinal unívoco no se puede sintetizar nada correcto;
+     *   - sólo se sintetizan textos que el documento defina en algún lado. Los demás textos
+     *     no numéricos que viven en &lt;Val&gt; ("IEC 61850-7-4:2007", "false", marcas de tiempo)
+     *     pertenecen a atributos que no son enumerados y no hay que tocarlos.
+     *
+     * Portado del simulador de IED para Android, donde se probó contra 72 archivos reales de
+     * ocho fabricantes. Ver HALLAZGOS_DESDE_EL_SIMULADOR.md, hallazgos 1 y 1b.
      */
     private int patchMissingEnumOrdinals(Document doc) {
-        // Paso 1: recolectar todos los enteros en elementos <Val>
-        Set<Integer> numericVals = new LinkedHashSet<>();
+        NodeList enumTypes = doc.getElementsByTagNameNS("*", "EnumType");
+        if (enumTypes.getLength() == 0) enumTypes = doc.getElementsByTagName("EnumType");
+        if (enumTypes.getLength() == 0) return 0;
+
+        // Paso 1: aprender del documento qué ordinal le corresponde a cada texto.
+        Map<String, String> textoAOrd = new HashMap<>();
+        Set<String> ambiguos = new HashSet<>();
+        for (int i = 0; i < enumTypes.getLength(); i++) {
+            org.w3c.dom.NodeList children = enumTypes.item(i).getChildNodes();
+            for (int j = 0; j < children.getLength(); j++) {
+                org.w3c.dom.Node child = children.item(j);
+                if (child.getNodeType() != org.w3c.dom.Node.ELEMENT_NODE) continue;
+                String ord = ((Element) child).getAttribute("ord").trim();
+                if (ord.isEmpty()) continue;
+                String texto = child.getTextContent().trim();
+                if (texto.isEmpty()) continue;
+                String previo = textoAOrd.put(texto, ord);
+                if (previo != null && !previo.equals(ord)) ambiguos.add(texto);
+            }
+        }
+        for (String a : ambiguos) textoAOrd.remove(a);
+
+        // Paso 2: juntar los textos usados en <Val> para los que se conoce un ordinal.
+        // Un texto numérico es su propio ordinal; uno simbólico sólo sirve si el documento
+        // lo define en algún lado.
+        Map<String, String> usados = new LinkedHashMap<>();
         NodeList valNodes = doc.getElementsByTagNameNS("*", "Val");
         if (valNodes.getLength() == 0) valNodes = doc.getElementsByTagName("Val");
         for (int i = 0; i < valNodes.getLength(); i++) {
-            String text = valNodes.item(i).getTextContent().trim();
-            try { numericVals.add(Integer.parseInt(text)); } catch (NumberFormatException ignore) {}
+            String texto = valNodes.item(i).getTextContent().trim();
+            if (texto.isEmpty() || usados.containsKey(texto)) continue;
+            try {
+                Integer.parseInt(texto);
+                usados.put(texto, texto);
+            } catch (NumberFormatException e) {
+                String ord = textoAOrd.get(texto);
+                if (ord != null) usados.put(texto, ord);
+            }
         }
-        if (numericVals.isEmpty()) return 0;
+        if (usados.isEmpty()) return 0;
 
-        // Paso 2: para cada EnumType, agregar ordinals faltantes con valor sintético
-        NodeList enumTypes = doc.getElementsByTagNameNS("*", "EnumType");
-        if (enumTypes.getLength() == 0) enumTypes = doc.getElementsByTagName("EnumType");
-
+        // Paso 3: completar cada EnumType con los textos que le falten.
         int patchCount = 0;
         for (int i = 0; i < enumTypes.getLength(); i++) {
             Element enumType = (Element) enumTypes.item(i);
             String nsUri = enumType.getNamespaceURI();
 
-            // Ordinals ya definidos en este EnumType
-            Set<Integer> defined = new HashSet<>();
+            // Textos ya presentes, que es por lo que la librería busca.
+            Set<String> definedTexts = new HashSet<>();
             org.w3c.dom.NodeList children = enumType.getChildNodes();
             for (int j = 0; j < children.getLength(); j++) {
                 org.w3c.dom.Node child = children.item(j);
                 if (child.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
-                    String ordStr = ((Element) child).getAttribute("ord");
-                    if (!ordStr.isEmpty()) {
-                        try { defined.add(Integer.parseInt(ordStr)); } catch (NumberFormatException ignore) {}
-                    }
+                    definedTexts.add(child.getTextContent().trim());
                 }
             }
 
-            // Agregar los ordinals faltantes
-            for (int n : numericVals) {
-                if (!defined.contains(n)) {
-                    Element synth = (nsUri != null && !nsUri.isEmpty())
-                        ? doc.createElementNS(nsUri, "EnumVal")
-                        : doc.createElement("EnumVal");
-                    synth.setAttribute("ord", String.valueOf(n));
-                    synth.setTextContent(String.valueOf(n));
-                    enumType.appendChild(synth);
-                    patchCount++;
-                }
+            for (Map.Entry<String, String> e : usados.entrySet()) {
+                if (definedTexts.contains(e.getKey())) continue;
+                // El ord va aunque ya esté tomado por una etiqueta: el ord del EnumVal que
+                // coincide por texto es el que termina siendo el valor, así que con
+                // cualquier otro se guardaría un valor equivocado. Quedan dos EnumVal con el
+                // mismo ord y distinto texto ("on" y "1"), y el bucle de la librería los
+                // tolera — devuelve el primero que coincida, y ambos dan el mismo ordinal.
+                Element synth = (nsUri != null && !nsUri.isEmpty())
+                    ? doc.createElementNS(nsUri, "EnumVal")
+                    : doc.createElement("EnumVal");
+                synth.setAttribute("ord", e.getValue());
+                synth.setTextContent(e.getKey());
+                enumType.appendChild(synth);
+                patchCount++;
             }
         }
         return patchCount;
