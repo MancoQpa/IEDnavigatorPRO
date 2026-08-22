@@ -233,6 +233,31 @@ public class TestPreprocesadoScl {
         check("Mod.stVal sigue siendo BdaInt8", anchoDe(grande, "Mod").equals("BdaInt8"),
               anchoDe(grande, "Mod") + " — si fuera Int16, la libreria no leeria ctlModel");
 
+        System.out.println("\n== hallazgo 5: AccessPoints sin <Server> ==");
+        // SclParser devuelve un ServerModel por AccessPoint CON servidor, no por AccessPoint.
+        // Un equipo puede declarar uno solo para GOOSE/SV. Contandolos de mas se desincroniza
+        // el recorrido: al primer IED se le asignan los modelos del siguiente y el ultimo
+        // queda sin ninguno.
+        //
+        // El informe lo daba como LATENTE porque ningun archivo del corpus combina varios
+        // IEDs con un AccessPoint sin servidor. test/test_ap_sin_server.scd es ese archivo,
+        // fabricado al efecto, y con el el defecto pasa de deducido a observado.
+        Path apScd = Path.of("test", "test_ap_sin_server.scd");
+        if (!Files.exists(apScd)) {
+            check("test_ap_sin_server.scd presente", false, "no esta");
+        } else {
+            IEC61850Server s5 = new IEC61850Server();
+            List<String> ieds5 = s5.getAvailableIEDs(apScd.toString());
+            check("los dos IEDs aparecen", ieds5.size() == 2, ieds5.toString());
+            java.util.List<String> ldsPorIed = new java.util.ArrayList<>();
+            for (int i = 0; i < ieds5.size(); i++) {
+                com.beanit.iec61850bean.ServerModel m = s5.getMergedModel(i);
+                ldsPorIed.add(String.valueOf(m == null ? 0 : m.getChildren().size()));
+            }
+            check("cada IED se queda con SU Logical Device", "[1, 1]".equals(ldsPorIed.toString()),
+                  ldsPorIed + " — sin el arreglo daba [2, 0]");
+        }
+
         System.out.println("\n== la salvaguarda: no se toca lo que no es un enumerado ==");
         // Un texto no numerico que el documento NO define en ningun EnumType no debe
         // sintetizarse: pertenece a un atributo que no es enum. Si se sintetizara, se estarian

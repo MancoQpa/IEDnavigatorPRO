@@ -95,9 +95,17 @@ public class IEC61850Server implements ServerEventListener {
                 if (name == null || name.isEmpty()) name = "IED_" + i;
                 iedNames.add(name);
 
-                // Contar AccessPoints de este IED
-                NodeList aps = ied.getElementsByTagName("AccessPoint");
-                int apCount = Math.max(1, aps.getLength());
+                // Contar SÓLO los AccessPoint que tengan sección <Server>.
+                //
+                // SclParser devuelve un ServerModel por cada AccessPoint CON servidor, no por
+                // cada AccessPoint. Un equipo puede declarar uno sólo para publicar GOOSE o SV,
+                // o uno de ingeniería, sin servidor MMS. Contarlos de más desincroniza el
+                // recorrido de modelIndex: a ese IED se le asignan además los modelos del
+                // siguiente, y el último queda sin ninguno — menos dispositivos en la lista y
+                // Logical Devices atribuidos al equipo equivocado, sin que nada falle.
+                //
+                // Portado del simulador; ver HALLAZGOS_DESDE_EL_SIMULADOR.md, hallazgo 5.
+                int apCount = Math.max(1, contarAccessPointsConServidor(ied));
 
                 // Fusionar todos los AccessPoints de este IED en un único ServerModel
                 ServerModel merged = mergeModels(parsedModels, modelIndex, modelIndex + apCount);
@@ -119,6 +127,33 @@ public class IEC61850Server implements ServerEventListener {
             System.err.println("[SERVER] Error getting IED list: " + e.getMessage());
         }
         return iedNames;
+    }
+
+    /**
+     * Cuántos {@code <AccessPoint>} de este IED contienen una sección {@code <Server>}.
+     *
+     * Es el número de modelos que SclParser va a devolver para ese IED. Se cuentan sólo los
+     * hijos directos del IED —no {@code getElementsByTagName}, que baja por todo el subárbol—
+     * y se busca el {@code <Server>} dentro de cada uno, también como descendiente directo,
+     * para no confundirse con estructuras anidadas.
+     */
+    private int contarAccessPointsConServidor(Element ied) {
+        int n = 0;
+        org.w3c.dom.NodeList hijos = ied.getChildNodes();
+        for (int i = 0; i < hijos.getLength(); i++) {
+            org.w3c.dom.Node h = hijos.item(i);
+            if (h.getNodeType() != org.w3c.dom.Node.ELEMENT_NODE) continue;
+            String nom = (h.getLocalName() != null) ? h.getLocalName() : h.getNodeName();
+            if (!"AccessPoint".equals(nom)) continue;
+            org.w3c.dom.NodeList nietos = h.getChildNodes();
+            for (int j = 0; j < nietos.getLength(); j++) {
+                org.w3c.dom.Node g = nietos.item(j);
+                if (g.getNodeType() != org.w3c.dom.Node.ELEMENT_NODE) continue;
+                String gn = (g.getLocalName() != null) ? g.getLocalName() : g.getNodeName();
+                if ("Server".equals(gn)) { n++; break; }
+            }
+        }
+        return n;
     }
 
     /**
@@ -1309,9 +1344,60 @@ public class IEC61850Server implements ServerEventListener {
             if (listener != null) {
                 listener.onClientWrite(ref, value);
             }
+
+            aplicarRealimentacionDeMando(bda, ref, value);
         }
 
         return null; // No errors
+    }
+
+    /**
+     * Realimentación del mando: lleva el ctlVal de un Oper aceptado al stVal del mismo objeto.
+     *
+     * Sin esto, un mando entra y no pasa nada. Medido antes de escribirlo: ante una orden, la
+     * librería entrega a write() un único BDA, "&lt;LD&gt;/&lt;LN&gt;.&lt;DO&gt;.Oper.ctlVal" con FC=CO, y
+     * ahí termina — ni iec61850bean ni esta aplicación cableaban el efecto sobre el estado.
+     * El cliente recibía respuesta positiva y el stVal se quedaba quieto, que es exactamente
+     * el cuadro que el 07-08 hizo falta detectar contra un IED real, sólo que del otro lado.
+     *
+     * Es lo que convierte al simulador en un banco de maniobra: recién con el estado moviéndose
+     * se puede ejercitar la verificación de posición del cliente, que es lo único que separa
+     * "el IED dijo que sí" de "el aparato se movió".
+     *
+     * Alcance, dicho para que no se lea como más de lo que es:
+     *   - No hay enclavamiento ni autoridad de mando: si la orden llegó hasta acá, la librería
+     *     ya la aceptó. Simular un CILO que rechace es otra cosa y no está.
+     *   - No hay tiempo de maniobra: el estado salta, no pasa por intermediate.
+     *   - Sólo llega acá lo que la librería atiende. Del lado servidor implementa
+     *     ctlModel=1 (direct-with-normal-security); ante un ctlModel=3 responde
+     *     "unsupported ctlModel: 3" y write() no se llama.
+     */
+    private void aplicarRealimentacionDeMando(BasicDataAttribute bda, String ref, String value) {
+        final String SUFIJO = ".Oper.ctlVal";
+        if (!ref.endsWith(SUFIJO) || value == null) return;
+        if (serverModel == null) return;
+
+        String refDo = ref.substring(0, ref.length() - SUFIJO.length());
+        ModelNode estado = serverModel.findModelNode(refDo, Fc.ST);
+        if (estado == null) return;                       // el DO no expone rama de estado
+        ModelNode stVal = estado.getChild("stVal");
+        if (!(stVal instanceof BasicDataAttribute)) return;
+
+        String valorEstado = value;
+        if (stVal instanceof BdaDoubleBitPos) {
+            // En un DPC el ctlVal es booleano y el stVal es de dos bits: cerrar es "on".
+            valorEstado = ("true".equalsIgnoreCase(value) || "1".equals(value)) ? "on" : "off";
+        }
+        setBasicDataAttributeValue((BasicDataAttribute) stVal, valorEstado);
+
+        // La marca de tiempo del estado, si el objeto la tiene. Sin esto un cliente que mire
+        // el t no vería que el valor es nuevo.
+        ModelNode t = estado.getChild("t");
+        if (t instanceof BdaTimestamp) ((BdaTimestamp) t).setCurrentTime();
+
+        String aviso = "[SERVER] Realimentación de mando: " + refDo + ".stVal = " + valorEstado;
+        System.out.println(aviso);
+        if (listener != null) listener.onLog(aviso);
     }
 
     /**
