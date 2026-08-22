@@ -2092,12 +2092,22 @@ public class IEC61850Client implements ClientEventListener {
         public final boolean blocking;   // true = va a rechazar la orden
         public final String hintKey;     // clave i18n de la explicación; null si no aplica
 
+        /** Argumento opcional de la clave i18n, para etiquetas que nombran al aparato. */
+        public final String labelArg;
+
         PreflightCheck(String reference, String labelKey, String value,
                        boolean blocking, String hintKey) {
-            this.reference = reference; this.labelKey = labelKey; this.value = value;
-            this.blocking = blocking; this.hintKey = hintKey;
+            this(reference, labelKey, value, blocking, hintKey, null);
         }
-        public String label() { return I18n.t(labelKey); }
+
+        PreflightCheck(String reference, String labelKey, String value,
+                       boolean blocking, String hintKey, String labelArg) {
+            this.reference = reference; this.labelKey = labelKey; this.value = value;
+            this.blocking = blocking; this.hintKey = hintKey; this.labelArg = labelArg;
+        }
+        public String label() {
+            return (labelArg == null) ? I18n.t(labelKey) : I18n.t(labelKey, labelArg);
+        }
         public String hint()  {
             if (hintKey == null) return null;
             String t = I18n.t(hintKey);
@@ -2179,12 +2189,29 @@ public class IEC61850Client implements ClientEventListener {
                 mismatch, mismatch ? "ctl.pre.hint.locsta" : null));
         }
 
-        // ── Enclavamiento: CILO del mismo Logical Device ──
+        // ── Enclavamiento y bloqueos: se lee todo el LD, pero sólo bloquea lo del aparato ──
+        // No se sacan lecturas: en un modelo de miles de nodos son baratas y la información
+        // sirve. Lo que cambia es la clasificación — el CILO de un vecino responde «¿se puede
+        // mover el vecino?», que no es la pregunta, así que pasa a contexto informativo. Así
+        // nada se oculta y el cambio es reversible mirando una sola línea.
+        GrupoAparato grupo = agruparPorAparato(ldName, lnRef);
+
         for (String cilo : findLnRefsByClass(ldName, "CILO")) {
+            boolean propio = (grupo == null) || grupo.cilos.contains(cilo);
+            // blockingWhenFalse: TRUE para el propio (EnaXxx=false bloquea); null para el
+            // vecino, que es "informar sin marcar nunca". Pasar FALSE seria decir "bloquea
+            // cuando es true", que es exactamente al reves.
+            Boolean bloquea = propio ? Boolean.TRUE : null;
+            String etiqueta = propio ? null : "ctl.pre.ctx.ena";
+            String pista    = propio ? "ctl.pre.hint.ena" : null;
             if (closing == null || closing == Boolean.FALSE)
-                addBoolCheck(out, cilo + ".EnaOpn.stVal", "ctl.pre.enaopn", true, "ctl.pre.hint.ena");
+                agregar(out, readBool(cilo + ".EnaOpn.stVal",
+                        propio ? "ctl.pre.enaopn" : etiqueta, bloquea, pista),
+                        propio ? null : nombreDeAparato(cilo));
             if (closing == null || closing == Boolean.TRUE)
-                addBoolCheck(out, cilo + ".EnaCls.stVal", "ctl.pre.enacls", true, "ctl.pre.hint.ena");
+                agregar(out, readBool(cilo + ".EnaCls.stVal",
+                        propio ? "ctl.pre.enacls" : etiqueta, bloquea, pista),
+                        propio ? null : nombreDeAparato(cilo));
         }
 
         // ── Bloqueo explícito de apertura/cierre ──
@@ -2196,10 +2223,16 @@ public class IEC61850Client implements ClientEventListener {
         blkOwners.addAll(findLnRefsByClass(ldName, "XCBR"));
         blkOwners.addAll(findLnRefsByClass(ldName, "XSWI"));
         for (String owner : blkOwners) {
+            boolean propio = (grupo == null) || owner.equals(lnRef) || grupo.aparatos.contains(owner);
+            Boolean bloquea = propio ? Boolean.FALSE : null;   // FALSE = bloquea cuando es true
+            String pista = propio ? "ctl.pre.hint.blk" : null;
+            String arg   = propio ? null : nombreDeAparato(owner);
             if (closing == null || closing == Boolean.FALSE)
-                addBoolCheck(out, owner + ".BlkOpn.stVal", "ctl.pre.blkopn", false, "ctl.pre.hint.blk");
+                agregar(out, readBool(owner + ".BlkOpn.stVal",
+                        propio ? "ctl.pre.blkopn" : "ctl.pre.ctx.blk", bloquea, pista), arg);
             if (closing == null || closing == Boolean.TRUE)
-                addBoolCheck(out, owner + ".BlkCls.stVal", "ctl.pre.blkcls", false, "ctl.pre.hint.blk");
+                agregar(out, readBool(owner + ".BlkCls.stVal",
+                        propio ? "ctl.pre.blkcls" : "ctl.pre.ctx.blk", bloquea, pista), arg);
         }
 
         // ── Posición actual = posición comandada ──
@@ -2208,7 +2241,91 @@ public class IEC61850Client implements ClientEventListener {
         PreflightCheck setActual = checkSetEqualsActual(operRef, ctlValStr);
         if (setActual != null) out.add(setActual);
 
+        // ── Estado del vano: posición de los aparatos vecinos ──
+        // Es el control compensatorio de haber acotado el enclavamiento al CILO propio. Al
+        // hacerlo se confía en que la ecuación del IED contempla a los vecinos —una tierra
+        // cerrada debe impedir el cierre del interruptor, y eso lo resuelve el equipo—. Si
+        // una ingeniería tuviera esa ecuación incompleta, ya no lo agarraríamos de rebote.
+        // Mostrar la posición real de los vecinos es lo que cubre ese hueco.
+        //
+        // El rol de cada uno sale de la clase del LN y de SwTyp, que son normativos. NUNCA
+        // del número del prefijo: está medido que los conjuntos de prefijos no coinciden
+        // entre ingenierías. Si SwTyp no se puede leer, se muestra el nombre pelado.
+        if (grupo != null) {
+            for (String vecino : aparatosVecinos(ldName, grupo)) {
+                PreflightCheck pos = readPos(vecino + ".Pos.stVal", "ctl.pre.ctx.pos");
+                if (pos != null) out.add(new PreflightCheck(pos.reference, pos.labelKey, pos.value,
+                        false, null, nombreDeAparato(vecino)));
+            }
+        }
+
         return out;
+    }
+
+    /** Agrega el chequeo si se pudo leer, con un argumento opcional para su etiqueta. */
+    private void agregar(java.util.List<PreflightCheck> out, PreflightCheck c, String labelArg) {
+        if (c == null) return;
+        out.add(labelArg == null ? c
+                : new PreflightCheck(c.reference, c.labelKey, c.value, c.blocking, c.hintKey, labelArg));
+    }
+
+    /**
+     * Nombre legible del aparato al que pertenece un LN: el prefijo más lo que declara el
+     * modelo sobre su tipo. "Q8XSWI1" con SwTyp=3 → "Q8 (seccionador de puesta a tierra)".
+     * Si el tipo no se puede leer, sólo el prefijo: no se inventa el rol.
+     */
+    String nombreDeAparato(String lnRef) {
+        String lnName = lnRef.substring(lnRef.indexOf('/') + 1);
+        String prefijo = prefijoDeLn(lnName);
+        if (prefijo == null || prefijo.isEmpty()) prefijo = lnName;
+
+        // XCBR es interruptor por definición de la norma; no hace falta preguntarle nada más.
+        if (claseDeLn(lnName, "XCBR")) return prefijo + " (" + I18n.t("swtyp.breaker") + ")";
+
+        Integer swTyp = readEnumOrdinal(lnRef + ".SwTyp.stVal");
+        if (swTyp == null) return prefijo;
+        String clave;
+        switch (swTyp) {
+            case 1:  clave = "swtyp.1"; break;
+            case 2:  clave = "swtyp.2"; break;
+            case 3:  clave = "swtyp.3"; break;
+            case 4:  clave = "swtyp.4"; break;
+            default: return prefijo;                 // enumerado fuera de catálogo: no inventar
+        }
+        return prefijo + " (" + I18n.t(clave) + ")";
+    }
+
+    /** Ordinal de un atributo enumerado, o null si no se puede leer. */
+    private Integer readEnumOrdinal(String ref) {
+        for (Fc fc : new Fc[]{Fc.ST, Fc.CF, Fc.DC}) {
+            try {
+                ModelNode n = serverModel.findModelNode(ref, fc);
+                if (!(n instanceof FcModelNode)) continue;
+                try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
+                if (n instanceof BdaInt8)   return (int) ((BdaInt8) n).getValue();
+                if (n instanceof BdaInt8U)  return (int) ((BdaInt8U) n).getValue();
+                if (n instanceof BdaInt16)  return (int) ((BdaInt16) n).getValue();
+                if (n instanceof BdaInt16U) return ((BdaInt16U) n).getValue();
+                if (n instanceof BdaInt32)  return ((BdaInt32) n).getValue();
+            } catch (Exception ignore) {}
+        }
+        return null;
+    }
+
+    /** Posición de un aparato, normalizada, para mostrarla como contexto. */
+    private PreflightCheck readPos(String ref, String labelKey) {
+        try {
+            ModelNode n = serverModel.findModelNode(ref, Fc.ST);
+            if (!(n instanceof FcModelNode)) return null;
+            try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
+            String v;
+            if (n instanceof BdaDoubleBitPos)   v = formatDoubleBitPos((BdaDoubleBitPos) n);
+            else if (n instanceof BdaBoolean)   v = ((BdaBoolean) n).getValue() ? "on" : "off";
+            else return null;
+            return new PreflightCheck(ref, labelKey, v, false, null);
+        } catch (Exception ignore) {
+            return null;
+        }
     }
 
     /**
@@ -2286,7 +2403,22 @@ public class IEC61850Client implements ClientEventListener {
 
         String daName = closing ? "EnaCls" : "EnaOpn";
         Boolean result = null;
-        for (String cilo : findLnRefsByClass(ldName, "CILO")) {
+
+        // Sólo el CILO del aparato que se opera. El CILO del vecino responde «¿se puede
+        // mover el vecino?», que es otra pregunta: en un vano energizado el de la puesta a
+        // tierra está en false con toda razón, y con el alcance por LD eso disparaba el aviso
+        // de bypass en cada cierre. Lo que sí captura la preocupación real —¿puedo cerrar el
+        // interruptor con la tierra puesta?— es el CILO del propio interruptor, donde el IED
+        // resuelve la ecuación incluyendo la posición de la tierra. Ése es el que se lee.
+        //
+        // Si no se puede agrupar con confianza se cae al Logical Device entero, que es el
+        // comportamiento anterior y el correcto cuando el LD es el aparato.
+        int lnDot = operRef.indexOf('.');
+        GrupoAparato grupo = (lnDot > 0) ? agruparPorAparato(ldName, operRef.substring(0, lnDot)) : null;
+        java.util.List<String> cilos = (grupo != null && !grupo.cilos.isEmpty())
+                ? grupo.cilos : findLnRefsByClass(ldName, "CILO");
+
+        for (String cilo : cilos) {
             PreflightCheck c = readBool(cilo + "." + daName + ".stVal",
                                         closing ? "ctl.pre.enacls" : "ctl.pre.enaopn",
                                         Boolean.TRUE, null);
@@ -2296,6 +2428,145 @@ public class IEC61850Client implements ClientEventListener {
             result = Boolean.FALSE;
         }
         return result;
+    }
+
+    // ───────────────────────────────────────────────────────────────────────────────────────
+    //  Agrupamiento por aparato
+    // ───────────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Los nodos lógicos que pertenecen al mismo aparato que el LN operado.
+     *
+     * POR QUÉ HACE FALTA. El enclavamiento y los bloqueos se acotaban por Logical Device.
+     * Eso es correcto cuando el LD *es* el aparato —hay ingenierías con un LD por vano— pero
+     * hay familias donde varios aparatos comparten un mismo LD: interruptor, seccionadores y
+     * puesta a tierra, todos en el mismo. Ahí, operar el interruptor leía el CILO de todos
+     * ellos.
+     *
+     * En el preflight eso sólo ensuciaba una lista, porque es informativo. Pero
+     * {@link #interlockBlocking} tiene el mismo alcance y SÍ gobierna comportamiento: corta
+     * en el primer CILO que no habilite, y el de una puesta a tierra en un vano energizado
+     * está en `false` con toda razón —cerrar la tierra ahí está prohibido—. Resultado: el
+     * aviso de «vas a operar sin verificación de enclavamiento» saltaba en cada cierre.
+     *
+     * Y ése es justo el diálogo que no puede volverse rutina: si aparece siempre, el
+     * operador aprende a darle a continuar sin leer, y el día que el aviso es real ya no lo
+     * ve. Eso es peor que no tenerlo.
+     *
+     * POR QUÉ EL PREFIJO, Y QUÉ SE AFIRMA CON ÉL. Hay que separar dos preguntas:
+     *
+     *   - «¿qué aparato es?» → se responde con la clase del LN y con {@code XSWI.SwTyp}, que
+     *     es normativo y portable. NUNCA con el número del prefijo: está medido sobre dos
+     *     ingenierías distintas que los conjuntos de prefijos no coinciden.
+     *   - «¿qué LN son del mismo aparato?» → acá sí entra el prefijo, y es legítimo: agrupar
+     *     `Q8CSWI1` con `Q8XSWI1` y `Q8CILO1` no afirma que 8 signifique tierra, sólo que
+     *     los tres hablan del mismo aparato. Es una afirmación mucho más débil.
+     *
+     * No es un atajo: el vínculo normativo entre LN y equipo primario vive en la sección
+     * `Substation` del SCL, y al conectarse en vivo por MMS esa sección no existe — el equipo
+     * entrega el modelo de datos, no el unifilar. El prefijo es el único hilo disponible en
+     * el momento en que hay que decidir.
+     *
+     * @return el grupo del aparato operado, o {@code null} si no se puede agrupar con
+     *         confianza, en cuyo caso el llamador usa el Logical Device entero, que es el
+     *         comportamiento anterior.
+     */
+    GrupoAparato agruparPorAparato(String ldName, String lnRef) {
+        try {
+            if (serverModel == null) return null;
+            String lnName = lnRef.substring(lnRef.indexOf('/') + 1);
+            String prefijo = prefijoDeLn(lnName);
+            if (prefijo == null || prefijo.isEmpty()) return null;   // sin prefijo: no agrupar
+
+            ModelNode ld = serverModel.getChild(ldName);
+            if (ld == null || ld.getChildren() == null) return null;
+
+            // Si en el LD hay un solo aparato, agrupar no cambia nada y el alcance por LD ya
+            // es correcto. Se mantiene el camino anterior para no alterar lo que funciona.
+            java.util.Set<String> prefijosDeAparato = new java.util.TreeSet<>();
+            for (ModelNode ln : ld.getChildren()) {
+                String n = ln.getName();
+                if (n == null) continue;
+                if (claseDeLn(n, "CSWI") || claseDeLn(n, "XCBR") || claseDeLn(n, "XSWI")) {
+                    String p = prefijoDeLn(n);
+                    if (p != null && !p.isEmpty()) prefijosDeAparato.add(p);
+                }
+            }
+            if (prefijosDeAparato.size() < 2) return null;
+
+            GrupoAparato g = new GrupoAparato(prefijo);
+            for (ModelNode ln : ld.getChildren()) {
+                String n = ln.getName();
+                if (n == null || !prefijo.equals(prefijoDeLn(n))) continue;   // prefijo EXACTO
+                String ref = ldName + "/" + n;
+                if (claseDeLn(n, "CILO")) g.cilos.add(ref);
+                else if (claseDeLn(n, "XCBR") || claseDeLn(n, "XSWI")) g.aparatos.add(ref);
+                else if (claseDeLn(n, "CSWI")) g.cswis.add(ref);
+            }
+
+            // El grupo tiene que cerrar: un aparato y a lo sumo un CILO. Si no cierra, el
+            // agrupamiento no es de fiar y es preferible el alcance de siempre.
+            if (g.aparatos.size() != 1 || g.cilos.size() > 1) return null;
+            return g;
+        } catch (Exception ignore) {
+            return null;
+        }
+    }
+
+    /** Los LN de un LD que son aparatos (XCBR/XSWI) y NO pertenecen al grupo dado. */
+    java.util.List<String> aparatosVecinos(String ldName, GrupoAparato propio) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        try {
+            ModelNode ld = serverModel.getChild(ldName);
+            if (ld == null || ld.getChildren() == null) return out;
+            for (ModelNode ln : ld.getChildren()) {
+                String n = ln.getName();
+                if (n == null) continue;
+                if (!claseDeLn(n, "XCBR") && !claseDeLn(n, "XSWI")) continue;
+                String p = prefijoDeLn(n);
+                if (propio != null && propio.prefijo.equals(p)) continue;
+                out.add(ldName + "/" + n);
+            }
+        } catch (Exception ignore) {}
+        return out;
+    }
+
+    /** ¿El nombre de LN es de esta clase? Exige la clase seguida sólo de dígitos. */
+    static boolean claseDeLn(String lnName, String lnClass) {
+        int i = lnName.toUpperCase().indexOf(lnClass);
+        if (i < 0) return false;
+        String resto = lnName.substring(i + lnClass.length());
+        if (resto.isEmpty()) return true;
+        for (int k = 0; k < resto.length(); k++) if (!Character.isDigit(resto.charAt(k))) return false;
+        return true;
+    }
+
+    /**
+     * Lo que precede a la clase en el nombre del LN: "Q0CSWI1" → "Q0", "CSWI1" → "".
+     * Devuelve null si el nombre no corresponde a ninguna de las clases de aparato.
+     */
+    static String prefijoDeLn(String lnName) {
+        if (lnName == null) return null;
+        String up = lnName.toUpperCase();
+        for (String cls : new String[]{"CSWI", "XCBR", "XSWI", "CILO"}) {
+            int i = up.indexOf(cls);
+            if (i < 0) continue;
+            String resto = lnName.substring(i + cls.length());
+            boolean soloDigitos = true;
+            for (int k = 0; k < resto.length(); k++)
+                if (!Character.isDigit(resto.charAt(k))) { soloDigitos = false; break; }
+            if (soloDigitos) return lnName.substring(0, i);
+        }
+        return null;
+    }
+
+    /** Los LN de un mismo aparato dentro de un Logical Device. */
+    static class GrupoAparato {
+        final String prefijo;
+        final java.util.List<String> cswis    = new java.util.ArrayList<>();
+        final java.util.List<String> aparatos = new java.util.ArrayList<>();  // XCBR o XSWI
+        final java.util.List<String> cilos    = new java.util.ArrayList<>();
+        GrupoAparato(String prefijo) { this.prefijo = prefijo; }
     }
 
     /** Referencias "LD/prefijoCLASEinst" de todos los LN de una clase dentro de un LD. */

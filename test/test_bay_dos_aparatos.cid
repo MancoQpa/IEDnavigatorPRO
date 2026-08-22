@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Banco de pruebas de la ruta de mando: preflight, enclavamiento y control SBO.
+
+  Forma de modelo tomada de un vano de mando real (la tríada Q0CSWI1 / Q0XCBR1 /
+  Q0CILO1 en un Logical Device CTRL), pero el archivo es sintético: no lleva
+  nombres, direcciones ni señales de ninguna instalación. Generado para este repo.
+
+  Lo que este modelo ejercita a propósito:
+   - CSWI.Pos con sbo-with-enhanced-security y sboTimeout largo (SBO en dos pasos).
+   - BlkOpn/BlkCls SOLO en el XCBR, que es donde viven de verdad: el CSWI no los
+     declara. Es el caso que el preflight no cubría cuando los buscaba en el CSWI.
+   - CILO con EnaOpn/EnaCls, para forzar el enclavamiento en las dos direcciones.
+   - Loc en el CSWI, SIN LocKey ni LocSta: modelo estilo Edición 1, para que el
+     preflight tenga que omitir en silencio los chequeos que el equipo no expone.
+   - XCBR.Pos como status-only: la posición se lee del aparato, se manda por CSWI.
+-->
+<SCL xmlns="http://www.iec.ch/61850/2003/SCL" version="2007" revision="B">
+  <Header id="TestBayControl" version="1" revision="1" toolID="IEDNavigator"/>
+  <Communication>
+    <SubNetwork name="SN1" type="8-MMS">
+      <ConnectedAP iedName="BAYCTRL" apName="AP1">
+        <Address>
+          <P type="IP">127.0.0.1</P>
+          <P type="IP-SUBNET">255.255.255.0</P>
+          <P type="IP-GATEWAY">127.0.0.1</P>
+          <P type="OSI-AP-Title">1,3,9999,33</P>
+          <P type="OSI-AE-Qualifier">33</P>
+          <P type="OSI-PSEL">00000001</P>
+          <P type="OSI-SSEL">0001</P>
+          <P type="OSI-TSEL">0001</P>
+        </Address>
+      </ConnectedAP>
+    </SubNetwork>
+  </Communication>
+  <IED name="BAYCTRL" type="TestBayControl" manufacturer="IEDNavigator" configVersion="1.0">
+    <AccessPoint name="AP1">
+      <Server>
+        <Authentication/>
+        <LDevice inst="CTRL">
+          <LN0 lnClass="LLN0" inst="" lnType="LLN0_T">
+            <DOI name="Mod">
+              <DAI name="ctlModel"><Val>status-only</Val></DAI>
+            </DOI>
+          </LN0>
+          <LN lnClass="LPHD" inst="1" lnType="LPHD_T"/>
+
+          <!-- Nodo que se opera. Es el único con ctlModel operable. -->
+          <LN prefix="Q0" lnClass="CSWI" inst="1" lnType="CSWI_T">
+            <DOI name="Mod">
+              <DAI name="ctlModel"><Val>status-only</Val></DAI>
+            </DOI>
+            <DOI name="Pos">
+              <DAI name="ctlModel"><Val>sbo-with-enhanced-security</Val></DAI>
+              <DAI name="sboTimeout"><Val>300000</Val></DAI>
+            </DOI>
+          </LN>
+
+          <!-- Aparato: posición de sólo lectura y los bloqueos de maniobra. -->
+          <LN prefix="Q0" lnClass="XCBR" inst="1" lnType="XCBR_T">
+            <DOI name="Mod">
+              <DAI name="ctlModel"><Val>status-only</Val></DAI>
+            </DOI>
+            <DOI name="Pos">
+              <DAI name="ctlModel"><Val>status-only</Val></DAI>
+            </DOI>
+          </LN>
+
+          <!-- Enclavamiento del mismo Logical Device. -->
+          <LN prefix="Q0" lnClass="CILO" inst="1" lnType="CILO_T">
+            <DOI name="Mod">
+              <DAI name="ctlModel"><Val>status-only</Val></DAI>
+            </DOI>
+          </LN>
+
+          <!-- SEGUNDO APARATO en el MISMO Logical Device. Es la forma que tienen las
+               familias donde interruptor, seccionadores y puesta a tierra comparten un
+               unico LD, y es la condicion que hace falta para que el agrupamiento por
+               aparato tenga algo que agrupar. -->
+          <LN prefix="Q8" lnClass="CSWI" inst="1" lnType="CSWI_T">
+            <DOI name="Mod"><DAI name="ctlModel"><Val>status-only</Val></DAI></DOI>
+            <DOI name="Pos">
+              <DAI name="ctlModel"><Val>sbo-with-enhanced-security</Val></DAI>
+              <DAI name="sboTimeout"><Val>300000</Val></DAI>
+            </DOI>
+          </LN>
+          <LN prefix="Q8" lnClass="XSWI" inst="1" lnType="XSWI_T">
+            <DOI name="Mod"><DAI name="ctlModel"><Val>status-only</Val></DAI></DOI>
+            <DOI name="Pos"><DAI name="ctlModel"><Val>status-only</Val></DAI></DOI>
+            <!-- El rol sale de aca, no del numero 8. -->
+            <DOI name="SwTyp"><DAI name="stVal"><Val>Earthing Switch</Val></DAI></DOI>
+          </LN>
+          <LN prefix="Q8" lnClass="CILO" inst="1" lnType="CILO_T">
+            <DOI name="Mod"><DAI name="ctlModel"><Val>status-only</Val></DAI></DOI>
+          </LN>
+        </LDevice>
+      </Server>
+    </AccessPoint>
+  </IED>
+  <DataTypeTemplates>
+    <LNodeType id="LLN0_T" lnClass="LLN0">
+      <DO name="Mod" type="ENC_T"/>
+      <DO name="Beh" type="ENS_T"/>
+      <DO name="Health" type="ENS_HEALTH_T"/>
+      <DO name="NamPlt" type="LPL_T"/>
+      <DO name="Loc" type="SPS_T"/>
+    </LNodeType>
+    <LNodeType id="LPHD_T" lnClass="LPHD">
+      <DO name="PhyNam" type="DPL_T"/>
+      <DO name="PhyHealth" type="ENS_HEALTH_T"/>
+      <DO name="Proxy" type="SPS_T"/>
+    </LNodeType>
+    <LNodeType id="CSWI_T" lnClass="CSWI">
+      <DO name="Mod" type="ENC_T"/>
+      <DO name="Beh" type="ENS_T"/>
+      <DO name="Health" type="ENS_HEALTH_T"/>
+      <DO name="NamPlt" type="LPL_T"/>
+      <DO name="Loc" type="SPS_T"/>
+      <DO name="Pos" type="DPC_CTL_T"/>
+    </LNodeType>
+    <LNodeType id="XCBR_T" lnClass="XCBR">
+      <DO name="Mod" type="ENC_T"/>
+      <DO name="Beh" type="ENS_T"/>
+      <DO name="Health" type="ENS_HEALTH_T"/>
+      <DO name="NamPlt" type="LPL_T"/>
+      <DO name="Loc" type="SPS_T"/>
+      <DO name="OpCnt" type="INS_T"/>
+      <DO name="Pos" type="DPC_STAT_T"/>
+      <DO name="BlkOpn" type="SPS_T"/>
+      <DO name="BlkCls" type="SPS_T"/>
+    </LNodeType>
+    <LNodeType id="XSWI_T" lnClass="XSWI">
+      <DO name="Mod" type="ENC_T"/>
+      <DO name="Beh" type="ENS_T"/>
+      <DO name="Health" type="ENS_HEALTH_T"/>
+      <DO name="NamPlt" type="LPL_T"/>
+      <DO name="Pos" type="DPC_STAT_T"/>
+      <DO name="BlkOpn" type="SPS_T"/>
+      <DO name="BlkCls" type="SPS_T"/>
+      <DO name="SwTyp" type="ENS_SWTYP_T"/>
+    </LNodeType>
+    <LNodeType id="CILO_T" lnClass="CILO">
+      <DO name="Mod" type="ENC_T"/>
+      <DO name="Beh" type="ENS_T"/>
+      <DO name="Health" type="ENS_HEALTH_T"/>
+      <DO name="NamPlt" type="LPL_T"/>
+      <DO name="EnaOpn" type="SPS_T"/>
+      <DO name="EnaCls" type="SPS_T"/>
+    </LNodeType>
+
+    <DOType id="ENC_T" cdc="ENC">
+      <DA name="stVal" fc="ST" dchg="true" bType="Enum" type="BehKind"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+      <DA name="ctlModel" fc="CF" bType="Enum" type="CtlModelKind"/>
+    </DOType>
+    <DOType id="ENS_T" cdc="ENS">
+      <DA name="stVal" fc="ST" dchg="true" bType="Enum" type="BehKind"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+    </DOType>
+    <DOType id="ENS_HEALTH_T" cdc="ENS">
+      <DA name="stVal" fc="ST" dchg="true" bType="Enum" type="HealthKind"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+    </DOType>
+    <DOType id="ENS_SWTYP_T" cdc="ENS">
+      <DA name="stVal" fc="ST" dchg="true" bType="Enum" type="SwTypKind"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+    </DOType>
+    <DOType id="SPS_T" cdc="SPS">
+      <DA name="stVal" fc="ST" dchg="true" bType="BOOLEAN"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+    </DOType>
+    <DOType id="INS_T" cdc="INS">
+      <DA name="stVal" fc="ST" dchg="true" bType="INT32"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+    </DOType>
+    <DOType id="LPL_T" cdc="LPL">
+      <DA name="vendor" fc="DC" bType="VisString255"/>
+      <DA name="swRev" fc="DC" bType="VisString255"/>
+      <DA name="d" fc="DC" bType="VisString255"/>
+      <DA name="configRev" fc="DC" bType="VisString255"/>
+    </DOType>
+    <DOType id="DPL_T" cdc="DPL">
+      <DA name="vendor" fc="DC" bType="VisString255"/>
+      <DA name="model" fc="DC" bType="VisString255"/>
+      <DA name="serNum" fc="DC" bType="VisString255"/>
+    </DOType>
+
+    <!-- Posición comandable: SBO en dos pasos, con Check en SBOw y en Oper. -->
+    <DOType id="DPC_CTL_T" cdc="DPC">
+      <DA name="origin" fc="ST" bType="Struct" type="Originator_T"/>
+      <DA name="ctlNum" fc="ST" bType="INT8U"/>
+      <DA name="stVal" fc="ST" dchg="true" bType="Dbpos"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+      <DA name="stSeld" fc="ST" dchg="true" bType="BOOLEAN"/>
+      <DA name="ctlModel" fc="CF" bType="Enum" type="CtlModelKind"/>
+      <DA name="sboTimeout" fc="CF" bType="INT32U"/>
+      <DA name="SBOw" fc="CO" bType="Struct" type="DPCOperate_T"/>
+      <DA name="Oper" fc="CO" bType="Struct" type="DPCOperate_T"/>
+      <DA name="Cancel" fc="CO" bType="Struct" type="DPCCancel_T"/>
+    </DOType>
+    <!-- Posición del aparato: sólo lectura. -->
+    <DOType id="DPC_STAT_T" cdc="DPC">
+      <DA name="stVal" fc="ST" dchg="true" bType="Dbpos"/>
+      <DA name="q" fc="ST" qchg="true" bType="Quality"/>
+      <DA name="t" fc="ST" bType="Timestamp"/>
+      <DA name="ctlModel" fc="CF" bType="Enum" type="CtlModelKind"/>
+    </DOType>
+
+    <DAType id="DPCOperate_T">
+      <BDA name="ctlVal" bType="BOOLEAN"/>
+      <BDA name="origin" bType="Struct" type="Originator_T"/>
+      <BDA name="ctlNum" bType="INT8U"/>
+      <BDA name="T" bType="Timestamp"/>
+      <BDA name="Test" bType="BOOLEAN"/>
+      <BDA name="Check" bType="Check"/>
+    </DAType>
+    <DAType id="DPCCancel_T">
+      <BDA name="ctlVal" bType="BOOLEAN"/>
+      <BDA name="origin" bType="Struct" type="Originator_T"/>
+      <BDA name="ctlNum" bType="INT8U"/>
+      <BDA name="T" bType="Timestamp"/>
+      <BDA name="Test" bType="BOOLEAN"/>
+    </DAType>
+    <DAType id="Originator_T">
+      <BDA name="orCat" bType="Enum" type="OrCatKind"/>
+      <BDA name="orIdent" bType="Octet64"/>
+    </DAType>
+
+    <EnumType id="SwTypKind">
+      <EnumVal ord="1">Load Break</EnumVal>
+      <EnumVal ord="2">Disconnector</EnumVal>
+      <EnumVal ord="3">Earthing Switch</EnumVal>
+      <EnumVal ord="4">High Speed Earthing Switch</EnumVal>
+    </EnumType>
+    <EnumType id="BehKind">
+      <EnumVal ord="1">on</EnumVal>
+      <EnumVal ord="2">blocked</EnumVal>
+      <EnumVal ord="3">test</EnumVal>
+      <EnumVal ord="4">test/blocked</EnumVal>
+      <EnumVal ord="5">off</EnumVal>
+    </EnumType>
+    <EnumType id="HealthKind">
+      <EnumVal ord="1">Ok</EnumVal>
+      <EnumVal ord="2">Warning</EnumVal>
+      <EnumVal ord="3">Alarm</EnumVal>
+    </EnumType>
+    <EnumType id="CtlModelKind">
+      <EnumVal ord="0">status-only</EnumVal>
+      <EnumVal ord="1">direct-with-normal-security</EnumVal>
+      <EnumVal ord="2">sbo-with-normal-security</EnumVal>
+      <EnumVal ord="3">direct-with-enhanced-security</EnumVal>
+      <EnumVal ord="4">sbo-with-enhanced-security</EnumVal>
+    </EnumType>
+    <EnumType id="OrCatKind">
+      <EnumVal ord="0">not-supported</EnumVal>
+      <EnumVal ord="1">bay-control</EnumVal>
+      <EnumVal ord="2">station-control</EnumVal>
+      <EnumVal ord="3">remote-control</EnumVal>
+      <EnumVal ord="4">automatic-bay</EnumVal>
+      <EnumVal ord="5">automatic-station</EnumVal>
+      <EnumVal ord="6">automatic-remote</EnumVal>
+      <EnumVal ord="7">maintenance</EnumVal>
+      <EnumVal ord="8">process</EnumVal>
+    </EnumType>
+  </DataTypeTemplates>
+</SCL>
