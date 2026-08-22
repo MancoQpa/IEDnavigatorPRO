@@ -1309,9 +1309,60 @@ public class IEC61850Server implements ServerEventListener {
             if (listener != null) {
                 listener.onClientWrite(ref, value);
             }
+
+            aplicarRealimentacionDeMando(bda, ref, value);
         }
 
         return null; // No errors
+    }
+
+    /**
+     * Realimentación del mando: lleva el ctlVal de un Oper aceptado al stVal del mismo objeto.
+     *
+     * Sin esto, un mando entra y no pasa nada. Medido antes de escribirlo: ante una orden, la
+     * librería entrega a write() un único BDA, "&lt;LD&gt;/&lt;LN&gt;.&lt;DO&gt;.Oper.ctlVal" con FC=CO, y
+     * ahí termina — ni iec61850bean ni esta aplicación cableaban el efecto sobre el estado.
+     * El cliente recibía respuesta positiva y el stVal se quedaba quieto, que es exactamente
+     * el cuadro que el 07-08 hizo falta detectar contra un IED real, sólo que del otro lado.
+     *
+     * Es lo que convierte al simulador en un banco de maniobra: recién con el estado moviéndose
+     * se puede ejercitar la verificación de posición del cliente, que es lo único que separa
+     * "el IED dijo que sí" de "el aparato se movió".
+     *
+     * Alcance, dicho para que no se lea como más de lo que es:
+     *   - No hay enclavamiento ni autoridad de mando: si la orden llegó hasta acá, la librería
+     *     ya la aceptó. Simular un CILO que rechace es otra cosa y no está.
+     *   - No hay tiempo de maniobra: el estado salta, no pasa por intermediate.
+     *   - Sólo llega acá lo que la librería atiende. Del lado servidor implementa
+     *     ctlModel=1 (direct-with-normal-security); ante un ctlModel=3 responde
+     *     "unsupported ctlModel: 3" y write() no se llama.
+     */
+    private void aplicarRealimentacionDeMando(BasicDataAttribute bda, String ref, String value) {
+        final String SUFIJO = ".Oper.ctlVal";
+        if (!ref.endsWith(SUFIJO) || value == null) return;
+        if (serverModel == null) return;
+
+        String refDo = ref.substring(0, ref.length() - SUFIJO.length());
+        ModelNode estado = serverModel.findModelNode(refDo, Fc.ST);
+        if (estado == null) return;                       // el DO no expone rama de estado
+        ModelNode stVal = estado.getChild("stVal");
+        if (!(stVal instanceof BasicDataAttribute)) return;
+
+        String valorEstado = value;
+        if (stVal instanceof BdaDoubleBitPos) {
+            // En un DPC el ctlVal es booleano y el stVal es de dos bits: cerrar es "on".
+            valorEstado = ("true".equalsIgnoreCase(value) || "1".equals(value)) ? "on" : "off";
+        }
+        setBasicDataAttributeValue((BasicDataAttribute) stVal, valorEstado);
+
+        // La marca de tiempo del estado, si el objeto la tiene. Sin esto un cliente que mire
+        // el t no vería que el valor es nuevo.
+        ModelNode t = estado.getChild("t");
+        if (t instanceof BdaTimestamp) ((BdaTimestamp) t).setCurrentTime();
+
+        String aviso = "[SERVER] Realimentación de mando: " + refDo + ".stVal = " + valorEstado;
+        System.out.println(aviso);
+        if (listener != null) listener.onLog(aviso);
     }
 
     /**
