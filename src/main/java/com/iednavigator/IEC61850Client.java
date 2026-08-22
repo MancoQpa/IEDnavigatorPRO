@@ -1031,8 +1031,9 @@ public class IEC61850Client implements ClientEventListener {
                 String name = node.getName().toLowerCase();
 
                 // Decodificar enums por nombre del DA
-                if (bda instanceof BdaInt8 || bda instanceof BdaInt8U
-                        || bda instanceof BdaInt16 || bda instanceof BdaInt16U) {
+                // Cualquier ancho: el de un enumerado lo elige SclParser segun el rango
+                // de ordinales, no es siempre Int8.
+                if (ordinalDeBda(bda) != null) {
                     int v = getIntValue(bda);
                     if (name.equals("unit") || name.equals("siunit"))
                         return decodeEnum(v, SI_UNIT_MAP, bda);
@@ -1652,10 +1653,16 @@ public class IEC61850Client implements ClientEventListener {
                 if (!"SGCB".equalsIgnoreCase(child.getName())) continue;
                 for (ModelNode attr : child.getChildren()) {
                     if (!"actsg".equalsIgnoreCase(attr.getName())) continue;
+                    // Cualquier ancho. Con el instanceof angosto, un actSG que llegara
+                    // mas ancho no se escribia y se enviaba igual el valor viejo: el grupo
+                    // de ajustes no cambiaba y nada lo decia.
                     if (attr instanceof BdaInt8U) {
                         ((BdaInt8U) attr).setValue((short) groupNumber);
                     } else if (attr instanceof BdaInt8) {
                         ((BdaInt8) attr).setValue((byte) groupNumber);
+                    } else if (attr instanceof BasicDataAttribute) {
+                        setBasicDataAttributeValue((BasicDataAttribute) attr,
+                            String.valueOf(groupNumber));
                     }
                     if (attr instanceof FcModelNode) {
                         association.setDataValues((FcModelNode) attr);
@@ -1890,19 +1897,26 @@ public class IEC61850Client implements ClientEventListener {
         int lastDot = operRef.lastIndexOf('.');
         if (lastDot < 0) return 1;
         String doRef = operRef.substring(0, lastDot);
+        // Cualquier ancho de entero, no sólo BdaInt8/BdaInt8U. Preguntar por un ancho fijo
+        // hacía que un ctlModel que llegara como BdaInt16 no matcheara y se cayera al 1 de
+        // abajo: el cliente informaba direct-with-normal-security sobre puntos que en el
+        // modelo eran status-only o SBO. Medido contra un modelo real: los 84 puntos
+        // controlables se leían como 1 cuando la distribución real era {0, 1, 3}.
+        //
+        // No es cosmético: ese valor decide por qué rama sale la orden. Con un 1 falso se
+        // manda directo un punto que exige selección previa, o se ofrece operar uno que es
+        // de sólo lectura.
         for (Fc fc : new Fc[]{Fc.CF, Fc.SP}) {
             try {
                 ModelNode node = serverModel.findModelNode(doRef + ".ctlModel", fc);
-                if (node instanceof BdaInt8U) {
-                    try { association.getDataValues((FcModelNode) node); } catch (Exception ignore) {}
-                    return ((BdaInt8U) node).getValue() & 0xFF;
-                }
-                if (node instanceof BdaInt8) {
-                    try { association.getDataValues((FcModelNode) node); } catch (Exception ignore) {}
-                    return ((BdaInt8) node).getValue() & 0xFF;
-                }
+                if (!(node instanceof FcModelNode)) continue;
+                try { association.getDataValues((FcModelNode) node); } catch (Exception ignore) {}
+                Integer v = ordinalDeBda(node);
+                if (v != null) return v & 0xFF;
             } catch (Exception ignore) {}
         }
+        // El modelo no declara ctlModel: se asume direct-with-normal-security, que es lo que
+        // hacía antes. Es una suposición, pero acá sí está justificada — no hay dato.
         return 1;
     }
 
@@ -2009,13 +2023,22 @@ public class IEC61850Client implements ClientEventListener {
                         ((BdaOctetString) oc).setValue(b);
                     }
                 }
-            } else if ("ctlNum".equals(name) && child instanceof BdaInt8U) {
+            } else if ("ctlNum".equals(name) && ordinalDeBda(child) != null) {
+                // Cualquier ancho: el ctlNum es lo que correlaciona el SBOw con el Oper en
+                // SBO reforzado. Si el instanceof no matchea, no se escribe y el segundo
+                // paso llega con un numero que el IED no espera.
+                int valorCtlNum;
                 if (ctlNumOverride >= 0) {
-                    ((BdaInt8U) child).setValue((short) (ctlNumOverride & 0xFF));
+                    valorCtlNum = ctlNumOverride & 0xFF;
                 } else {
                     ctlNumCounter = (ctlNumCounter + 1) & 0xFF;
-                    ((BdaInt8U) child).setValue((short) ctlNumCounter);
+                    valorCtlNum = ctlNumCounter;
                 }
+                // El cast fijo a BdaInt8U reventaba si el guard dejaba pasar otro ancho: se
+                // escribe por el camino que ya resuelve el tipo.
+                if (child instanceof BdaInt8U) ((BdaInt8U) child).setValue((short) valorCtlNum);
+                else if (child instanceof BasicDataAttribute)
+                    setBasicDataAttributeValue((BasicDataAttribute) child, String.valueOf(valorCtlNum));
             } else if ("T".equals(name) && child instanceof BdaTimestamp) {
                 ((BdaTimestamp) child).setCurrentTime();
             } else if ("Test".equals(name) && child instanceof BdaBoolean) {
@@ -2295,6 +2318,29 @@ public class IEC61850Client implements ClientEventListener {
         return prefijo + " (" + I18n.t(clave) + ")";
     }
 
+    /**
+     * Valor entero de un BDA, sea cual sea el ancho con que la librería lo haya instanciado.
+     *
+     * Un atributo con bType="Enum" no llega siempre como BdaInt8: SclParser elige el ancho
+     * según el rango de ordinales del EnumType. Preguntar por un ancho fijo es la fuente de
+     * una familia entera de defectos de este proyecto —un desplegable que no aparece, un valor
+     * que no se pinta, un mando que se rutea mal—, y todos comparten la misma forma: nada
+     * falla, simplemente el instanceof no matchea y se sigue de largo con un valor por
+     * defecto.
+     *
+     * @return el valor, o {@code null} si el nodo no es un entero — que es distinto de cero.
+     */
+    static Integer ordinalDeBda(ModelNode n) {
+        if (n instanceof BdaInt8)   return (int) ((BdaInt8) n).getValue();
+        if (n instanceof BdaInt8U)  return (int) ((BdaInt8U) n).getValue();
+        if (n instanceof BdaInt16)  return (int) ((BdaInt16) n).getValue();
+        if (n instanceof BdaInt16U) return ((BdaInt16U) n).getValue();
+        if (n instanceof BdaInt32)  return ((BdaInt32) n).getValue();
+        if (n instanceof BdaInt32U) return (int) ((BdaInt32U) n).getValue();
+        if (n instanceof BdaInt64)  return (int) ((BdaInt64) n).getValue();
+        return null;
+    }
+
     /** Ordinal de un atributo enumerado, o null si no se puede leer. */
     private Integer readEnumOrdinal(String ref) {
         for (Fc fc : new Fc[]{Fc.ST, Fc.CF, Fc.DC}) {
@@ -2302,11 +2348,8 @@ public class IEC61850Client implements ClientEventListener {
                 ModelNode n = serverModel.findModelNode(ref, fc);
                 if (!(n instanceof FcModelNode)) continue;
                 try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
-                if (n instanceof BdaInt8)   return (int) ((BdaInt8) n).getValue();
-                if (n instanceof BdaInt8U)  return (int) ((BdaInt8U) n).getValue();
-                if (n instanceof BdaInt16)  return (int) ((BdaInt16) n).getValue();
-                if (n instanceof BdaInt16U) return ((BdaInt16U) n).getValue();
-                if (n instanceof BdaInt32)  return ((BdaInt32) n).getValue();
+                Integer v = ordinalDeBda(n);
+                if (v != null) return v;
             } catch (Exception ignore) {}
         }
         return null;

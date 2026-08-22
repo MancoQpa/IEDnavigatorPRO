@@ -1,4 +1,5 @@
 import com.beanit.iec61850bean.*;
+import com.iednavigator.IEC61850Client;
 import com.iednavigator.IEC61850Server;
 
 import java.io.File;
@@ -163,6 +164,26 @@ public class TestEnumAncho {
             }
             check("todos los anchos presentes se reconocen", todosReconocidos, porLaApp.keySet().toString());
         }
+
+        System.out.println("\n== ordinalDeBda lee cualquier ancho ==");
+        // Barrido del proyecto buscando instanceof sobre Bda de enumerados: aparecio un
+        // cuarto defecto de la familia, y el mas caro de los que quedaban.
+        // getCtlModelValue() preguntaba solo por BdaInt8/BdaInt8U; con un ctlModel que
+        // llegara mas ancho no matcheaba y caia al default 1. O sea que el cliente
+        // informaba direct-with-normal-security sobre puntos que en el modelo eran
+        // status-only o SBO — y ese valor decide por que rama sale la orden.
+        Method mOrd = IEC61850Client.class.getDeclaredMethod("ordinalDeBda", ModelNode.class);
+        mOrd.setAccessible(true);
+        BdaInt8 o8 = (BdaInt8) bda("BdaInt8");     o8.setValue((byte) 4);
+        BdaInt16 o16 = (BdaInt16) bda("BdaInt16"); o16.setValue((short) 4);
+        BdaInt32 o32 = (BdaInt32) bda("BdaInt32"); o32.setValue(4);
+        check("BdaInt8  -> 4", Integer.valueOf(4).equals(mOrd.invoke(null, o8)), null);
+        check("BdaInt16 -> 4", Integer.valueOf(4).equals(mOrd.invoke(null, o16)),
+              "el ancho que hacia caer getCtlModelValue al default");
+        check("BdaInt32 -> 4", Integer.valueOf(4).equals(mOrd.invoke(null, o32)), null);
+        check("un no-entero devuelve null, que no es cero",
+              mOrd.invoke(null, new BdaBoolean(new ObjectReference("L/L.D.d"), Fc.ST, null, false, false)) == null,
+              "distinguir 'no se pudo leer' de 'vale 0'");
 
         System.out.println("\n== getValueString() de la libreria no cubre todos los anchos ==");
         // Medido, no deducido: iec61850bean devuelve el numero para BdaInt8 y BdaInt32, y
