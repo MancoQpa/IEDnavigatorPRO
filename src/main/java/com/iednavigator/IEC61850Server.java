@@ -429,6 +429,16 @@ public class IEC61850Server implements ServerEventListener {
     /** Tope de valores iniciales inválidos que se descartan antes de darse por vencido. */
     private static final int MAX_VALORES_DESCARTADOS = 200;
 
+    /** ¿Entra el ordinal en un byte con signo? Decide si sintetizarlo ensancharía el EnumType. */
+    private static boolean cabeEnByte(String ord) {
+        try { return cabeEnByte(Integer.parseInt(ord.trim())); }
+        catch (NumberFormatException e) { return false; }
+    }
+
+    private static boolean cabeEnByte(int n) {
+        return n >= Byte.MIN_VALUE && n <= Byte.MAX_VALUE;
+    }
+
     /**
      * Parsea un SCL descartando, uno por uno, los valores iniciales que la librería no sabe
      * convertir, en vez de perder el archivo entero por uno solo.
@@ -682,18 +692,38 @@ public class IEC61850Server implements ServerEventListener {
             Element enumType = (Element) enumTypes.item(i);
             String nsUri = enumType.getNamespaceURI();
 
-            // Textos ya presentes, que es por lo que la librería busca.
+            // Textos ya presentes, que es por lo que la librería busca. Y de paso el mayor
+            // ordinal que este EnumType ya declara, que hace falta para no ensancharlo.
             Set<String> definedTexts = new HashSet<>();
+            boolean yaEsAncho = false;
             org.w3c.dom.NodeList children = enumType.getChildNodes();
             for (int j = 0; j < children.getLength(); j++) {
                 org.w3c.dom.Node child = children.item(j);
                 if (child.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
                     definedTexts.add(child.getTextContent().trim());
+                    String o = ((Element) child).getAttribute("ord").trim();
+                    if (!o.isEmpty()) {
+                        try { if (!cabeEnByte(Integer.parseInt(o))) yaEsAncho = true; }
+                        catch (NumberFormatException ignore) {}
+                    }
                 }
             }
 
             for (Map.Entry<String, String> e : usados.entrySet()) {
                 if (definedTexts.contains(e.getKey())) continue;
+                // NO ensanchar el EnumType. SclParser elige el ancho del entero según el rango
+                // de ordinales, y la propia librería lee ctlModel con un instanceof BdaInt8 al
+                // atender un mando: verificado en el bytecode de ServerAssociation. Si el
+                // parche mete un ordinal grande, el atributo pasa a BdaInt16, la librería no lo
+                // reconoce y responde "ctlModel is not set" — o sea que el parche que existe
+                // para que el archivo CARGUE terminaba rompiendo el MANDO.
+                //
+                // Los ordinales de los enumerados de IEC 61850 son chicos. Los <Val> grandes
+                // del documento —contadores, tiempos, un 1000000 medido en un archivo real—
+                // pertenecen a atributos que no son enumerados, así que descartarlos no pierde
+                // ningún caso legítimo. Si el EnumType YA declara un ordinal fuera del byte,
+                // entonces ya es ancho y agregar no cambia nada: ahí no se filtra.
+                if (!yaEsAncho && !cabeEnByte(e.getValue())) continue;
                 // El ord va aunque ya esté tomado por una etiqueta: el ord del EnumVal que
                 // coincide por texto es el que termina siendo el valor, así que con
                 // cualquier otro se guardaría un valor equivocado. Quedan dos EnumVal con el

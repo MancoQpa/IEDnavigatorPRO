@@ -32,10 +32,14 @@ import java.util.TreeMap;
  * escribio para el mundo anterior al parche de enums y dejo de matchear en silencio cuando el
  * parche se agrego.
  *
- * Por eso no alcanza con parsear un CID sintetico y mirar el tipo: hay que hacerlo pasar por
- * la ruta de la aplicacion. El banco lo mide en la misma corrida y sobre el mismo archivo —
- * test_bay_control.cid da BdaInt8 con la libreria sola y BdaInt16 por la ruta de la app—, asi
- * que la causalidad queda reproducida sin depender de ningun archivo de fabricante.
+ * DESPUES se acoto el parche para que no ensanche —porque el ensanchamiento ademas dejaba a la
+ * propia libreria sin poder leer ctlModel al atender un mando, ver TestPreprocesadoScl—, asi
+ * que hoy la ruta de la aplicacion ya NO mueve el ancho. Las comprobaciones de la seccion "la
+ * condicion real" quedaron como guarda de regresion de aquel arreglo.
+ *
+ * El guard ancho sigue haciendo falta igual: SclParser elige el ancho segun el rango de
+ * ordinales, asi que un EnumType que legitimamente pase del byte sigue dando BdaInt16 y hay
+ * que reconocerlo. Eso se cubre ejercitando los tipos directamente, mas arriba.
  *
  * Uso:  java -cp "classes;lib\*;test" TestEnumAncho
  */
@@ -138,17 +142,20 @@ public class TestEnumAncho {
             System.out.println("     por la app: " + porLaApp);
             check("el modelo trae Mod/Beh/Health", !porLaApp.isEmpty(), porLaApp.toString());
 
-            // La causalidad, medida sobre el mismo archivo y en la misma corrida: crudo da
-            // Int8 y por la ruta de la aplicacion da Int16. Es la prueba de que el ancho lo
-            // mueve el parche de enums del propio proyecto y no el archivo del fabricante.
-            // Si algun dia esto dejara de cumplirse, el arreglo hay que repensarlo entero.
+            // HISTORIA, para que no se lea mal: cuando se escribio este banco, la ruta de la
+            // aplicacion ensanchaba este mismo archivo de BdaInt8 a BdaInt16, porque
+            // patchMissingEnumOrdinals() le agregaba a cada EnumType todos los <Val>
+            // numericos del documento, incluidos los grandes. Eso rompia el guard de
+            // getEnumOptionsForNode() y ademas dejaba a la propia libreria sin poder leer
+            // ctlModel al atender un mando. El parche se acoto despues (ver
+            // TestPreprocesadoScl), asi que hoy el ancho ya no se mueve.
+            //
+            // Estas dos comprobaciones son la guarda de regresion de aquel arreglo: si el
+            // parche volviera a ensanchar, vuelven a fallar.
             check("crudo: la libreria elige BdaInt8",
                   crudo.containsKey("BdaInt8") && !crudo.containsKey("BdaInt16"), crudo.toString());
-            check("por la app: pasa a BdaInt16",
-                  porLaApp.containsKey("BdaInt16") && !porLaApp.containsKey("BdaInt8"), porLaApp.toString());
-            check("el guard viejo habria fallado sobre este mismo modelo",
-                  !guardViejo(bda(porLaApp.keySet().iterator().next())),
-                  "que es el bug, reproducido de punta a punta");
+            check("por la app: el ancho NO se mueve",
+                  porLaApp.equals(crudo), porLaApp + "  (crudo: " + crudo + ")");
 
             boolean todosReconocidos = true;
             for (String tipo : porLaApp.keySet()) {

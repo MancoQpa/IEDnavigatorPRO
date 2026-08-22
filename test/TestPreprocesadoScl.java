@@ -41,6 +41,27 @@ public class TestPreprocesadoScl {
         return new IEC61850Server().getAvailableIEDs(cid.toString());
     }
 
+    /** Tipo Java con el que llega el stVal del DO dado, tras el pre-procesado de la app. */
+    private static String anchoDe(Path cid, String doName) {
+        IEC61850Server s = new IEC61850Server();
+        if (s.getAvailableIEDs(cid.toString()).isEmpty()) return "(no carga)";
+        com.beanit.iec61850bean.ServerModel m = s.getMergedModel(0);
+        for (com.beanit.iec61850bean.ModelNode ld : m.getChildren()) {
+            java.util.Collection<com.beanit.iec61850bean.ModelNode> lns = ld.getChildren();
+            if (lns == null) continue;
+            for (com.beanit.iec61850bean.ModelNode ln : lns) {
+                java.util.Collection<com.beanit.iec61850bean.ModelNode> dos = ln.getChildren();
+                if (dos == null) continue;
+                for (com.beanit.iec61850bean.ModelNode d : dos) {
+                    if (!doName.equals(d.getName())) continue;
+                    com.beanit.iec61850bean.ModelNode v = d.getChild("stVal");
+                    if (v != null) return v.getClass().getSimpleName();
+                }
+            }
+        }
+        return "(no encontrado)";
+    }
+
     private static Path escribir(String nombre, String xml) throws Exception {
         Path p = Files.createTempFile(nombre, ".cid");
         Files.write(p, xml.getBytes(StandardCharsets.UTF_8));
@@ -185,6 +206,32 @@ public class TestPreprocesadoScl {
                 modelo("1", "status-only", true, "0", "CTRL/GAPC1.Op1.ST.general"));
         List<String> rt = cargar(todos);
         check("carga con los cinco a la vez", !rt.isEmpty(), rt.toString());
+
+        System.out.println("\n== el parche no ensancha el EnumType ==");
+        // SclParser elige el ancho del entero segun el rango de ordinales del EnumType, y la
+        // propia libreria lee ctlModel con un instanceof BdaInt8 al atender un mando —
+        // verificado en el bytecode de ServerAssociation—. Si el parche sintetiza un ordinal
+        // grande, el atributo pasa a BdaInt16, la libreria no lo reconoce y responde
+        // "ctlModel is not set": el parche que existe para que el archivo CARGUE terminaba
+        // rompiendo el MANDO. Los <Val> grandes del documento pertenecen a atributos que no
+        // son enumerados, asi que descartarlos no pierde ningun caso legitimo.
+        String conValGrande = modelo("on", null, false, null)
+                .replace("<DOI name=\"Mod\">",
+                         "<DOI name=\"Cnt\"><DAI name=\"stVal\"><Val>1000000</Val></DAI></DOI>\n"
+                         + "        <DOI name=\"Mod\">")
+                .replace("<DO name=\"Mod\" type=\"T_INC\"/>",
+                         "<DO name=\"Mod\" type=\"T_INC\"/>\n"
+                         + "      <DO name=\"Cnt\" type=\"T_CNT\"/>")
+                .replace("<DOType id=\"T_SPS\"",
+                         "<DOType id=\"T_CNT\" cdc=\"INS\">\n"
+                         + "      <DA name=\"stVal\" bType=\"INT32\" fc=\"ST\"/>\n"
+                         + "    </DOType>\n"
+                         + "    <DOType id=\"T_SPS\"");
+        Path grande = escribir("scl_ordgrande", conValGrande);
+        List<String> rg = cargar(grande);
+        check("carga con un <Val> numerico grande", !rg.isEmpty(), rg.toString());
+        check("Mod.stVal sigue siendo BdaInt8", anchoDe(grande, "Mod").equals("BdaInt8"),
+              anchoDe(grande, "Mod") + " — si fuera Int16, la libreria no leeria ctlModel");
 
         System.out.println("\n== la salvaguarda: no se toca lo que no es un enumerado ==");
         // Un texto no numerico que el documento NO define en ningun EnumType no debe
