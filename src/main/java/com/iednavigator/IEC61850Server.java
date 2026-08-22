@@ -358,6 +358,8 @@ public class IEC61850Server implements ServerEventListener {
 
             int totalExpanded = 0;
 
+            int countsDeducidos = 0, countsQuitados = 0;
+
             // Expandir SDO, DA y BDA con atributo count
             for (String tag : new String[]{"SDO", "DA", "BDA"}) {
                 // getElementsByTagNameNS("*", tag) encuentra elementos con cualquier namespace
@@ -370,7 +372,28 @@ public class IEC61850Server implements ServerEventListener {
                         try {
                             int count = Integer.parseInt(countStr);
                             if (count > 1) toExpand.add(el);
-                        } catch (NumberFormatException ignore) {}
+                        } catch (NumberFormatException e) {
+                            // El count NO es un número. Por IEC 61850-6 puede ser el nombre de
+                            // otro atributo, que lleva el tamaño en tiempo de ejecución. Este
+                            // catch lo ignoraba en silencio y el count sobrevivía intacto hasta
+                            // SclParser, que le hace Integer.parseInt y lanza una
+                            // NumberFormatException — no una SclParseException—, tirando abajo
+                            // el archivo entero. Medido: una sola ocurrencia en un archivo de
+                            // 23 MB costaba sus 52 IEDs, después de cinco minutos de parseo.
+                            //
+                            // Se deduce del nombre del tipo, que suele traer el tamaño; y si no
+                            // se puede, se quita el count y el elemento queda como uno solo.
+                            // Degradación aceptable frente a perder el archivo.
+                            int deducido = deducirCountDelTipo(el.getAttribute("type"));
+                            if (deducido > 1) {
+                                el.setAttribute("count", String.valueOf(deducido));
+                                toExpand.add(el);
+                                countsDeducidos++;
+                            } else {
+                                el.removeAttribute("count");
+                                countsQuitados++;
+                            }
+                        }
                     }
                 }
 
@@ -408,6 +431,12 @@ public class IEC61850Server implements ServerEventListener {
             }
 
             if (listener != null) listener.onLog("[SCL] Arrays con count encontrados: " + totalExpanded);
+            if (countsDeducidos > 0 || countsQuitados > 0) {
+                String aviso = "[SCL] count no numerico: " + countsDeducidos
+                        + " deducido(s) del nombre del tipo, " + countsQuitados + " quitado(s)";
+                if (listener != null) listener.onLog(aviso);
+                System.out.println("[SERVER] " + aviso);
+            }
 
             // Parche de EnumTypes incompletos (hay familias que omiten ordinales estándar)
             int patchedEnums = patchMissingEnumOrdinals(doc);
@@ -568,6 +597,21 @@ public class IEC61850Server implements ServerEventListener {
             System.err.println("[SERVER] dropValsConTexto falló: " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Tamaño de un arreglo deducido del nombre de su tipo, que suele traerlo embebido
+     * (patrón {@code ARRAY_of_N_}). Devuelve 0 si no se puede deducir.
+     *
+     * Portado del simulador; ver HALLAZGOS_DESDE_EL_SIMULADOR.md, hallazgo 7.
+     */
+    private int deducirCountDelTipo(String typeId) {
+        if (typeId == null) return 0;
+        java.util.regex.Matcher m =
+                java.util.regex.Pattern.compile("ARRAY_of_(\\d+)_").matcher(typeId);
+        if (!m.find()) return 0;
+        try { return Integer.parseInt(m.group(1)); }
+        catch (NumberFormatException e) { return 0; }
     }
 
     /**

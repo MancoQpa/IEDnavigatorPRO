@@ -265,9 +265,11 @@ public class TestEnumAncho {
                   !claseExcepcion.equals("SclParseException") && !claseExcepcion.equals("ninguna"),
                   claseExcepcion);
 
-            // Y ahora lo que se arreglo: el metodo devuelve false en vez de propagarla.
+            // Lo primero que se arreglo fue que el metodo NO propague la excepcion. Esa
+            // garantia sigue valiendo y es la que importa: pase lo que pase, el llamador no
+            // se cae.
             IEC61850Server srv2 = new IEC61850Server();
-            boolean cargo = true, propago = false;
+            boolean cargo = false, propago = false;
             try {
                 cargo = srv2.loadSclFile(roto.toString());
             } catch (RuntimeException e) {
@@ -275,7 +277,14 @@ public class TestEnumAncho {
             }
             check("loadSclFile no propaga la excepcion", !propago,
                   propago ? "se propago: el catch no la atrapa" : null);
-            check("loadSclFile devuelve false", !cargo, null);
+
+            // Y despues se porto la deduccion del count, asi que este archivo YA NO degrada:
+            // carga. Cuando se escribio esta comprobacion afirmaba lo contrario —que devolvia
+            // false— porque entonces el count no numerico seguia tirando abajo el archivo.
+            // Se da vuelta a proposito y queda como guarda: si volviera a no cargar, es que
+            // se perdio la deduccion.
+            check("con la deduccion del count, el archivo carga", cargo,
+                  cargo ? null : "volvio a degradar: revisar deducirCountDelTipo()");
         }
         Files.deleteIfExists(roto);
 
