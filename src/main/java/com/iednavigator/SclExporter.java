@@ -430,11 +430,13 @@ public final class SclExporter {
 
     // ── Report Control Blocks ────────────────────────────────────────────────
     private void appendReportControls(StringBuilder sb, LogicalNode ln) {
-        appendRcbGroup(sb, ln.getUrcbs(), false);
-        appendRcbGroup(sb, ln.getBrcbs(), true);
+        String lnRef = ln.getReference().toString();   // "LD/LNname"
+        appendRcbGroup(sb, ln.getUrcbs(), false, lnRef);
+        appendRcbGroup(sb, ln.getBrcbs(), true, lnRef);
     }
 
-    private void appendRcbGroup(StringBuilder sb, Collection<? extends ModelNode> rcbs, boolean buffered) {
+    private void appendRcbGroup(StringBuilder sb, Collection<? extends ModelNode> rcbs,
+                                boolean buffered, String lnRef) {
         if (rcbs == null) return;
         for (ModelNode rcb : rcbs) {
             nRcb++;
@@ -457,7 +459,7 @@ public final class SclExporter {
                 // esta en el modelo tampoco se emite <DataSet> y la referencia queda
                 // colgando. Un archivo asi carga, pero el reporting no funciona: hay
                 // que decirlo en vez de dejarlo pasar en silencio.
-                if (!tieneDataSet(simple)) datSetsColgados.add(simple);
+                if (!tieneDataSet(lnRef, simple)) datSetsColgados.add(lnRef + "." + simple);
             }
             sb.append(" confRev=\"").append(esc(confRev != null && !confRev.isEmpty() ? confRev : "1")).append("\"");
             sb.append(" buffered=\"").append(buffered).append("\"");
@@ -477,16 +479,21 @@ public final class SclExporter {
      * RP = report control block no bufferizado, BR = bufferizado. En SCL van como
      * {@code <ReportControl>}, no como DO del LNodeType.
      */
-    /** ¿El modelo trae un DataSet con ese nombre simple? */
-    private boolean tieneDataSet(String nombreSimple) {
+    /**
+     * ¿El modelo trae ese DataSet EN ESTE Logical Node?
+     *
+     * El atributo datSet de SCL es un nombre simple relativo al LN que declara
+     * el bloque de reporte, no global. Comparar solo por el nombre simple daba
+     * por buena una referencia de un LD cuyo DataSet no se pudo recuperar
+     * porque existia otro homonimo en otro LD: el archivo salia con referencias
+     * rotas y el aviso decia que estaba todo bien.
+     */
+    private boolean tieneDataSet(String lnRef, String nombreSimple) {
         Collection<DataSet> all = model.getDataSets();
         if (all == null) return false;
+        String buscado = lnRef + "." + nombreSimple;
         for (DataSet ds : all) {
-            String ref = ds.getReferenceStr();
-            if (ref == null) continue;
-            int dot = ref.lastIndexOf('.');
-            String simple = (dot >= 0) ? ref.substring(dot + 1) : ref;
-            if (simple.equals(nombreSimple)) return true;
+            if (buscado.equals(ds.getReferenceStr())) return true;
         }
         return false;
     }

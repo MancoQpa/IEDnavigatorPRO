@@ -442,6 +442,13 @@ class ConnectionManager {
                 lectura = ctx.getClient().leerValoresParaExportar(
                         (hechos, total) -> ctx.log(I18n.t("log.cid.readprogress", hechos, total)));
                 ctx.log(I18n.t("log.cid.readdone", lectura.leidos, lectura.fallidos));
+                // Los DataSets no vienen con el modelo cuando retrieveModel() falla y se
+                // cae a la construccion manual. Se recuperan aparte, tolerando el fallo
+                // individual, o el CID sale con los ReportControl apuntando a la nada.
+                IEC61850Client.LecturaDataSets ds = ctx.getClient().recuperarDataSetsTolerante();
+                if (ds.recuperados > 0 || ds.omitidos > 0) {
+                    ctx.log(I18n.t("log.cid.dsleidos", ds.recuperados, ds.omitidos));
+                }
             }
 
             String host = (ctx.getClient() != null) ? ctx.getClient().getHost() : null;

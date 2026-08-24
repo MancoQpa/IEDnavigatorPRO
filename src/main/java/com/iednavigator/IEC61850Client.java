@@ -1273,6 +1273,143 @@ public class IEC61850Client implements ClientEventListener {
         return association;
     }
 
+    // ==================== RECUPERACION DE DATASETS ====================
+
+    /** Cuantos DataSets se pudieron recuperar y cuantos quedaron afuera. */
+    public static final class LecturaDataSets {
+        public final int recuperados, omitidos;
+        public final java.util.List<String> motivos;
+        LecturaDataSets(int recuperados, int omitidos, java.util.List<String> motivos) {
+            this.recuperados = recuperados; this.omitidos = omitidos; this.motivos = motivos;
+        }
+    }
+
+    /**
+     * Recupera los DataSets del IED sin abortar la pasada por uno que falle.
+     *
+     * updateDataSets() de la libreria enumera los DataSets de todos los Logical
+     * Devices y lanza ServiceError ante el primer problema, dejando el modelo
+     * con lo que alcanzo a cargar. Contra un PCS-9611S real eso significa
+     * quedarse con 3 de 13: aborta con
+     *
+     *     INSTANCE_NOT_AVAILABLE: decodeGetDataSetDirectoryResponse:
+     *     LN for returned DataSet is not available
+     *
+     * porque decodeGetDataSetDirectoryResponse() exige que el LN nombrado por el
+     * DataSet exista en el modelo, y contra este equipo retrieveModel() falla y
+     * se cae a la construccion manual, que OMITE los LN que dan error. Un LN
+     * omitido tumbaba la enumeracion entera.
+     *
+     * Consecuencia concreta: el CID reconstruido salia con los ReportControl
+     * apuntando a DataSets que el archivo no declaraba — 336 referencias
+     * colgadas — y el reporting no funcionaba con ese archivo.
+     *
+     * Aca se repite el bucle de updateDataSets() pero con el try/catch movido
+     * adentro, alrededor de CADA DataSet. Los metodos que hacen falta son
+     * privados, asi que se los llama por reflexion: es la misma tecnica que ya
+     * usa retrieveModelManually() en esta clase, y por el mismo motivo.
+     *
+     * Los DataSets que no se puedan resolver se saltan y se informan, en vez de
+     * perder tambien los que si estaban bien.
+     */
+    public LecturaDataSets recuperarDataSetsTolerante() {
+        java.util.List<String> motivos = new java.util.ArrayList<>();
+        int recuperados = 0, omitidos = 0;
+
+        ServerModel m = serverModel;
+        if (m == null || association == null) return new LecturaDataSets(0, 0, motivos);
+
+        int antes = (m.getDataSets() == null) ? 0 : m.getDataSets().size();
+
+        try {
+            Class<?> ca = association.getClass();
+
+            java.lang.reflect.Method mReq = ca.getDeclaredMethod(
+                    "constructGetDirectoryRequest", String.class, String.class, boolean.class);
+            mReq.setAccessible(true);
+
+            java.lang.reflect.Method mEnviar = null;
+            for (java.lang.reflect.Method x : ca.getDeclaredMethods()) {
+                if (x.getName().equals("encodeWriteReadDecode")) { mEnviar = x; break; }
+            }
+            if (mEnviar == null) {
+                logDiag("[DATASETS] no se encontro encodeWriteReadDecode - se omite");
+                return new LecturaDataSets(0, 0, motivos);
+            }
+            mEnviar.setAccessible(true);
+
+            java.lang.reflect.Method mDir = null;
+            for (java.lang.reflect.Method x : ca.getDeclaredMethods()) {
+                if (x.getName().equals("getDataSetDirectory") && x.getParameterCount() == 2) {
+                    mDir = x; break;
+                }
+            }
+            if (mDir == null) {
+                logDiag("[DATASETS] no se encontro getDataSetDirectory - se omite");
+                return new LecturaDataSets(0, 0, motivos);
+            }
+            mDir.setAccessible(true);
+
+            for (ModelNode ldNodo : m.getChildren()) {
+                if (!(ldNodo instanceof LogicalDevice)) continue;
+                String ldName = ldNodo.getName();
+                Object respuesta;
+                try {
+                    Object peticion = mReq.invoke(association, ldName, "", false);
+                    respuesta = mEnviar.invoke(association, peticion);
+                } catch (Exception e) {
+                    omitidos++;
+                    motivos.add(ldName + ": no se pudo listar los DataSets - " + causa(e));
+                    continue;
+                }
+
+                // Los identificadores de DataSet del LD, sacados de la respuesta MMS
+                java.util.List<?> ids;
+                try {
+                    Object nameList = respuesta.getClass().getMethod("getGetNameList").invoke(respuesta);
+                    if (nameList == null) continue;
+                    Object lista = nameList.getClass().getMethod("getListOfIdentifier").invoke(nameList);
+                    if (lista == null) continue;
+                    ids = (java.util.List<?>) lista.getClass().getMethod("getIdentifier").invoke(lista);
+                } catch (Exception e) {
+                    omitidos++;
+                    motivos.add(ldName + ": respuesta ilegible - " + causa(e));
+                    continue;
+                }
+                if (ids == null || ids.isEmpty()) continue;
+
+                // Y aca lo que importa: un try por DataSet, no uno para todos
+                for (Object id : ids) {
+                    try {
+                        mDir.invoke(association, id, ldNodo);
+                        recuperados++;
+                    } catch (Exception e) {
+                        omitidos++;
+                        if (motivos.size() < 30) {
+                            motivos.add(ldName + "/" + id + ": " + causa(e));
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logDiag("[DATASETS] fallo la recuperacion tolerante: " + e);
+        }
+
+        int ahora = (m.getDataSets() == null) ? 0 : m.getDataSets().size();
+        logDiag("[DATASETS] recuperados " + recuperados + ", omitidos " + omitidos
+                + " (el modelo pasa de " + antes + " a " + ahora + " DataSet)");
+        for (String s : motivos) logDiag("[DATASETS]    - " + s);
+        return new LecturaDataSets(recuperados, omitidos, motivos);
+    }
+
+    /** Mensaje util de una excepcion lanzada por reflexion. */
+    private static String causa(Exception e) {
+        Throwable t = (e instanceof java.lang.reflect.InvocationTargetException)
+                ? ((java.lang.reflect.InvocationTargetException) e).getTargetException() : e;
+        String msg = (t == null) ? null : t.getMessage();
+        return (msg == null || msg.isEmpty()) ? String.valueOf(t) : msg;
+    }
+
     // ==================== LECTURA PREVIA A EXPORTAR UN CID ====================
 
     /** Avance de la lectura del modelo, para poder informarla mientras corre. */
