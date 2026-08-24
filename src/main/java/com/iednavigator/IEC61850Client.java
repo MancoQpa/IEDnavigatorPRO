@@ -1273,6 +1273,79 @@ public class IEC61850Client implements ClientEventListener {
         return association;
     }
 
+    // ==================== LECTURA PREVIA A EXPORTAR UN CID ====================
+
+    /** Avance de la lectura del modelo, para poder informarla mientras corre. */
+    public interface ProgresoLectura {
+        void avance(int hechos, int total);
+    }
+
+    /** Cuántos objetos se pudieron leer del IED y cuántos no. */
+    public static final class LecturaModelo {
+        public final int leidos, fallidos, total;
+        public LecturaModelo(int leidos, int fallidos, int total) {
+            this.leidos = leidos; this.fallidos = fallidos; this.total = total;
+        }
+    }
+
+    /**
+     * Lee del IED los valores de todo el modelo, para que un CID reconstruido
+     * lleve la configuración real del equipo y no ceros.
+     *
+     * Hace falta porque retrieveModel() trae la ESTRUCTURA pero no los VALORES:
+     * cada atributo queda en su valor por defecto —0, false, cadena vacía— hasta
+     * que alguien lo lee. Exportar el modelo recién recuperado producía un CID
+     * sintácticamente válido y semánticamente vacío: medido sobre un PCS-9611S
+     * real, 37.994 DAI en cero contra 7 con valor, los 763 ctlModel en 0
+     * (o sea, todo el equipo declarado status-only) y los ReportControl sin
+     * datSet ni rptID. Ese archivo cargado en un simulador da un IED que no
+     * acepta ningún mando.
+     *
+     * Se lee por Data Object, no por atributo: es un viaje MMS por DO en vez de
+     * uno por cada BDA. Y se tolera el fallo individual —hay equipos que niegan
+     * la lectura de algunos objetos— porque abortar entero por uno solo es lo
+     * que hace getAllDataValues() de la librería, y con eso no se exporta nada.
+     *
+     * No se leen FC=CO ni FC=SE: los primeros son las estructuras de mando, que
+     * no tienen valor que leer, y los segundos exigen seleccionar antes el grupo
+     * de ajustes. Es el mismo criterio que aplica getAllDataValues().
+     *
+     * Puede tardar: es un viaje de ida y vuelta por Data Object. NO llamarla
+     * desde el hilo de la interfaz.
+     */
+    public LecturaModelo leerValoresParaExportar(ProgresoLectura progreso) {
+        ServerModel m = serverModel;
+        if (m == null || association == null) return new LecturaModelo(0, 0, 0);
+
+        List<FcModelNode> objetivos = new ArrayList<>();
+        for (ModelNode ld : m.getChildren()) {
+            for (ModelNode ln : ld.getChildren()) {
+                for (ModelNode hijo : ln.getChildren()) {
+                    if (!(hijo instanceof FcModelNode)) continue;
+                    FcModelNode fcdo = (FcModelNode) hijo;
+                    Fc fc = fcdo.getFc();
+                    if (fc == Fc.CO || fc == Fc.SE) continue;
+                    objetivos.add(fcdo);
+                }
+            }
+        }
+
+        int leidos = 0, fallidos = 0, i = 0;
+        for (FcModelNode fcdo : objetivos) {
+            try {
+                association.getDataValues(fcdo);
+                leidos++;
+            } catch (Exception e) {
+                fallidos++;
+            }
+            i++;
+            if (progreso != null && (i % 200 == 0 || i == objetivos.size())) {
+                progreso.avance(i, objetivos.size());
+            }
+        }
+        return new LecturaModelo(leidos, fallidos, objetivos.size());
+    }
+
     // ==================== REPORTS ====================
 
     // Interface para notificar reportes

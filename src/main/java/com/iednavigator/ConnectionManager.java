@@ -425,8 +425,25 @@ class ConnectionManager {
         File file = pedirDestino(iedName + ".cid");
         if (file == null) return;
 
+        // La lectura de valores y la exportacion van a un hilo de fondo: son miles de
+        // viajes MMS y esto corre en el hilo de la interfaz, que se congelaria.
+        ctx.backgroundExecutor().submit(() -> generarYGuardarCid(modelo, iedName, file));
+    }
+
+    /** Lee los valores del IED, reconstruye el SCL y lo escribe. Fuera del hilo de UI. */
+    private void generarYGuardarCid(ServerModel modelo, String iedName, File file) {
         ctx.log(I18n.t("log.cid.generating"));
         try {
+            // Sin esto el archivo sale con la estructura correcta y TODOS los valores en
+            // cero: retrieveModel() trae la estructura, no los valores. Ver
+            // IEC61850Client.leerValoresParaExportar().
+            IEC61850Client.LecturaModelo lectura = null;
+            if (ctx.getClient() != null) {
+                lectura = ctx.getClient().leerValoresParaExportar(
+                        (hechos, total) -> ctx.log(I18n.t("log.cid.readprogress", hechos, total)));
+                ctx.log(I18n.t("log.cid.readdone", lectura.leidos, lectura.fallidos));
+            }
+
             String host = (ctx.getClient() != null) ? ctx.getClient().getHost() : null;
             // Fabricante / tipo / configRev: del nameplate que ya se leyó al conectar
             String mfr = null, tipo = null, cfg = null;
@@ -449,25 +466,40 @@ class ConnectionManager {
                 ctx.log(I18n.t("log.cid.uncertain", r.uncertainCdc.size()));
                 for (String u : r.uncertainCdc) ctx.log("    - " + u);
             }
+            if (!r.datSetsColgados.isEmpty()) {
+                ctx.log(I18n.t("log.cid.dscolgados", r.datSetsColgados.size()));
+                for (String d : r.datSetsColgados) ctx.log("    - " + d);
+            }
 
             StringBuilder msg = new StringBuilder();
             msg.append(I18n.t("cid.gen.ok", file.getAbsolutePath())).append("\n\n");
             msg.append(I18n.t("cid.gen.stats", r.logicalDevices, r.logicalNodes,
                               r.dataObjects, r.dataSets, r.reportControls)).append("\n");
-            msg.append(I18n.t("cid.gen.templates", r.lnodeTypes, r.doTypes, r.daTypes)).append("\n\n");
+            msg.append(I18n.t("cid.gen.templates", r.lnodeTypes, r.doTypes, r.daTypes)).append("\n");
+            if (lectura != null) {
+                msg.append(I18n.t("cid.gen.values", lectura.leidos, lectura.total,
+                                  lectura.fallidos)).append("\n");
+            }
+            msg.append("\n");
             if (!r.uncertainCdc.isEmpty()) {
                 msg.append(I18n.t("cid.gen.uncertain", r.uncertainCdc.size())).append("\n\n");
             }
+            if (!r.datSetsColgados.isEmpty()) {
+                msg.append(I18n.t("cid.gen.dscolgados", r.datSetsColgados.size())).append("\n\n");
+            }
             msg.append(I18n.t("cid.gen.limits"));
-            JOptionPane.showMessageDialog(ctx.parentWindow(), msg.toString(),
-                I18n.t("cid.save.ok.title"), JOptionPane.INFORMATION_MESSAGE);
+            final String resumen = msg.toString();
+            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                ctx.parentWindow(), resumen,
+                I18n.t("cid.save.ok.title"), JOptionPane.INFORMATION_MESSAGE));
 
         } catch (Exception e) {
             ctx.log(I18n.t("log.cid.error", e.getMessage()));
             e.printStackTrace();
-            JOptionPane.showMessageDialog(ctx.parentWindow(),
-                I18n.t("cid.save.error", e.getMessage()),
-                "Error", JOptionPane.ERROR_MESSAGE);
+            final String detalleError = String.valueOf(e.getMessage());
+            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                ctx.parentWindow(), I18n.t("cid.save.error", detalleError),
+                "Error", JOptionPane.ERROR_MESSAGE));
         }
     }
 

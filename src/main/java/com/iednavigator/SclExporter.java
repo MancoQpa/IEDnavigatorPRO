@@ -54,12 +54,15 @@ public final class SclExporter {
         public final int lnodeTypes, doTypes, daTypes;
         /** DOs cuyo cdc no pudo determinarse con confianza (se emitió el mejor candidato). */
         public final List<String> uncertainCdc;
+        /** DataSets nombrados por algún ReportControl que el archivo no declara. */
+        public final List<String> datSetsColgados;
         public final String iedName;
 
         Result(String xml, String iedName, int lds, int lns, int dos, int das,
                int dataSets, int rcbs, int lnTypes, int doTypes, int daTypes,
-               List<String> uncertainCdc) {
+               List<String> uncertainCdc, List<String> datSetsColgados) {
             this.xml = xml; this.iedName = iedName;
+            this.datSetsColgados = datSetsColgados;
             this.logicalDevices = lds; this.logicalNodes = lns;
             this.dataObjects = dos; this.dataAttributes = das;
             this.dataSets = dataSets; this.reportControls = rcbs;
@@ -85,6 +88,8 @@ public final class SclExporter {
     private final Map<String, String> daTypeXml = new LinkedHashMap<>();
 
     private final List<String> uncertainCdc = new ArrayList<>();
+    /** DataSets que los ReportControl nombran pero que el modelo no trae. */
+    private final java.util.Set<String> datSetsColgados = new java.util.LinkedHashSet<>();
     private int nLd, nLn, nDo, nDa, nDataSet, nRcb;
 
     /** Nombre de IED impuesto por quien llama; si es null se deduce de los nombres de LD. */
@@ -175,7 +180,8 @@ public final class SclExporter {
         sb.append("</SCL>\n");
 
         return new Result(sb.toString(), iedName, nLd, nLn, nDo, nDa, nDataSet, nRcb,
-                          lnTypeXml.size(), doTypeXml.size(), daTypeXml.size(), uncertainCdc);
+                          lnTypeXml.size(), doTypeXml.size(), daTypeXml.size(), uncertainCdc,
+                          new ArrayList<>(datSetsColgados));
     }
 
     private void appendHeader(StringBuilder sb, String iedName) {
@@ -447,6 +453,11 @@ public final class SclExporter {
                 int dollar = simple.lastIndexOf('$');
                 if (dollar >= 0) simple = simple.substring(dollar + 1);
                 sb.append(" datSet=\"").append(esc(simple)).append("\"");
+                // El equipo dice a que DataSet apunta el RCB, pero si ese DataSet no
+                // esta en el modelo tampoco se emite <DataSet> y la referencia queda
+                // colgando. Un archivo asi carga, pero el reporting no funciona: hay
+                // que decirlo en vez de dejarlo pasar en silencio.
+                if (!tieneDataSet(simple)) datSetsColgados.add(simple);
             }
             sb.append(" confRev=\"").append(esc(confRev != null && !confRev.isEmpty() ? confRev : "1")).append("\"");
             sb.append(" buffered=\"").append(buffered).append("\"");
@@ -466,6 +477,20 @@ public final class SclExporter {
      * RP = report control block no bufferizado, BR = bufferizado. En SCL van como
      * {@code <ReportControl>}, no como DO del LNodeType.
      */
+    /** ¿El modelo trae un DataSet con ese nombre simple? */
+    private boolean tieneDataSet(String nombreSimple) {
+        Collection<DataSet> all = model.getDataSets();
+        if (all == null) return false;
+        for (DataSet ds : all) {
+            String ref = ds.getReferenceStr();
+            if (ref == null) continue;
+            int dot = ref.lastIndexOf('.');
+            String simple = (dot >= 0) ? ref.substring(dot + 1) : ref;
+            if (simple.equals(nombreSimple)) return true;
+        }
+        return false;
+    }
+
     private static boolean isControlBlockFc(Fc fc) {
         return fc == Fc.RP || fc == Fc.BR;
     }
