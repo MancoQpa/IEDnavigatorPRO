@@ -575,7 +575,18 @@ public final class SclExporter {
                     sdos.computeIfAbsent(child.getName(), k -> new ArrayList<>())
                         .add((FcDataObject) child);
                 } else {
-                    das.computeIfAbsent(child.getName(), k -> new DaInfo(child, fc));
+                    // El fc del DA NO puede ser el de la primera instancia que aparezca.
+                    // Un mismo DO se expone bajo varios Functional Constraints y el mismo
+                    // hijo puede figurar en mas de uno; quedarse con el primero producia
+                    // plantillas incoherentes con los FCDA. Medido: PPV de un MMXU salia
+                    // con phsAB declarado fc="BL" mientras el DataSet lo referenciaba con
+                    // fc="MX", y SclParser rechazaba el archivo entero con
+                    // "Specified FCDA ... not found in Model" — o sea que el CID generado
+                    // NO SE PODIA CARGAR.
+                    DaInfo previo = das.get(child.getName());
+                    if (previo == null || prioridadFc(fc) < prioridadFc(previo.fc)) {
+                        das.put(child.getName(), new DaInfo(child, fc));
+                    }
                 }
             }
         }
@@ -653,6 +664,31 @@ public final class SclExporter {
     }
 
     /** Un DA/BDA observado: el nodo y el FC en que se lo vio. */
+    /**
+     * Orden de preferencia del Functional Constraint cuando un mismo hijo aparece
+     * bajo varios. Menor es mejor.
+     *
+     * Los datos de proceso —medida y estado— son los que referencian los DataSets
+     * y los que un cliente lee, asi que mandan sobre los de configuracion y sobre
+     * los auxiliares como BL (bloqueo).
+     */
+    private static int prioridadFc(Fc fc) {
+        if (fc == null) return 99;
+        switch (fc) {
+            case MX: return 0;
+            case ST: return 1;
+            case CF: return 2;
+            case SP: return 3;
+            case DC: return 4;
+            case SG: return 5;
+            case SE: return 6;
+            case OR: return 7;
+            case EX: return 8;
+            case BL: return 9;
+            default: return 10;
+        }
+    }
+
     private static final class DaInfo {
         final ModelNode node;
         final Fc fc;
