@@ -3476,9 +3476,25 @@ public class IEDNavigatorApp extends JFrame {
         }
 
         SwingUtilities.invokeLater(() -> {
-            IEDNavigatorApp app = new IEDNavigatorApp();
-            app.setVisible(true);
-            app.announceSessionLog();
+            try {
+                IEDNavigatorApp app = new IEDNavigatorApp();
+                app.setVisible(true);
+                app.announceSessionLog();
+            } catch (Throwable t) {
+                // El launcher corre con javaw.exe (sin consola): si el armado de la UI
+                // muere, el usuario no ve nada y el proceso queda vivo sin ventana. Antes
+                // de salir se muestra el motivo y se deja la traza en iednavigator.log.
+                t.printStackTrace();
+                try {
+                    String NL = System.lineSeparator();
+                    JOptionPane.showMessageDialog(null,
+                        "IED Navigator PRO no pudo iniciar." + NL + NL +
+                        t.getClass().getSimpleName() + ": " + t.getMessage() + NL + NL +
+                        "El detalle completo quedo en iednavigator.log, junto al ejecutable.",
+                        "IED Navigator PRO", JOptionPane.ERROR_MESSAGE);
+                } catch (Throwable ignored) {}
+                System.exit(1);
+            }
         });
     }
 }

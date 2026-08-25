@@ -1,0 +1,107 @@
+﻿IED Navigator PRO - Historial de cambios (NOVEDADES)
+=====================================================
+Para instrucciones de instalacion y uso, ver README.txt
+
+v4.13.2
+-----
+- Instalador: se corrige la ilegibilidad del proceso. INSTALAR.bat se distribuia
+  con BOM UTF-8 y cmd.exe se lo comia junto con el "@echo off": el instalador
+  corria con el eco encendido y mostraba en pantalla cada comando y cada ruta
+  completa. Ahora se distribuye sin BOM, con cuatro pasos numerados, su resultado
+  a la vista y un resumen final.
+- Instalador: deja de anunciar Npcap como "incluido". Npcap no se empaqueta desde
+  la v4.7 (su licencia no permite redistribuirlo), pero el paso seguia diciendo lo
+  contrario. Cuando falta, el resumen final aclara que la aplicacion funciona
+  igual para MMS y que solo GOOSE / Sampled Values quedan deshabilitados.
+- Instalador: aborta con un mensaje claro, en vez de terminar diciendo
+  "INSTALACION COMPLETA", cuando se lo ejecuta desde adentro del ZIP (Windows lo
+  abre en una carpeta temporal que despues borra) o cuando el paquete esta
+  incompleto. Ese era el caso tipico de "instale y no arranca".
+- Instalador: ya no exige privilegios de administrador. No instala nada en el
+  sistema: verifica el paquete y crea el acceso directo.
+- Arranque: la aplicacion ya no se quedaba sin ventana en una PC sin Npcap. Al
+  armar el panel GOOSE se enumeran las interfaces de red, y sin Npcap esa llamada
+  falla con UnsatisfiedLinkError, que es un Error y no una Exception: no lo
+  atrapaba nadie, moria el hilo de la interfaz y el proceso quedaba vivo sin
+  mostrar nada. Ahora la aplicacion abre normalmente, el panel GOOSE indica
+  "Npcap no instalado" y el resto sigue funcionando.
+- Arranque: si aun asi el armado de la interfaz falla, se muestra un cuadro de
+  dialogo con el motivo en lugar de dejar un proceso invisible; el detalle queda
+  en iednavigator.log.
+
+v4.11
+-----
+- Guardar CID: ahora puede reconstruir el archivo SCL a partir del modelo de
+  datos que el propio IED expone al conectarse, sin depender de que el equipo
+  guarde el CID como archivo. Incluye la jerarquia completa LD/LN/DO/DA con sus
+  Functional Constraints, los DataSets y los bloques de control de reporte.
+  Es una reconstruccion, no el archivo de ingenieria del fabricante: por MMS no
+  viajan los nombres originales de los tipos, las etiquetas de los enumerados
+  ni la seccion GOOSE.
+- Control: nuevo selector de nivel de mando (orCat) en el dialogo de control.
+  El valor debe coincidir con la autoridad de mando configurada en el IED; con
+  autoridad de estacion muchos equipos rechazan el valor remoto por defecto.
+- Control: boton "Verificar condiciones", que antes de enviar la orden lee del
+  IED lo que puede bloquearla (modo y salud del nodo logico y de su Logical
+  Device, mando local, autoridad de estacion, enclavamiento y bloqueos de
+  apertura/cierre) y muestra cuales la impedirian.
+- Control: cuando el IED rechaza una orden, se interpreta el codigo AddCause y
+  se explica que revisar, ademas de mostrarlo en el panel de Log.
+- Diccionario: los nodos logicos con prefijo de fabricante se resuelven de
+  forma exacta en vez de por coincidencia parcial, y se describe el patron de
+  nombres de los Logical Devices, incluido su codigo ANSI. Se agregan LCCH,
+  LTIM, LTMS y LTRK, nodos de sistema de la Edicion 2.
+- Conexion: los mensajes de diagnostico de recuperacion del modelo ahora van al
+  panel de Log ademas de la consola, y se espera antes de cada reintento para
+  darle tiempo al IED a liberar la asociacion anterior.
+- Interfaz: se simplifica la barra superior. Limpiar Log pasa al menu
+  contextual del panel de Log, junto con una nueva opcion Copiar.
+
+v4.10
+-----
+- Soporte multilenguaje: la interfaz completa (menus, paneles, dialogos,
+  control SBO), el diccionario IEC 61850 y la leyenda de iconos ahora estan
+  disponibles en Espanol, English, Portugues y Chino simplificado (Idioma
+  desde el menu; se aplica al reiniciar la app). Espanol sigue siendo el
+  idioma por defecto.
+- Refactor del flujo de control SBO en dos pasos (Seleccionar/Ejecutar): el
+  estado de la seleccion pendiente ahora expone su timeout restante de forma
+  explicita en el cliente.
+
+v4.9
+----
+- Correccion en GOOSE sobre UDP: se elimina el error "pcap_sendpacket:
+  PacketSendPacket failed" que aparecia al publicar en modo UDP (quedaba un
+  handle de Capa 2 abierto de una sesion previa). Ademas, ahora el heartbeat
+  tambien se envia por UDP (antes solo salia el cambio de estado).
+
+v4.8
+----
+- Correccion en el publicador GOOSE: el numero de secuencia (sqNum) ahora es
+  estrictamente monotono en la transicion rafaga->heartbeat tras un cambio de
+  estado (antes se repetia un valor), conforme a IEC 61850-8-1. Incluye mejora
+  de seguridad de hilos (thread-safety) en el manejo de stNum/sqNum.
+
+v4.7
+----
+- Cumplimiento de licencias: distribuido bajo GPLv3 (archivo LICENSE) con avisos
+  de terceros (THIRD-PARTY-NOTICES.txt). Npcap ya NO se empaqueta (su licencia no
+  lo permite): se instala aparte desde https://npcap.com/#download
+- Control SBO en 2 pasos: Seleccionar (SBOw) / Ejecutar (OPER) / Cancelar SELECT,
+  con cuenta regresiva del timeout de reserva; valor por botones Abrir/Cerrar.
+- Paquete autocontenido: runtime Java incluido (jre\); corre en PC nueva sin
+  instalar Java.
+
+v4.5
+----
+- Verificacion de posicion post-control (lectura de stVal tras OPERATE).
+- Mensajes de control honestos; descargo de uso educativo.
+- Correccion de conexion con IEDs que rechazan el modelo estandar (NARI/Siemens).
+- Launcher sin ventana de consola (log a iednavigator.log) e icono nuevo.
+
+v4.4
+----
+- Control SBO enhanced (ctlModel=4): select-with-value + operate con mismo ctlNum.
+  Verificado contra NARI PCS-9611S real.
+- origin.orCat=3; LastApplError a nivel de LN; modelo por reflexion para IEDs
+  que rechazan el retrieveModel estandar.

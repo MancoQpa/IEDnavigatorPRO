@@ -163,9 +163,16 @@ class GoosePanel {
         panel.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
 
         // Initialize Native GOOSE subscriber (libiec61850) - preferred
-        nativeGooseSubscriber = new NativeGooseSubscriber();
-        nativeGooseSubscriber.setLogListener(msg -> logGoose("[NATIVE] " + msg));
-        nativeGooseSubscriber.setMessageListener(msg -> handleNativeGooseMessage(msg));
+        // Si iec61850.dll no carga (Error, no Exception) la app se quedaba sin ventana:
+        // se degrada a null y el resto del panel sigue funcionando con pcap4j/UDP.
+        try {
+            nativeGooseSubscriber = new NativeGooseSubscriber();
+            nativeGooseSubscriber.setLogListener(msg -> logGoose("[NATIVE] " + msg));
+            nativeGooseSubscriber.setMessageListener(msg -> handleNativeGooseMessage(msg));
+        } catch (Throwable t) {
+            nativeGooseSubscriber = null;
+            ctx.log("libiec61850 (iec61850.dll) no pudo cargar: " + t.getMessage());
+        }
 
         // Initialize pcap4j GOOSE subscriber as fallback
         gooseSubscriber = new GooseSubscriber();
@@ -647,11 +654,20 @@ class GoosePanel {
                 }
             }
             if (interfaces.isEmpty()) {
-                gooseInterfaceCombo.addItem(I18n.t("goose.iface.none"));
+                gooseInterfaceCombo.addItem(GooseSubscriber.isPcapUnavailable()
+                        ? I18n.t("goose.iface.nopcap")
+                        : I18n.t("goose.iface.none"));
+                if (GooseSubscriber.isPcapUnavailable()) {
+                    ctx.log(I18n.t("log.goose.nopcap"));
+                    logGoose(I18n.t("log.goose.nopcap"));
+                }
             }
-        } catch (Exception e) {
-            gooseInterfaceCombo.addItem(I18n.t("err.title") + ": " + e.getMessage());
-            ctx.log(I18n.t("log.goose.ifaceloaderror", e.getMessage()));
+        } catch (Throwable e) {
+            // Throwable y no Exception: sin Npcap, pcap4j falla con UnsatisfiedLinkError.
+            // Esto corre dentro de createPanel(), asi que un Error que escape deja la
+            // aplicacion sin ventana. El resto de la app (MMS) no depende de la captura.
+            gooseInterfaceCombo.addItem(I18n.t("goose.iface.nopcap"));
+            ctx.log(I18n.t("log.goose.ifaceloaderror", String.valueOf(e.getMessage())));
         }
     }
 

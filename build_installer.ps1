@@ -98,9 +98,14 @@ foreach ($item in @("jre", "IEDNavigatorPRO.exe", "IEDNavigatorPRO.ico", "IEDNav
     $src = Join-Path $Template $item
     if (Test-Path $src) { Copy-Item $src -Destination $DEST -Recurse -Force }
 }
-# textos de version: se toman de la plantilla y se actualizan mas abajo
+# Textos: SIEMPRE desde el repo, nunca de la plantilla. Arrastrarlos de release en
+# release fue lo que dejo vivo el paso "Verificando Npcap (incluido)" mucho despues de
+# que la v4.7 dejara de empaquetar Npcap, y lo que fue relabelando el historial de
+# LEAME.txt. README.txt e INSTALAR.bat llevan __VERSION__ como marcador; LEAME.txt no,
+# porque sus "v4.x" son cabeceras del historial. De la plantilla solo salen ya los
+# binarios genericos (jre\, .exe, .ico, .bat).
 foreach ($item in @("INSTALAR.bat", "README.txt", "LEAME.txt")) {
-    Copy-Item (Join-Path $Template $item) -Destination $DEST -Force
+    Copy-Item (Join-Path $ROOT "installer\resources\$item") -Destination $DEST -Force
 }
 # legales: SIEMPRE desde el repo, nunca de la plantilla
 Copy-Item (Join-Path $ROOT "LICENSE") -Destination $DEST -Force
@@ -125,14 +130,28 @@ Get-ChildItem $DEST -Recurse -File -ErrorAction SilentlyContinue |
 
 # ── Actualizar la version en los textos ──────────────────────────────────────
 Step "Actualizando textos de version"
-$oldVer = [regex]::Match((Split-Path $Template -Leaf), 'v(\d+\.\d+)').Groups[1].Value
-if (-not $oldVer) { Fail "No se pudo deducir la version de la plantilla" }
-Write-Host "  $oldVer -> $Version"
-foreach ($f in @("INSTALAR.bat", "README.txt", "LEAME.txt")) {
-    $p = Join-Path $DEST $f
-    $t = Get-Content $p -Raw -Encoding utf8
-    $t = $t -replace [regex]::Escape("v$oldVer"), "v$Version"
-    Set-Content $p $t -Encoding utf8 -NoNewline
+# Los textos ya no heredan la version de la plantilla: traen __VERSION__ desde el repo.
+Write-Host "  -> v$Version"
+$p = Join-Path $DEST "README.txt"
+$t = (Get-Content $p -Raw -Encoding utf8) -replace "__VERSION__", "v$Version"
+if ($t -match "__VERSION__") { Fail "Quedo un __VERSION__ sin reemplazar en README.txt" }
+Set-Content $p $t -Encoding utf8 -NoNewline
+# El historial se edita a mano por release; se avisa si quedo sin entrada para esta.
+if ((Get-Content (Join-Path $DEST "LEAME.txt") -Raw -Encoding utf8) -notmatch [regex]::Escape("v$Version")) {
+    Write-Host "  AVISO: LEAME.txt no tiene una entrada para v$Version" -ForegroundColor Yellow
+}
+# INSTALAR.bat viene del repo con el marcador, no con la version de la plantilla.
+# Se escribe en ASCII a proposito: "Set-Content -Encoding utf8" de PowerShell 5.1 antepone
+# un BOM, y cmd.exe se come el BOM junto con "@echo off". El instalador quedaba entonces
+# con el eco encendido y el usuario veia cada comando y cada ruta completa en pantalla:
+# ese fue el motivo de que el proceso se leyera mal hasta la v4.13.1.
+$p = Join-Path $DEST "INSTALAR.bat"
+$t = (Get-Content $p -Raw -Encoding utf8) -replace "__VERSION__", "v$Version"
+if ($t -match "__VERSION__") { Fail "Quedo un __VERSION__ sin reemplazar en INSTALAR.bat" }
+Set-Content $p $t -Encoding ascii -NoNewline
+$head = [System.IO.File]::ReadAllBytes($p)[0..2]
+if ($head[0] -eq 0xEF -and $head[1] -eq 0xBB -and $head[2] -eq 0xBF) {
+    Fail "INSTALAR.bat quedo con BOM: cmd.exe no procesaria el @echo off"
 }
 
 # ── Comprimir ────────────────────────────────────────────────────────────────

@@ -92,8 +92,22 @@ public class GooseSubscriber {
             return Pcaps.findAllDevs();
         } catch (PcapNativeException e) {
             return Collections.emptyList();
+        } catch (Throwable t) {
+            // Sin Npcap instalado, la carga de wpcap.dll falla con UnsatisfiedLinkError
+            // (un Error, no una Exception) desde el <clinit> de pcap4j. Se atrapa aca
+            // porque esto se llama al construir la UI: dejarlo escapar mataba el EDT y
+            // la aplicacion se quedaba sin ventana, sin ningun mensaje.
+            pcapUnavailable = true;
+            return Collections.emptyList();
         }
     }
+
+    /** true si ya se detecto que la libreria nativa de captura (Npcap) no esta disponible. */
+    public static boolean isPcapUnavailable() {
+        return pcapUnavailable;
+    }
+
+    private static volatile boolean pcapUnavailable = false;
 
     /**
      * Start capturing GOOSE on specified interface
