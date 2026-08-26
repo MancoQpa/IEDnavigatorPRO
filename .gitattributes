@@ -1,0 +1,40 @@
+# Politica de fin de linea del repo.
+#
+# Sin este archivo, el resultado dependia de core.autocrlf de cada maquina: una
+# configuracion local, no del proyecto. Aca queda fijada para cualquier clon.
+#
+# Regla general: git normaliza a LF en el indice y decide el checkout.
+* text=auto
+
+# ── Los que TIENEN que salir con CRLF ────────────────────────────────────────
+#
+# Los .bat son sensibles al fin de linea: cmd.exe puede fallar al resolver
+# etiquetas y goto si el archivo llega con LF. INSTALAR.bat es lo primero que
+# ejecuta el usuario, asi que esto no es cosmetico.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# README.txt y LEAME.txt viajan dentro del ZIP y se abren en Windows.
+*.txt  text eol=crlf
+
+# ── Los que git no debe tocar ────────────────────────────────────────────────
+#
+# La deteccion automatica de binarios es una heuristica. Declararlos evita que
+# una conversion de fin de linea corrompa un jar, una dll o un .class.
+*.jar    binary
+*.dll    binary
+*.exe    binary
+*.class  binary
+*.ico    binary
+*.zip    binary
+*.rar    binary
+*.bundle binary
+*.lnk    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.pdf    binary
+*.docx   binary
+*.xlsx   binary
+*.mp4    binary
