@@ -57,18 +57,18 @@ compatibilidade declarada, homologação nem endosso de nenhum fabricante.
 
 | Equipamento | O que se verificou |
 | --- | --- |
-| Siemens SIPROTEC 5 | Descoberta do modelo e **manobra SBO com segurança reforçada em campo**, com verificação de posição |
+| Siemens SIPROTEC 5 7SJ85 | Descoberta do modelo e **manobra SBO com segurança reforçada em campo**, com verificação de posição |
+| Siemens SIPROTEC 5 6MD85 | Descoberta do modelo em bancada (31 dispositivos lógicos, 117 nós lógicos, 2.009 objetos de dados) e leitura do modelo de controle |
 | NARI PCS-9611S | Descoberta do modelo e controle SBO em laboratório |
 | ZIV 2IRX | Descoberta do modelo e **comando direto** (`ctlModel` = 3) |
 | ABB REC670 | Descoberta do modelo, blocos de controle de relatório e verificação prévia de condições |
 | Ingeteam Ingepac EF-ZTO | Descoberta do modelo |
-| Efacec | Descoberta do modelo |
-| TPUS420 | Descoberta do modelo |
+| Efacec TPU S420 | Descoberta do modelo |
 
 *Descoberta do modelo* significa que a ferramenta recuperou e navegou o modelo de dados do
 equipamento; não implica que algo tenha sido operado nele. O ABB REC670 e o Ingeteam estão
 retirados de serviço e são usados como bancada de testes: servem para verificar funcionamento,
-não para afirmações de desempenho.
+não para afirmações de desempenho. O 6MD85 foi explorado em bancada, alimentado apenas com tensão auxiliar: sem realimentação de posição nem grandezas medidas.
 
 ### Requisitos
 - **Windows 10 ou 11 de 64 bits.**

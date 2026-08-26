@@ -57,17 +57,17 @@ endorsement by any manufacturer.
 
 | Device | What was verified |
 | --- | --- |
-| Siemens SIPROTEC 5 | Model discovery and **SBO with enhanced security operated in the field**, with position verification |
+| Siemens SIPROTEC 5 7SJ85 | Model discovery and **SBO with enhanced security operated in the field**, with position verification |
+| Siemens SIPROTEC 5 6MD85 | Bench model discovery (31 logical devices, 117 logical nodes, 2,009 data objects) and control model readout |
 | NARI PCS-9611S | Model discovery and SBO control in the lab |
 | ZIV 2IRX | Model discovery and **direct control** (`ctlModel` = 3) |
 | ABB REC670 | Model discovery, report control blocks and pre-command condition checks |
 | Ingeteam Ingepac EF-ZTO | Model discovery |
-| Efacec | Model discovery |
-| TPUS420 | Model discovery |
+| Efacec TPU S420 | Model discovery |
 
 *Model discovery* means the tool retrieved and browsed the device's data model; it does not
 imply anything was operated on it. The ABB REC670 and the Ingeteam are retired from service and
-used as test-bench units: they support functional verification, not performance claims.
+used as test-bench units: they support functional verification, not performance claims. The 6MD85 was explored on the bench, powered by auxiliary supply only: no position feedback and no measured quantities.
 
 ### Requirements
 - **64-bit Windows 10 or 11.**

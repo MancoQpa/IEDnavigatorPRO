@@ -57,18 +57,18 @@ declarada, homologación ni respaldo de ningún fabricante.
 
 | Equipo | Qué se verificó |
 | --- | --- |
-| Siemens SIPROTEC 5 | Exploración de modelo y **maniobra SBO con seguridad reforzada en campo**, con verificación de posición |
+| Siemens SIPROTEC 5 7SJ85 | Exploración de modelo y **maniobra SBO con seguridad reforzada en campo**, con verificación de posición |
+| Siemens SIPROTEC 5 6MD85 | Exploración de modelo en banco (31 dispositivos lógicos, 117 nodos lógicos, 2.009 objetos de datos) y lectura del modelo de control |
 | NARI PCS-9611S | Exploración de modelo y control SBO en laboratorio |
 | ZIV 2IRX | Exploración de modelo y **mando directo** (`ctlModel` = 3) |
 | ABB REC670 | Exploración de modelo, bloques de control de reporte y verificación previa de condiciones |
 | Ingeteam Ingepac EF-ZTO | Exploración de modelo |
-| Efacec | Exploración de modelo |
-| TPUS420 | Exploración de modelo |
+| Efacec TPU S420 | Exploración de modelo |
 
 *Exploración de modelo* significa que la herramienta recuperó y navegó el modelo de datos del
 equipo; no implica que se haya operado nada sobre él. El ABB REC670 y el Ingeteam están
 retirados de servicio y se usan como banco de pruebas: sirven para verificar funcionamiento,
-no para afirmaciones de rendimiento.
+no para afirmaciones de rendimiento. El 6MD85 se exploró sobre mesa, alimentado solo con tensión auxiliar: sin realimentación de posición ni magnitudes de medida.
 
 ### Requisitos
 - **Windows 10 u 11 de 64 bits.**
