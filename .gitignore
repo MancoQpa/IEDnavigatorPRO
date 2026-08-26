@@ -6,5 +6,13 @@ classes/
 *.log
 temp_installer*/
 
+# Paquetes armados por build_installer.ps1. Se publican como asset del release,
+# no viven en el repo: son cientos de MB de ZIPs y carpetas de releases viejos.
+# Las fuentes del instalador si estan versionadas, en installer/resources/.
+installer/output/
+
 # Registros de sesión que escribe la app junto al ejecutable (ver SessionLog)
 logs/
+
+# Bitácora de trabajo local, no forma parte del proyecto publicado
+sesion.md
