@@ -14,5 +14,7 @@ installer/output/
 # Registros de sesión que escribe la app junto al ejecutable (ver SessionLog)
 logs/
 
-# Bitácora de trabajo local, no forma parte del proyecto publicado
+# Bitacoras y notas de trabajo local, no forman parte del proyecto publicado
 sesion.md
+BITACORA.md
+HALLAZGOS_DESDE_EL_SIMULADOR.md
