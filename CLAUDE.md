@@ -84,7 +84,46 @@ Main class: `com.iednavigator.IEDNavigatorApp`
 - Logging via SLF4J with simple backend; debug info printed to console.
 - GUI uses color-coded tree nodes for state indication.
 - CSV export available for monitored data.
-- Multiple installer versions exist in `installer/output/` (v2.0 through v12).
+- Built installer packages land in `installer/output/`, which is **gitignored**. The
+  installer sources that *are* versioned live in `installer/resources/`
+  (`INSTALAR.bat`, `README.txt`, `LEAME.txt`); `build_installer.ps1` copies them from
+  there, never from a previous release.
+
+## Releasing: order matters
+
+`main` is not just the default branch — **pushing it publishes**. GitHub Pages serves
+`index.html` from `main` at `/`, and release tags are cut from `main`. There is no
+staging step.
+
+Publish a release in this order, and do not reorder steps 3 and 4:
+
+1. `.\build_installer.ps1 -Version X.Y.Z`
+2. Verify the package: run `INSTALAR.bat` and launch `IEDNavigatorPRO.exe` from the
+   built folder.
+3. **Publish the GitHub release** with the ZIP as its asset.
+4. **Only then** update the download link in `index.html` and push `main`.
+
+Doing 4 before 3 leaves the landing page's download button pointing at an asset that
+does not exist yet — a 404 on the main call to action, live, for as long as the release
+stays a draft. This happened with v4.13.2.
+
+### Branching
+
+- **Chores** (`.gitignore`, config): straight to `main`. A branch buys ceremony, not
+  protection.
+- **Code, installer, landing** (`src/`, `build_installer.ps1`, `installer/resources/`,
+  `index.html`): via branch. A mistake here reaches users immediately.
+
+### Untracking files that are already committed
+
+`git rm --cached <path>` does not delete anything *on the branch where you run it*, but
+when that commit reaches `main`, git applies it as a deletion of tracked files and
+**removes the working-tree copies** — including on anyone else's next `git pull`. Back
+up first, or restore afterwards without re-adding to the index:
+
+```bash
+git restore --source=<commit-before> --worktree -- <path>
+```
 
 ## Common Tasks
 
