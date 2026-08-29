@@ -3290,6 +3290,12 @@ public class IEDNavigatorApp extends JFrame {
         // Limpiar GOOSE y Reports al cambiar de modelo
         if (goosePanel != null) goosePanel.clearAll();
         if (reportsPanel != null) reportsPanel.clearAll();
+        // Y el monitor. MonitorItem guarda el FcModelNode que habia al arrastrarlo:
+        // cuando el modelo se va -- al desconectar o al cambiar de modo -- ese nodo
+        // queda huerfano y la fila se congela en el ultimo valor, con apariencia de
+        // dato vivo. Vaciar la tabla lo vuelve explicito: para seguir monitoreando
+        // hay que volver a arrastrar el DO/DA, contra el modelo nuevo.
+        if (monitorManager != null) monitorManager.clearMonitor();
     }
 
     private void updateNodeValue(String reference, String value) {
