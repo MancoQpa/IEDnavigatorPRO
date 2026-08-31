@@ -2736,13 +2736,15 @@ public class IEC61850Client implements ClientEventListener {
 
             // Si en el LD hay un solo aparato, agrupar no cambia nada y el alcance por LD ya
             // es correcto. Se mantiene el camino anterior para no alterar lo que funciona.
+            // Cuantos aparatos distintos hay en el LD, contando prefijo Y instancia: con solo
+            // el prefijo, DSXSWI1..9 contaban como uno y el agrupamiento se descartaba.
             java.util.Set<String> prefijosDeAparato = new java.util.TreeSet<>();
             for (ModelNode ln : ld.getChildren()) {
                 String n = ln.getName();
                 if (n == null) continue;
                 if (claseDeLn(n, "CSWI") || claseDeLn(n, "XCBR") || claseDeLn(n, "XSWI")) {
                     String p = prefijoDeLn(n);
-                    if (p != null && !p.isEmpty()) prefijosDeAparato.add(p);
+                    if (p != null && !p.isEmpty()) prefijosDeAparato.add(p + "|" + instanciaDeLn(n));
                 }
             }
             if (prefijosDeAparato.size() < 2) return null;
@@ -2750,7 +2752,7 @@ public class IEC61850Client implements ClientEventListener {
             GrupoAparato g = new GrupoAparato(prefijo);
             for (ModelNode ln : ld.getChildren()) {
                 String n = ln.getName();
-                if (n == null || !prefijo.equals(prefijoDeLn(n))) continue;   // prefijo EXACTO
+                if (n == null || !mismaFamiliaLn(lnName, n)) continue;   // prefijo de familia E instancia
                 String ref = ldName + "/" + n;
                 if (claseDeLn(n, "CILO")) g.cilos.add(ref);
                 else if (claseDeLn(n, "XCBR") || claseDeLn(n, "XSWI")) g.aparatos.add(ref);
@@ -2759,6 +2761,9 @@ public class IEC61850Client implements ClientEventListener {
 
             // El grupo tiene que cerrar: un aparato y a lo sumo un CILO. Si no cierra, el
             // agrupamiento no es de fiar y es preferible el alcance de siempre.
+            // Cero CILO es un cierre valido, no un fallo: hay archivos que numeran los CILO
+            // corridos respecto de los CSWI y dejan un aparato sin enclavamiento declarado.
+            // Antes eso caia al alcance por LD y el aparato heredaba el CILO de un vecino.
             if (g.aparatos.size() != 1 || g.cilos.size() > 1) return null;
             return g;
         } catch (Exception ignore) {
@@ -2798,6 +2803,37 @@ public class IEC61850Client implements ClientEventListener {
      * Lo que precede a la clase en el nombre del LN: "Q0CSWI1" → "Q0", "CSWI1" → "".
      * Devuelve null si el nombre no corresponde a ninguna de las clases de aparato.
      */
+    /**
+     * La instancia que cierra el nombre del LN: "DSCSWI1" -> "1". "" si no termina en digitos.
+     * Hace falta junto al prefijo: hay archivos donde el prefijo no identifica un aparato sino
+     * una familia entera —DSCSWI1..9 y DSCILO2..10 comparten el prefijo "DS"—, y agrupar solo
+     * por prefijo mete nueve seccionadores en una misma bolsa.
+     */
+    static String instanciaDeLn(String lnName) {
+        if (lnName == null) return "";
+        int i = lnName.length();
+        while (i > 0 && Character.isDigit(lnName.charAt(i - 1))) i--;
+        return lnName.substring(i);
+    }
+
+    /**
+     * Si dos LN pueden pertenecer al mismo aparato: misma instancia, y un prefijo contenido
+     * en el otro. Misma regla que ControlPolicy del simulador, para que cliente y servidor
+     * no discrepen sobre que CILO gobierna a que aparato.
+     *
+     * "CBNOCHK" contra "CB" es la misma familia —CBAUTOCSWI1, CBDEADCSWI1, CBNOCHKCSWI1 y
+     * CBSYNCCSWI1 son cuatro nodos de mando del mismo interruptor y todos responden a
+     * CBCILO1—; el prefijo vacio es prefijo de cualquiera, lo que cubre CSWI1 contra el
+     * SCILO1 de ABB. "DS" contra "CB" no comparten nada: son aparatos distintos.
+     */
+    static boolean mismaFamiliaLn(String a, String b) {
+        if (a == null || b == null) return false;
+        if (!instanciaDeLn(a).equals(instanciaDeLn(b))) return false;
+        String pa = prefijoDeLn(a), pb = prefijoDeLn(b);
+        if (pa == null || pb == null) return false;
+        return pa.startsWith(pb) || pb.startsWith(pa);
+    }
+
     static String prefijoDeLn(String lnName) {
         if (lnName == null) return null;
         String up = lnName.toUpperCase();
@@ -2855,7 +2891,15 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 ModelNode n = serverModel.findModelNode(ref, fc);
                 if (!(n instanceof FcModelNode)) continue;
-                try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
+                try {
+                    association.getDataValues((FcModelNode) n);
+                } catch (Exception e) {
+                    // Mismo motivo que en addEnumCheck: un booleano no leido queda en false,
+                    // que para Loc o EnaCls es una afirmacion fuerte y equivocada.
+                    logDiag("[WARN] preflight: no se pudo leer " + ref + ": " + e);
+                    return new PreflightCheck(ref, labelKey,
+                            I18n.t("ctl.pre.readfail", String.valueOf(e.getMessage())), false, null);
+                }
                 if (!(n instanceof BdaBoolean)) continue;
                 boolean v = ((BdaBoolean) n).getValue();
                 boolean blocking = false;
@@ -2884,7 +2928,18 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 ModelNode n = serverModel.findModelNode(ref, fc);
                 if (!(n instanceof FcModelNode)) continue;
-                try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
+                try {
+                    association.getDataValues((FcModelNode) n);
+                } catch (Exception e) {
+                    // Si la lectura falla, el modelo local conserva el valor por defecto —0 para
+                    // los enumerados— y presentarlo como si viniera del IED es mentir: se veia
+                    // "valor 0 fuera del enumerado (el equipo no lo informa)" contra un servidor
+                    // que en el mismo socket respondia Beh=1. Se informa el fallo de lectura.
+                    logDiag("[WARN] preflight: no se pudo leer " + ref + ": " + e);
+                    out.add(new PreflightCheck(ref, labelKey,
+                            I18n.t("ctl.pre.readfail", String.valueOf(e.getMessage())), false, null));
+                    return;
+                }
                 if (!(n instanceof BasicDataAttribute)) continue;
                 int v = getIntValue((BasicDataAttribute) n);
                 String name = map.get(v);
