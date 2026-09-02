@@ -581,7 +581,18 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 association.close();
             } catch (Exception e) {
-                // Ignorar
+                // close() hace un cierre ordenado. Si falla y no se hace nada mas, el
+                // socket queda huerfano: la referencia se pierde al poner association
+                // en null y ya nadie puede cerrarlo. Contra un IED que limite clientes
+                // simultaneos, cada socket asi ocupa un lugar hasta que muera el proceso.
+                // disconnect() es el cierre abrupto de la biblioteca y no negocia nada,
+                // asi que sirve de respaldo cuando el ordenado no pudo.
+                logDiag("[WARN] close() de la asociacion fallo (" + e + "), se cierra el socket a la fuerza");
+                try {
+                    association.disconnect();
+                } catch (Exception e2) {
+                    logDiag("[WARN] disconnect() tambien fallo: " + e2);
+                }
             }
             association = null;
         }
