@@ -683,6 +683,16 @@ class ConnectionManager {
                             ctx.log(I18n.t("log.cm.ipport", localIp, finalPort));
                             ctx.log(I18n.t("log.cm.connectclientto", localIp, finalPort));
 
+                            // Reconstruir el arbol del modelo. displayServerModel() solo se
+                            // llamaba al cargar el SCL, asi que si el archivo ya estaba
+                            // cargado el arbol nunca volvia. Y se vacia en cada cambio de
+                            // modo -- switchToServerMode() y switchToClientMode() llaman a
+                            // clearModel() --, de modo que tras detener y volver a simular
+                            // quedaba en blanco. Reportado por usuarios: "una vez que se
+                            // pierde la simulacion, al volver a darle a simular ya no me
+                            // carga el arbol del modelo de datos".
+                            ctx.displayServerModel();
+
                             // Auto-seleccionar interfaz de red para GOOSE (igual que en modo cliente)
                             ctx.autoSelectGooseInterface(localIp);
                         } else {
@@ -761,6 +771,14 @@ class ConnectionManager {
                 // Detectar interfaz local usada para la conexion
                 String localIp = detectLocalInterface(host);
                 ctx.log(I18n.t("log.cm.localifacedetected", localIp));
+
+                // Identificador del proceso. Con varias instancias abiertas -- pasa al
+                // comparar dos versiones, o al dejar una olvidada -- no habia forma de
+                // saber cual sostiene cada conexion, y una que uno cree cerrada sigue
+                // ocupando un lugar en un IED que limite clientes simultaneos. Este
+                // numero es el mismo que muestra "netstat -o" o el OwningProcess de
+                // Get-NetTCPConnection, asi que la correspondencia es directa.
+                ctx.log(I18n.t("log.cm.pid", String.valueOf(ProcessHandle.current().pid())));
 
                 final String finalHost = host;
                 final int finalPort = port;

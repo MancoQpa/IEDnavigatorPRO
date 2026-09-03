@@ -581,7 +581,18 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 association.close();
             } catch (Exception e) {
-                // Ignorar
+                // close() hace un cierre ordenado. Si falla y no se hace nada mas, el
+                // socket queda huerfano: la referencia se pierde al poner association
+                // en null y ya nadie puede cerrarlo. Contra un IED que limite clientes
+                // simultaneos, cada socket asi ocupa un lugar hasta que muera el proceso.
+                // disconnect() es el cierre abrupto de la biblioteca y no negocia nada,
+                // asi que sirve de respaldo cuando el ordenado no pudo.
+                logDiag("[WARN] close() de la asociacion fallo (" + e + "), se cierra el socket a la fuerza");
+                try {
+                    association.disconnect();
+                } catch (Exception e2) {
+                    logDiag("[WARN] disconnect() tambien fallo: " + e2);
+                }
             }
             association = null;
         }
@@ -2997,13 +3008,25 @@ public class IEC61850Client implements ClientEventListener {
                 "Nodo Cancel no encontrado en el modelo del IED", null);
         }
 
-        // Poblar Cancel: origin + ctlNum + T; sin ctlVal (Cancel no altera el proceso).
-        // Si hay una selección pendiente de este nodo (enhanced SBO), el CANCEL debe llevar
-        // el MISMO ctlNum del SELECT (IEC 61850-7-2 §20.8); si no, se autoincrementa.
+        // Poblar Cancel: ctlVal + origin + ctlNum + T. Si hay una selección pendiente de
+        // este nodo (enhanced SBO), el CANCEL debe llevar el MISMO ctlNum del SELECT
+        // (IEC 61850-7-2 §20.8); si no, se autoincrementa.
+        //
+        // El ctlVal también tiene que ser el del SELECT. Antes no se poblaba, con el
+        // razonamiento de que "Cancel no altera el proceso": es cierto que no maniobra,
+        // pero la norma lo define llevando el mismo valor de control, y un servidor
+        // estricto lo valida. Verificado el 2026-09-01 contra un NARI PCS-9611S: con el
+        // ctlVal por defecto rechazaba el CANCEL con ACCESS_VIOLATION(3), y poniéndole el
+        // del SELECT lo aceptó. Sin esto, una selección equivocada no se puede liberar y
+        // el aparato queda reservado hasta que venza el sboTimeout —30 s en ese equipo—.
         PendingSelect ps = pendingSelect;
         if (ps != null && ps.operNode == operNode && ps.ctlNum >= 0) {
+            setOperCtlVal(cancelNode, ps.ctlVal);
             fillControlStructure(cancelNode, ps.testFlag, orIdent, false, false, ps.ctlNum, ps.orCat);
         } else {
+            if (ps != null && ps.operNode == operNode && ps.ctlVal != null) {
+                setOperCtlVal(cancelNode, ps.ctlVal);
+            }
             fillControlStructure(cancelNode, false, orIdent);
         }
 

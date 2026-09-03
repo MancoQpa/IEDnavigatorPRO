@@ -28,11 +28,15 @@ function Step($msg) { Write-Host "`n== $msg" -ForegroundColor Cyan }
 
 # ── Plantilla ────────────────────────────────────────────────────────────────
 if (-not $Template) {
-    # el release mas reciente que tenga jre\ sirve de plantilla
+    # El release mas reciente que tenga jre\ sirve de plantilla, EXCLUYENDO la
+    # carpeta destino. Al reconstruir sobre una version que ya existe, esa carpeta
+    # es la mas nueva y se elegia a si misma: el script la vacia antes de copiar,
+    # asi que se llevaba puestos jre\, el .exe y el .ico, y el paquete quedaba en
+    # 9,9 MB sin lanzador. Peor: informaba "Listo" igual. Paso el 2026-09-03.
     $cand = Get-ChildItem $OUTDIR -Directory -ErrorAction SilentlyContinue |
-            Where-Object { Test-Path (Join-Path $_.FullName "jre") } |
+            Where-Object { $_.FullName -ne $DEST -and (Test-Path (Join-Path $_.FullName "jre")) } |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $cand) { Fail "No se encontro ninguna plantilla con jre\ en $OUTDIR" }
+    if (-not $cand) { Fail "No se encontro ninguna plantilla con jre\ en $OUTDIR (excluyendo el destino)" }
     $Template = $cand.FullName
 } elseif (-not [System.IO.Path]::IsPathRooted($Template)) {
     $Template = Join-Path $ROOT $Template
@@ -91,7 +95,16 @@ Banco (Join-Path $ROOT "classes\i18n") "el repo"
 
 # ── Armar el paquete ─────────────────────────────────────────────────────────
 Step "Copiando plantilla"
-if (Test-Path $DEST) { Remove-Item $DEST -Recurse -Force -Confirm:$false }
+if (Test-Path $DEST) {
+    # Si la aplicacion esta abierta desde esta misma carpeta, jre\bin\server\jvm.dll
+    # queda tomado y el borrado falla a mitad de camino. Conviene decirlo en una linea
+    # en vez de dejar un volcado de PowerShell.
+    try {
+        Remove-Item $DEST -Recurse -Force -Confirm:$false -ErrorAction Stop
+    } catch {
+        Fail "No se pudo vaciar $DEST -- probablemente la aplicacion este abierta desde esa carpeta. Cerrala y volve a correr el script.`n       Detalle: $($_.Exception.Message)"
+    }
+}
 New-Item -ItemType Directory -Path $DEST -Force | Out-Null
 # genericos de la plantilla (no dependen de la version)
 foreach ($item in @("jre", "IEDNavigatorPRO.exe", "IEDNavigatorPRO.ico", "IEDNavigatorPRO.bat")) {
@@ -152,6 +165,24 @@ Set-Content $p $t -Encoding ascii -NoNewline
 $head = [System.IO.File]::ReadAllBytes($p)[0..2]
 if ($head[0] -eq 0xEF -and $head[1] -eq 0xBB -and $head[2] -eq 0xBF) {
     Fail "INSTALAR.bat quedo con BOM: cmd.exe no procesaria el @echo off"
+}
+
+# ── Verificar que el paquete pueda arrancar ──────────────────────────────────
+# El script ya comprobaba los bundles de i18n, pero nada garantizaba que el
+# paquete fuera ejecutable. Un paquete sin jre\ o sin el .exe se comprimia y se
+# informaba como bueno; el usuario se enteraba al intentar abrirlo.
+Step "Verificando que el paquete arranque"
+$imprescindibles = @(
+    "IEDNavigatorPRO.exe",
+    "IEDNavigatorPRO.bat",
+    "jre\bin\java.exe",
+    "classes\com\iednavigator\IEDNavigatorApp.class",
+    "lib"
+)
+foreach ($item in $imprescindibles) {
+    $ruta = Join-Path $DEST $item
+    if (-not (Test-Path $ruta)) { Fail "El paquete quedo sin '$item' -- no arrancaria. Revisar la plantilla: $Template" }
+    Write-Host "  ok  $item"
 }
 
 # ── Comprimir ────────────────────────────────────────────────────────────────
