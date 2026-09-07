@@ -117,7 +117,7 @@ foreach ($item in @("jre", "IEDNavigatorPRO.exe", "IEDNavigatorPRO.ico", "IEDNav
 # LEAME.txt. README.txt e INSTALAR.bat llevan __VERSION__ como marcador; LEAME.txt no,
 # porque sus "v4.x" son cabeceras del historial. De la plantilla solo salen ya los
 # binarios genericos (jre\, .exe, .ico, .bat).
-foreach ($item in @("INSTALAR.bat", "README.txt", "LEAME.txt")) {
+foreach ($item in @("INSTALAR.bat", "instalador.ps1", "README.txt", "LEAME.txt")) {
     Copy-Item (Join-Path $ROOT "installer\resources\$item") -Destination $DEST -Force
 }
 # legales: SIEMPRE desde el repo, nunca de la plantilla
@@ -162,9 +162,24 @@ $p = Join-Path $DEST "INSTALAR.bat"
 $t = (Get-Content $p -Raw -Encoding utf8) -replace "__VERSION__", "v$Version"
 if ($t -match "__VERSION__") { Fail "Quedo un __VERSION__ sin reemplazar en INSTALAR.bat" }
 Set-Content $p $t -Encoding ascii -NoNewline
+
 $head = [System.IO.File]::ReadAllBytes($p)[0..2]
 if ($head[0] -eq 0xEF -and $head[1] -eq 0xBB -and $head[2] -eq 0xBF) {
     Fail "INSTALAR.bat quedo con BOM: cmd.exe no procesaria el @echo off"
+}
+
+# La ventana de instalacion lleva la version en su titulo y en el acceso directo.
+# Va en UTF-8 con BOM a proposito: PowerShell lo lee bien y el archivo tiene
+# acentos; el problema del BOM era de cmd.exe, no de PowerShell.
+#
+# Usa su propia variable: cuando compartia $p con INSTALAR.bat, y quedaba antes
+# del guardian de arriba, el guardian revisaba este archivo en vez del .bat y
+# abortaba el empaquetado por un BOM que aca es correcto.
+$pPs1 = Join-Path $DEST "instalador.ps1"
+if (Test-Path $pPs1) {
+    $tPs1 = (Get-Content $pPs1 -Raw -Encoding utf8) -replace "__VERSION__", "v$Version"
+    if ($tPs1 -match "__VERSION__") { Fail "Quedo un __VERSION__ sin reemplazar en instalador.ps1" }
+    Set-Content $pPs1 $tPs1 -Encoding utf8 -NoNewline
 }
 
 # ── Verificar que el paquete pueda arrancar ──────────────────────────────────
@@ -177,7 +192,8 @@ $imprescindibles = @(
     "IEDNavigatorPRO.bat",
     "jre\bin\java.exe",
     "classes\com\iednavigator\IEDNavigatorApp.class",
-    "lib"
+    "lib",
+    "instalador.ps1"
 )
 foreach ($item in $imprescindibles) {
     $ruta = Join-Path $DEST $item

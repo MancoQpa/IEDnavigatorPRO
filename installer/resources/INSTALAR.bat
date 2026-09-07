@@ -1,8 +1,39 @@
 @echo off
 setlocal enabledelayedexpansion
 title IED Navigator PRO __VERSION__ - Instalacion
-color 1F
 cd /d "%~dp0"
+
+:: ---- Instalacion con ventana -------------------------------------------
+:: Se intenta primero la ventana, que es lo que ve el usuario. Si PowerShell no
+:: esta disponible o la ventana falla, se continua con la instalacion de consola
+:: que sigue mas abajo: el resultado es el mismo y nunca queda sin instalar.
+if not exist "%~dp0instalador.ps1" goto :consola
+where powershell >nul 2>&1
+if errorlevel 1 goto :consola
+
+:: PowerShell tarda varios segundos en cargar las bibliotecas graficas. Sin este
+:: aviso el usuario ve una ventana negra vacia y no sabe si algo esta pasando.
+:: La consola se esconde sola en cuanto aparece la ventana de instalacion.
+cls
+echo.
+echo    IED Navigator PRO __VERSION__
+echo    ---------------------------------------------
+echo.
+echo    Preparando la instalacion...
+echo.
+echo    Aguarde unos segundos: se esta abriendo la ventana.
+echo.
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0instalador.ps1"
+if not errorlevel 1 exit /b 0
+
+echo.
+echo    No se pudo abrir la ventana de instalacion. Se continua en modo texto.
+echo.
+timeout /t 2 >nul
+
+:consola
+color 1F
 
 set "OK_JRE=0"
 set "OK_APP=0"
