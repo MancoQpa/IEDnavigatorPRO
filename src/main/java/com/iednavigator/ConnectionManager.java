@@ -127,7 +127,17 @@ class ConnectionManager {
             ctx.log(I18n.t("log.cm.clientdisc.tomodesrv"));
         }
         ctx.switchUiToServerMode();
+        // Se vacia el arbol porque puede venir con el modelo del cliente, que ya no
+        // corresponde. Pero si el servidor tiene uno cargado, se reconstruye en el acto:
+        // stop() no borra el modelo, asi que sigue disponible.
+        //
+        // Sin esto la interfaz se contradecia: el panel seguia mostrando el archivo
+        // cargado --lblFileName no se limpia-- y el arbol quedaba vacio. Reportado como
+        // "mostraba cargado sin embargo el arbol no estaba".
         ctx.clearModel();
+        if (ctx.getServer() != null && ctx.getServer().getServerModel() != null) {
+            ctx.displayServerModel();
+        }
         ctx.updateStatus(false, I18n.t("status.mode.server"));
     }
 
