@@ -2,6 +2,44 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.3
+-----
+- Modo servidor: el arbol del modelo de datos quedaba vacio y no habia forma de
+  recuperarlo sin volver a cargar el archivo SCL. Ocurria por dos caminos: al
+  detener la simulacion y volver a iniciarla, y al pasar a modo Cliente y
+  regresar a Servidor. En el segundo caso la ventana se contradecia, porque
+  seguia mostrando el archivo cargado junto al boton de cargar mientras el arbol
+  estaba vacio.
+  El arbol se vacia al cambiar de modo --correcto, porque el modelo mostrado deja
+  de corresponder-- pero solo se reconstruia al cargar el archivo, camino que ya
+  no se recorria. Ahora lo reconstruyen tanto el arranque de la simulacion como
+  el regreso a modo Servidor. El modelo nunca se habia perdido: seguia cargado y
+  disponible en ambos casos.
+- Control: el CANCEL de una seleccion previa (SBO) no incluia el valor de
+  control. La norma IEC 61850-7-2 lo define llevando el mismo valor que el
+  SELECT, y un IED estricto lo rechazaba con ACCESS_VIOLATION: la seleccion
+  equivocada no se podia liberar y el aparato quedaba reservado hasta vencer su
+  temporizador, 30 segundos en el equipo donde se detecto. Verificado contra un
+  IED de campo y contra IEDsimulator PRO con dos modelos de fabricantes
+  distintos.
+- Diagnostico: el registro de la sesion ahora indica el PID de la instancia al
+  conectarse. Con varias ventanas abiertas no habia forma de saber cual sostiene
+  cada conexion, y una que uno cree cerrada sigue ocupando un lugar en los IED
+  que limitan clientes simultaneos. El numero coincide con el que muestran
+  "netstat -o" y Get-NetTCPConnection.
+- Diagnostico: si el cierre ordenado de la asociacion falla, ahora se avisa y se
+  cierra el socket a la fuerza, en lugar de descartar el error en silencio y
+  dejar la conexion sin nadie que pueda cerrarla.
+- Ventana de condiciones de mando: una lectura fallida ya no se presenta como si
+  fuera un valor informado por el equipo. Se veia "valor 0 fuera del enumerado
+  (el equipo no lo informa)" contra IED que si respondian; ahora dice "no se pudo
+  leer del equipo" con el motivo.
+- Ventana de condiciones de mando: los enclavamientos de otros aparatos del vano
+  ya no se marcan como bloqueantes del aparato que se opera. El emparejamiento
+  entre nodo de mando y CILO ahora considera el numero de instancia ademas del
+  prefijo, de modo que cada aparato responde al suyo y el resto queda como
+  contexto informativo.
+
 v4.13.2
 -----
 - Instalador: se corrige la ilegibilidad del proceso. INSTALAR.bat se distribuia
