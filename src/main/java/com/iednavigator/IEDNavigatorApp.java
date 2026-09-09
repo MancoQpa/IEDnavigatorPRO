@@ -72,6 +72,8 @@ public class IEDNavigatorApp extends JFrame {
     private JTextField tfClientPort;
     private JButton btnConnect;
     private JCheckBox cbPolling;
+    /** Leer todos los valores al conectar. Apagada de fabrica: ver createClientPanel(). */
+    private JCheckBox cbLeerTodo;
     private JSpinner spinnerInterval;
     private JSpinner spinnerTimeout;
 
@@ -1194,6 +1196,11 @@ public class IEDNavigatorApp extends JFrame {
         cbPolling = new JCheckBox(I18n.t("cb.polling"));
         cbPolling.setEnabled(false);
         row4.add(cbPolling);
+        cbLeerTodo = new JCheckBox(I18n.t("cb.leertodo"));
+        cbLeerTodo.setToolTipText(I18n.t("cb.leertodo.tip"));
+        cbLeerTodo.setEnabled(true);
+        cbLeerTodo.setSelected(false);
+        row4.add(cbLeerTodo);
         row4.add(new JLabel(I18n.t("lbl.interval")));
         spinnerInterval = new JSpinner(new SpinnerNumberModel(2000, 500, 60000, 500));
         spinnerInterval.setEnabled(false);
@@ -1504,6 +1511,7 @@ public class IEDNavigatorApp extends JFrame {
             @Override
             public void onLog(String message) {
                 log(message);
+                mostrarEtapaEnEstado(message);
             }
         });
     }
@@ -3205,6 +3213,7 @@ public class IEDNavigatorApp extends JFrame {
             public void setBtnConnectText(String text) { btnConnect.setText(text); }
             public void setBtnStartStopText(String text) { btnStartStop.setText(text); }
             public void setBtnStartStopEnabled(boolean v) { btnStartStop.setEnabled(v); }
+            public boolean leerTodoAlConectar() { return cbLeerTodo.isSelected(); }
             public void setCbPollingEnabled(boolean v) { cbPolling.setEnabled(v); }
             public void setCbPollingSelected(boolean v) { cbPolling.setSelected(v); }
             public void setSpinnerIntervalEnabled(boolean v) { spinnerInterval.setEnabled(v); }
@@ -3278,6 +3287,53 @@ public class IEDNavigatorApp extends JFrame {
         if (model == null) { log(I18n.t("log.app.clientmodelnull")); return; }
         log(I18n.t("log.app.clientmodellds", model.getChildren().size()));
         buildTree(model);
+    }
+
+    /**
+     * Refleja en la barra de estado las etapas que el cliente informa por log.
+     *
+     * Conectar a un IED que rechaza retrieveModel() lleva unos 17 s. La barra
+     * decia "Conectando..." todo ese tiempo y el avance solo aparecia en el panel
+     * de log, que suele quedar angosto: se lee como un cuelgue aunque la ventana
+     * responda. Aca se traduce cada marca del cliente a algo que el usuario pueda
+     * leer de un vistazo.
+     */
+    private void mostrarEtapaEnEstado(String mensaje) {
+        if (mensaje == null) return;
+        String estado = null;
+
+        if (mensaje.startsWith("[RETRY] Esperando")) {
+            estado = I18n.t("status.et.esperando");
+        } else if (mensaje.startsWith("[RETRY] Reconectando")
+                || mensaje.startsWith("[RETRY-MANUAL] Reconectando")) {
+            estado = I18n.t("status.et.reconectando");
+        } else if (mensaje.startsWith("[RETRY-MANUAL] Esperando")) {
+            estado = I18n.t("status.et.esperando");
+        } else if (mensaje.startsWith("[MANUAL] Logical Devices")) {
+            estado = I18n.t("status.et.reconstruyendo");
+        } else if (mensaje.startsWith("[MANUAL] LD '")) {
+            // "[MANUAL] LD 'IED001CTRL': 43 LN(s)" -> se muestra cual va leyendo
+            int a = mensaje.indexOf('\''), b = mensaje.indexOf('\'', a + 1);
+            if (a > 0 && b > a) estado = I18n.t("status.et.leyendold", mensaje.substring(a + 1, b));
+        } else if (mensaje.startsWith("[MODELO]")) {
+            estado = I18n.t("status.et.armandoarbol");
+        } else if (mensaje.startsWith("[CID] Valores leidos")) {
+            estado = I18n.t("status.et.valoresleidos");
+        }
+
+        if (estado != null) {
+            final String e = estado;
+            // Ambar: la conexion esta en curso. El rojo queda reservado a fallas,
+            // y el verde a estar conectado. Pintar de rojo una etapa normal hacia
+            // parecer un problema donde no lo habia.
+            final boolean terminado = mensaje.startsWith("[CID] Valores leidos");
+            SwingUtilities.invokeLater(() -> {
+                lblStatus.setText(e);
+                statusIndicator.setBackground(
+                    terminado ? (isConnected ? COLOR_RUNNING : COLOR_STOPPED)
+                              : COLOR_CONNECTING);
+            });
+        }
     }
 
     private void buildTree(ServerModel model) {

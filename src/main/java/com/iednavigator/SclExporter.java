@@ -43,6 +43,20 @@ import java.util.Map;
  */
 public final class SclExporter {
 
+    /**
+     * Objetos de datos que se leyeron del equipo antes de exportar, con su FC.
+     *
+     * Si es null, no se hizo lectura previa y se emite lo que haya en el modelo
+     * local -- comportamiento anterior, que escribia valores por defecto como si
+     * fueran del equipo. Con el conjunto poblado, un DO ausente no aporta ningun
+     * DAI: es preferible un archivo incompleto y honesto a uno completo y falso,
+     * sobre todo si despues se carga en el simulador creyendo que reproduce al IED.
+     */
+    private java.util.Set<String> leidos;
+
+    /** Objetos de datos omitidos por no haberse leido. Se informa al usuario. */
+    private int dosOmitidos;
+
     /** Namespace SCL (IEC 61850-6). */
     private static final String NS = "http://www.iec.ch/61850/2003/SCL";
 
@@ -56,13 +70,20 @@ public final class SclExporter {
         public final List<String> uncertainCdc;
         /** DataSets nombrados por algún ReportControl que el archivo no declara. */
         public final List<String> datSetsColgados;
+        /**
+         * Objetos de datos cuyos valores no se emitieron por no haberse leído del
+         * equipo. Cero cuando se hizo una lectura completa previa y todo respondió.
+         */
+        public final int valoresOmitidos;
         public final String iedName;
 
         Result(String xml, String iedName, int lds, int lns, int dos, int das,
                int dataSets, int rcbs, int lnTypes, int doTypes, int daTypes,
-               List<String> uncertainCdc, List<String> datSetsColgados) {
+               List<String> uncertainCdc, List<String> datSetsColgados,
+               int valoresOmitidos) {
             this.xml = xml; this.iedName = iedName;
             this.datSetsColgados = datSetsColgados;
+            this.valoresOmitidos = valoresOmitidos;
             this.logicalDevices = lds; this.logicalNodes = lns;
             this.dataObjects = dos; this.dataAttributes = das;
             this.dataSets = dataSets; this.reportControls = rcbs;
@@ -118,10 +139,24 @@ public final class SclExporter {
      * @param configVersion revisión de configuración, o null
      */
     public static Result export(ServerModel model, String ipAddress, String iedName,
-                                String manufacturer, String deviceType, String configVersion) {
+            String manufacturer, String deviceType, String configVersion) {
+        return export(model, ipAddress, iedName, manufacturer, deviceType, configVersion, null);
+    }
+
+    /**
+     * Igual que la anterior, pero emitiendo valores solo de los objetos de datos
+     * que figuren en {@code leidos} -- el resultado de
+     * {@code IEC61850Client.leerTodosLosValores()}.
+     *
+     * Con {@code null} se emite lo que haya en el modelo local, que con carga
+     * perezosa son en su mayoria valores por defecto y no del equipo.
+     */
+    public static Result export(ServerModel model, String ipAddress, String iedName,
+            String manufacturer, String deviceType, String configVersion, java.util.Set<String> leidos) {
         if (model == null) throw new IllegalArgumentException("model == null");
-        return new SclExporter(model, ipAddress, iedName, manufacturer, deviceType, configVersion)
-                .build();
+        SclExporter e = new SclExporter(model, ipAddress, iedName, manufacturer, deviceType, configVersion);
+        e.leidos = leidos;
+        return e.build();
     }
 
     /**
@@ -181,7 +216,7 @@ public final class SclExporter {
 
         return new Result(sb.toString(), iedName, nLd, nLn, nDo, nDa, nDataSet, nRcb,
                           lnTypeXml.size(), doTypeXml.size(), daTypeXml.size(), uncertainCdc,
-                          new ArrayList<>(datSetsColgados));
+                          new ArrayList<>(datSetsColgados), dosOmitidos);
     }
 
     private void appendHeader(StringBuilder sb, String iedName) {
@@ -323,6 +358,13 @@ public final class SclExporter {
     private void appendDoiValues(StringBuilder sb, String doName, List<FcDataObject> instances) {
         StringBuilder inner = new StringBuilder();
         for (FcDataObject fcdo : instances) {
+            // Solo se emiten valores de objetos que se leyeron del equipo. Un DO no
+            // leido conserva en el modelo local su valor por defecto --0, false-- y
+            // emitirlo seria presentarlo como dato del IED.
+            if (leidos != null) {
+                String clave = fcdo.getReference().toString() + "$" + fcdo.getFc();
+                if (!leidos.contains(clave)) { dosOmitidos++; continue; }
+            }
             collectDais(inner, fcdo, "", 14);
         }
         if (inner.length() == 0) return;
