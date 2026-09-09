@@ -82,6 +82,8 @@ class ConnectionManager {
         void setBtnConnectText(String text);
         void setBtnStartStopText(String text);
         void setBtnStartStopEnabled(boolean v);
+        /** Si el usuario pidio leer todos los valores al conectar. */
+        boolean leerTodoAlConectar();
         void setCbPollingEnabled(boolean v);
         void setCbPollingSelected(boolean v);
         void setSpinnerIntervalEnabled(boolean v);
@@ -471,7 +473,24 @@ class ConnectionManager {
                 if (np.length > 3) cfg  = np[3];
             }
 
-            SclExporter.Result r = SclExporter.export(modelo, host, iedName, mfr, tipo, cfg);
+            // Lectura completa antes de exportar. El exportador toma los valores del
+            // modelo local, y con carga perezosa la mayoria de los atributos nunca se
+            // leyeron: un entero sin leer vale 0 y un booleano false, y se emitian
+            // como si fueran del equipo. Se paga aca --del orden del minuto contra un
+            // modelo grande-- y no al conectar, que es donde molestaria.
+            IEC61850Client.LecturaValores lv = null;
+            if (ctx.getClient() != null) {
+                ctx.log(I18n.t("log.cid.leyendovalores"));
+                lv = ctx.getClient().leerTodosLosValores((hechos, total) -> {
+                    if (hechos % 200 == 0 || hechos == total) {
+                        ctx.log(I18n.t("log.cid.avance", hechos, total));
+                    }
+                });
+                ctx.log(I18n.t("log.cid.valoresleidos", lv.leidos.size(), lv.pedidos, lv.fallidos));
+            }
+
+            SclExporter.Result r = SclExporter.export(modelo, host, iedName, mfr, tipo, cfg,
+                    lv == null ? null : lv.leidos);
             try (java.io.Writer w = new java.io.OutputStreamWriter(
                     new java.io.FileOutputStream(file), java.nio.charset.StandardCharsets.UTF_8)) {
                 w.write(r.xml);
@@ -479,6 +498,9 @@ class ConnectionManager {
 
             ctx.log(I18n.t("log.cid.generated", file.getAbsolutePath(),
                     r.logicalDevices, r.logicalNodes, r.dataObjects));
+            if (r.valoresOmitidos > 0) {
+                ctx.log(I18n.t("log.cid.valoresomitidos", r.valoresOmitidos));
+            }
             if (!r.uncertainCdc.isEmpty()) {
                 ctx.log(I18n.t("log.cid.uncertain", r.uncertainCdc.size()));
                 for (String u : r.uncertainCdc) ctx.log("    - " + u);
@@ -807,6 +829,21 @@ class ConnectionManager {
                         ctx.updateConnectionInfo(finalHost, finalPort);
                         ctx.log(I18n.t("log.cm.buildingmodeltree"));
                         ctx.displayClientModel();
+                        // Lectura completa opcional. Apagada de fabrica: contra un IED de
+                        // 106.000 nodos son 22 s mas sobre los 17 de la conexion, y crece
+                        // con el modelo. Quien la necesita la enciende.
+                        if (ctx.leerTodoAlConectar() && ctx.getClient() != null) {
+                            ctx.log(I18n.t("log.cid.leyendovalores"));
+                            IEC61850Client.LecturaValores lv =
+                                ctx.getClient().leerTodosLosValores((hechos, total) -> {
+                                    if (hechos % 500 == 0 || hechos == total) {
+                                        ctx.log(I18n.t("log.cid.avance", hechos, total));
+                                    }
+                                });
+                            ctx.log(I18n.t("log.cid.valoresleidos",
+                                    lv.leidos.size(), lv.pedidos, lv.fallidos));
+                            ctx.displayClientModel();
+                        }
                         ctx.log(I18n.t("log.cm.connectedmodelreceived"));
 
                         // Leer placa de identificación del IED (FC=DC) en background

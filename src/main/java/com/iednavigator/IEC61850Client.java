@@ -1323,6 +1323,93 @@ public class IEC61850Client implements ClientEventListener {
      * Los DataSets que no se puedan resolver se saltan y se informan, en vez de
      * perder tambien los que si estaban bien.
      */
+    /** Resultado de una lectura completa de valores previa a exportar. */
+    public static final class LecturaValores {
+        /** Referencias de DO efectivamente leidas del equipo, con FC incluido. */
+        public final java.util.Set<String> leidos;
+        public final int pedidos, fallidos;
+        public final java.util.List<String> motivos;
+        LecturaValores(java.util.Set<String> leidos, int pedidos, int fallidos,
+                       java.util.List<String> motivos) {
+            this.leidos = leidos; this.pedidos = pedidos;
+            this.fallidos = fallidos; this.motivos = motivos;
+        }
+    }
+
+    /** Aviso de avance, para que la interfaz pueda mostrar progreso. */
+    public interface AvanceLectura { void en(int hechos, int total); }
+
+    /**
+     * Lee del equipo el valor de todos los objetos de datos, y devuelve cuales se
+     * pudieron leer.
+     *
+     * Hace falta antes de exportar un CID. El exportador toma los valores del
+     * modelo local, y con carga perezosa la mayoria de los atributos nunca se
+     * leyeron: quedan en su valor por defecto --0 para los enteros, false para
+     * los booleanos-- y se emitian como si fueran del equipo. Las cadenas se
+     * salvaban por quedar vacias, que el exportador ya descarta.
+     *
+     * Se lee por objeto de datos y no por atributo: un getDataValues() sobre el DO
+     * trae todos sus DA de una vez. Contra un modelo de 186 nodos logicos son
+     * algunos miles de pedidos, del orden del minuto.
+     *
+     * Se leen TODAS las restricciones funcionales, sin excluir ninguna. Filtrar
+     * --se habian excluido CO, BL, EX, OR, BR, RP y SR-- dejaba 5.759 objetos de
+     * 16.785 sin leer, y obligaba a que el conteo de omitidos mezclara lo que se
+     * decidio no leer con lo que el equipo rechazo. Leyendo todo, un objeto sin
+     * valor en el CID significa una sola cosa: el equipo no lo entrego.
+     *
+     * Leer un objeto de control es una lectura, no una orden: se consulta el
+     * contenido de la estructura, no se escribe nada.
+     *
+     * Tolera el fallo individual: un DO que el equipo rechace no interrumpe el
+     * recorrido y queda fuera del conjunto devuelto, para que el exportador no
+     * emita un valor que nunca leyo.
+     */
+    public LecturaValores leerTodosLosValores(AvanceLectura avance) {
+        java.util.Set<String> leidos = new java.util.HashSet<>();
+        java.util.List<String> motivos = new java.util.ArrayList<>();
+        int pedidos = 0, fallidos = 0;
+
+        ServerModel m = serverModel;
+        if (m == null || association == null) {
+            return new LecturaValores(leidos, 0, 0, motivos);
+        }
+
+        java.util.List<FcModelNode> objetivos = new java.util.ArrayList<>();
+        for (ModelNode ld : m.getChildren()) {
+            for (ModelNode ln : ld.getChildren()) {
+                if (ln.getChildren() == null) continue;
+                for (ModelNode dobj : ln.getChildren()) {
+                    if (!(dobj instanceof FcModelNode)) continue;
+                    if (((FcModelNode) dobj).getFc() == null) continue;
+                    objetivos.add((FcModelNode) dobj);
+                }
+            }
+        }
+
+        int total = objetivos.size();
+        for (FcModelNode n : objetivos) {
+            pedidos++;
+            try {
+                association.getDataValues(n);
+                leidos.add(n.getReference().toString() + "$" + n.getFc());
+            } catch (Exception e) {
+                fallidos++;
+                if (motivos.size() < 20) {
+                    motivos.add(n.getReference() + ": " + e.getMessage());
+                }
+            }
+            if (avance != null && (pedidos % 25 == 0 || pedidos == total)) {
+                avance.en(pedidos, total);
+            }
+        }
+
+        logDiag("[CID] Valores leidos del equipo: " + leidos.size() + " objetos de "
+                + total + (fallidos > 0 ? ", " + fallidos + " rechazados" : ""));
+        return new LecturaValores(leidos, pedidos, fallidos, motivos);
+    }
+
     public LecturaDataSets recuperarDataSetsTolerante() {
         java.util.List<String> motivos = new java.util.ArrayList<>();
         int recuperados = 0, omitidos = 0;

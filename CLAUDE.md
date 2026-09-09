@@ -107,6 +107,22 @@ Doing 4 before 3 leaves the landing page's download button pointing at an asset 
 does not exist yet — a 404 on the main call to action, live, for as long as the release
 stays a draft. This happened with v4.13.2.
 
+### Testing a change the user will try
+
+`compile.ps1` writes to `classes\`. **That is not what the user runs.** The desktop
+shortcut points into `installer\output\<version>_Setup\`, which only changes when
+`build_installer.ps1` runs.
+
+So "it compiles" is never the end of a change the user is about to test. Repackage
+first, then confirm the class timestamp inside the package is newer than the edit:
+
+```bash
+ls -l installer/output/<version>_Setup/classes/com/iednavigator/<Changed>.class
+```
+
+This cost four rounds of "I tested it and nothing changed" in the week of
+2026-09-07 alone. The user is not testing the repo; they are testing the package.
+
 ### Branching
 
 - **Chores** (`.gitignore`, config): straight to `main`. A branch buys ceremony, not
