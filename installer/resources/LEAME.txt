@@ -2,6 +2,45 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.4
+-----
+- Conexion mas rapida con los equipos que rechazan la lectura directa del modelo.
+  El cliente esperaba 4 segundos antes de cada reintento, por un IED que rechaza
+  asociaciones nuevas tras un reinicio abrupto. Pero esperaba siempre: eran 8 de
+  los 17 segundos que tardaba conectar a un equipo de ese tipo. Ahora reintenta de
+  inmediato y solo espera si ese intento falla, con lo que la proteccion se
+  conserva para el equipo que la necesita y los demas no la pagan. Medido en dos
+  fabricantes distintos: ninguno rechaza la reconexion inmediata.
+- Generacion del CID: el archivo llevaba valores que no eran del equipo. Los
+  atributos que nunca se habian leido conservaban su valor por defecto --cero para
+  los enteros, falso para los booleanos-- y se escribian como si el IED los
+  hubiera informado. Ahora se leen todos los valores antes de generar el archivo.
+  Contra un equipo real, el CID paso de 37.994 valores --14.104 de ellos falsos-- a
+  41.844 leidos del equipo. Los objetos que el IED no entrega quedan sin valor en
+  lugar de aparecer con uno inventado.
+- Nueva opcion "Leer todos los valores al conectar", apagada de fabrica. Trae el
+  valor de todos los objetos de datos al conectarse, para tenerlos a mano sin
+  desplegar el arbol ni activar el sondeo. Alarga la conexion --unos 20 segundos en
+  un equipo de 100.000 nodos-- y el costo crece con el tamano del modelo, por eso
+  no viene activada.
+- Ordenes rechazadas sin causa legible: cuando el IED rechaza una maniobra y
+  ninguna de las condiciones que se pueden leer la bloquea, la aplicacion lo dice
+  en lugar de quedarse callada. Indica que la causa mas frecuente es que el equipo
+  este en mando LOCAL sin informarlo --la norma preve Loc, LocKey y LocSta en el
+  nodo de mando, pero hay equipos que rechazan sin poblarlos-- y muestra los
+  valores que el equipo devolvio.
+- Durante la conexion, la barra de estado informa en que etapa esta: la espera, la
+  reconexion, la reconstruccion del modelo y cada Logical Device que va leyendo.
+  Antes decia solo "Conectando..." durante todo el proceso, que con un equipo lento
+  se lee como si la aplicacion estuviera colgada.
+- Panel de cliente reordenado. Con la ventana angosta, algunos controles quedaban
+  fuera de la vista sin aviso: "Guardar CID" desaparecia y parecia que la funcion
+  no existiera. Ahora los campos cortos comparten fila y los largos van solos.
+- El registro de la sesion indica el PID de la instancia al conectarse. Con varias
+  ventanas abiertas no habia forma de saber cual sostiene cada conexion, y una que
+  uno cree cerrada sigue ocupando un lugar en los IED que limitan clientes
+  simultaneos.
+
 v4.13.3
 -----
 - Modo servidor: el arbol del modelo de datos quedaba vacio y no habia forma de

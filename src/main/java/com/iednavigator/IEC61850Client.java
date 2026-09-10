@@ -371,15 +371,11 @@ public class IEC61850Client implements ClientEventListener {
                 association = null;
             }
 
-            logDiag("[RETRY] Esperando " + RECONNECT_BACKOFF_MS + "ms antes de reconectar "
-                + "(algunos IEDs rechazan asociaciones nuevas justo después de un reset)...");
-            sleepBackoff(RECONNECT_BACKOFF_MS);
-
             logDiag("[RETRY] Reconectando para obtener modelo sin DataSets...");
             ClientSap retrySap = new ClientSap();
             retrySap.setResponseTimeout(connectionTimeoutMs);
             retrySap.setMessageFragmentTimeout(5000);
-            retryAssoc = retrySap.associate(address, port, null, this);
+            retryAssoc = asociarConReintento(retrySap, address, port, "RETRY");
 
             // Primero intentar retrieveModel() estándar por si fue un error transitorio
             try {
@@ -404,13 +400,11 @@ public class IEC61850Client implements ClientEventListener {
             }
 
             // Tercer intento: construir modelo manualmente via reflexión (sin DataSets)
-            logDiag("[RETRY-MANUAL] Esperando " + RECONNECT_BACKOFF_MS + "ms antes de reconectar...");
-            sleepBackoff(RECONNECT_BACKOFF_MS);
             logDiag("[RETRY-MANUAL] Reconectando para construcción manual del modelo...");
             ClientSap manualSap = new ClientSap();
             manualSap.setResponseTimeout(connectionTimeoutMs);
             manualSap.setMessageFragmentTimeout(5000);
-            retryAssoc = manualSap.associate(address, port, null, this);
+            retryAssoc = asociarConReintento(manualSap, address, port, "RETRY-MANUAL");
             ServerModel manualModel = retrieveModelManually(retryAssoc);
             if (manualModel != null) {
                 association = retryAssoc;
@@ -1366,6 +1360,36 @@ public class IEC61850Client implements ClientEventListener {
      * recorrido y queda fuera del conjunto devuelto, para que el exportador no
      * emita un valor que nunca leyo.
      */
+    /**
+     * Asocia reintentando: primero de inmediato, y solo si ese intento falla
+     * espera {@link #RECONNECT_BACKOFF_MS} y prueba una vez mas.
+     *
+     * La espera existe por un IED que rechaza asociaciones nuevas tras un reset
+     * abrupto. Pero se aplicaba siempre, y cuesta 8 s de los 17 que tarda
+     * conectar a un equipo que rechaza retrieveModel(). Medido el 2026-09-03 en
+     * dos fabricantes distintos, ninguno la necesita: la reconexion inmediata se
+     * acepta en 5-7 ms (NARI) y 10-17 ms (Ingeteam), tanto tras close() como
+     * tras disconnect().
+     *
+     * Intentar primero conserva la proteccion para el equipo que la motivo --si
+     * rechaza, se espera y se reintenta-- y no cobra nada a los que no la
+     * necesitan. Un rechazo inmediato es barato: la asociacion ni se establece.
+     *
+     * Salvedad: el caso original hablaba de un reset del equipo, no del cierre de
+     * la asociacion. Eso no se pudo reproducir.
+     */
+    private ClientAssociation asociarConReintento(ClientSap sap, InetAddress address,
+                                                  int port, String etiqueta) throws Exception {
+        try {
+            return sap.associate(address, port, null, this);
+        } catch (Exception primera) {
+            logDiag("[" + etiqueta + "] Rechazo la reconexion inmediata (" + primera.getMessage()
+                    + "); esperando " + RECONNECT_BACKOFF_MS + "ms y reintentando...");
+            sleepBackoff(RECONNECT_BACKOFF_MS);
+            return sap.associate(address, port, null, this);
+        }
+    }
+
     public LecturaValores leerTodosLosValores(AvanceLectura avance) {
         java.util.Set<String> leidos = new java.util.HashSet<>();
         java.util.List<String> motivos = new java.util.ArrayList<>();
