@@ -1166,48 +1166,53 @@ public class IEDNavigatorApp extends JFrame {
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createTitledBorder(I18n.t("border.client")));
 
-        // Fila 1: Host + Puerto
+        // El reparto de filas sigue una regla: lo corto se junta, lo largo va solo.
+        // FlowLayout dentro de un BoxLayout no reacomoda al angostarse -- recorta sin
+        // avisar --, asi que ninguna fila debe depender de tener ancho de sobra.
+
+        // Fila 1: Host, puerto y timeout. Los tres son cortos y se leen juntos:
+        // el host no necesita 12 columnas para una IP.
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         row1.add(new JLabel(I18n.t("lbl.host")));
-        tfHost = new JTextField("192.168.1.100", 12);
+        tfHost = new JTextField("192.168.1.100", 10);
         row1.add(tfHost);
         row1.add(new JLabel(I18n.t("lbl.port")));
         tfClientPort = new JTextField("102", 4);
         row1.add(tfClientPort);
+        row1.add(new JLabel(I18n.t("lbl.timeout")));
+        spinnerTimeout = new JSpinner(new SpinnerNumberModel(10, 5, 60, 5));
+        ((JSpinner.DefaultEditor) spinnerTimeout.getEditor()).getTextField().setColumns(2);
+        row1.add(spinnerTimeout);
         panel.add(row1);
 
-        // Fila 2: Timeout de conexión
+        // Fila 2: Conectar. Va solo porque es la accion principal.
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        row2.add(new JLabel(I18n.t("lbl.timeout")));
-        spinnerTimeout = new JSpinner(new SpinnerNumberModel(10, 5, 60, 5));
-        ((JSpinner.DefaultEditor) spinnerTimeout.getEditor()).getTextField().setColumns(3);
-        row2.add(spinnerTimeout);
-        panel.add(row2);
-
-        // Fila 3: Boton Connect
-        JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         btnConnect = new JButton(I18n.t("btn.connect"));
         btnConnect.setPreferredSize(new Dimension(200, 30));
-        row3.add(btnConnect);
-        panel.add(row3);
+        row2.add(btnConnect);
+        panel.add(row2);
 
-        // Fila 4: Polling
-        JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
+        // Fila 3: Polling con su intervalo, que forman una sola idea.
+        JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         cbPolling = new JCheckBox(I18n.t("cb.polling"));
         cbPolling.setEnabled(false);
-        row4.add(cbPolling);
-        cbLeerTodo = new JCheckBox(I18n.t("cb.leertodo"));
-        cbLeerTodo.setToolTipText(I18n.t("cb.leertodo.tip"));
-        cbLeerTodo.setEnabled(true);
-        cbLeerTodo.setSelected(false);
-        row4.add(cbLeerTodo);
-        row4.add(new JLabel(I18n.t("lbl.interval")));
+        row3.add(cbPolling);
+        row3.add(new JLabel(I18n.t("lbl.interval")));
         spinnerInterval = new JSpinner(new SpinnerNumberModel(2000, 500, 60000, 500));
         spinnerInterval.setEnabled(false);
-        row4.add(spinnerInterval);
+        row3.add(spinnerInterval);
+        panel.add(row3);
+
+        // Fila 4: la casilla de lectura completa, sola. Su etiqueta es larga y
+        // compartiendo fila era lo primero que se recortaba.
+        JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
+        cbLeerTodo = new JCheckBox(I18n.t("cb.leertodo"));
+        cbLeerTodo.setToolTipText(I18n.t("cb.leertodo.tip"));
+        cbLeerTodo.setSelected(false);
+        row4.add(cbLeerTodo);
         panel.add(row4);
 
-        // Fila 5: Watchlist + Obtener/Guardar CID
+        // Fila 5: watchlist y su boton de limpiar.
         JPanel row5 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         lblWatchlistCount = new JLabel(I18n.t("watchlist.count", 0));
         lblWatchlistCount.setForeground(new Color(0, 100, 180));
@@ -1216,17 +1221,22 @@ public class IEDNavigatorApp extends JFrame {
         btnClearWatchlist.setMargin(new Insets(2, 5, 2, 5));
         btnClearWatchlist.addActionListener(e -> clearWatchlist());
         row5.add(btnClearWatchlist);
+        panel.add(row5);
+
+        // Fila 6: los dos botones de CID, en su propia fila. Antes compartian la
+        // de la watchlist y "Guardar CID" quedaba fuera de la ventana.
+        JPanel row6 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         JButton btnGetCid = new JButton(I18n.t("btn.getcid"));
         btnGetCid.setMargin(new Insets(2, 5, 2, 5));
         btnGetCid.setToolTipText(I18n.t("btn.getcid.tip"));
         btnGetCid.addActionListener(e -> obtenerCidDelIed());
-        row5.add(btnGetCid);
+        row6.add(btnGetCid);
         JButton btnSaveCid = new JButton(I18n.t("btn.savecid"));
         btnSaveCid.setMargin(new Insets(2, 5, 2, 5));
         btnSaveCid.setToolTipText(I18n.t("btn.savecid.tip"));
         btnSaveCid.addActionListener(e -> guardarCid());
-        row5.add(btnSaveCid);
-        panel.add(row5);
+        row6.add(btnSaveCid);
+        panel.add(row6);
 
         return panel;
     }
@@ -2528,8 +2538,53 @@ public class IEDNavigatorApp extends JFrame {
             for (IEC61850Client.PreflightCheck c : checks) if (c.blocking) anyBlocking = true;
             if (anyBlocking) {
                 SwingUtilities.invokeLater(() -> showPreflightDialog(ref, checks));
+            } else {
+                // El equipo rechazo la orden y ninguna condicion leida la bloquea. Antes
+                // esta rama se iba en silencio y el usuario quedaba sin explicacion.
+                //
+                // La causa mas comun es que el equipo este en mando local y no lo publique:
+                // la norma define Loc, LocKey y LocSta en el CSWI para informarlo, pero hay
+                // IED que rechazan sin poblarlos. Verificado sobre un NARI PCS-9611S con el
+                // selector en las dos posiciones: en local rechaza, en remoto acepta, y los
+                // tres atributos valen false en ambos casos.
+                SwingUtilities.invokeLater(() -> mostrarRechazoSinCausaLegible(ref, checks));
             }
         });
+    }
+
+    /**
+     * El IED rechazo la orden pero ninguna condicion que se pudo leer la bloquea.
+     *
+     * Se muestra igual, porque el silencio es peor: deja al usuario sin saber si la
+     * herramienta miro algo. Y se nombra la causa mas probable -- mando local no
+     * publicado --, con los valores de autoridad realmente leidos para que se vea
+     * que se consultaron.
+     */
+    private void mostrarRechazoSinCausaLegible(String ref,
+                                               java.util.List<IEC61850Client.PreflightCheck> checks) {
+        StringBuilder html = new StringBuilder("<html><body style='width:430px'>");
+        html.append("<b>").append(escapeHtml(ref)).append("</b><br><br>");
+        html.append(escapeHtml(I18n.t("ctl.rej.nocause"))).append("<br><br>");
+        html.append(escapeHtml(I18n.t("ctl.rej.localhint"))).append("<br>");
+
+        // Los atributos de autoridad, tal como los devolvio el equipo.
+        if (checks != null) {
+            html.append("<br><table>");
+            for (IEC61850Client.PreflightCheck c : checks) {
+                String r = c.reference;
+                if (r == null) continue;
+                if (!(r.endsWith(".Loc.stVal") || r.endsWith(".LocKey.stVal")
+                        || r.endsWith(".LocSta.stVal"))) continue;
+                html.append("<tr><td>").append(escapeHtml(r)).append("</td><td><b>")
+                    .append(escapeHtml(String.valueOf(c.value))).append("</b></td></tr>");
+            }
+            html.append("</table>");
+        }
+        html.append("</body></html>");
+
+        JOptionPane.showMessageDialog(this, html.toString(),
+            I18n.t("ctl.rej.title"), JOptionPane.WARNING_MESSAGE);
+        log(I18n.t("ctl.rej.title") + " — " + ref + ": " + I18n.t("ctl.rej.nocause"));
     }
 
     /**
