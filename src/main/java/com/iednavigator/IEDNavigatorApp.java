@@ -2286,7 +2286,7 @@ public class IEDNavigatorApp extends JFrame {
                         sbowInd.setText(I18n.t("ctl.sbo.rejected"));
                         // Mismo reporte que el OPERATE: AddCause si lo hay, significado del
                         // ServiceError si no, y preflight de las condiciones del IED.
-                        reportControlRejection(operNode, ref, ctlVal,
+                        reportControlRejection(operNode, ref, ctlVal, testFlag,
                             "ctl.select.rejected.msg", "ctl.select.rejected", fcr, dlg);
                     }
                     refreshButtons.run();
@@ -2493,7 +2493,7 @@ public class IEDNavigatorApp extends JFrame {
      * @param titleKey  clave i18n del título de la ventana
      */
     private void reportControlRejection(FcModelNode operNode, String ref, String ctlVal,
-                                        String headerKey, String titleKey,
+                                        boolean testFlag, String headerKey, String titleKey,
                                         IEC61850Client.ControlResult cr, Component parent) {
         StringBuilder msg = new StringBuilder(I18n.t(headerKey)).append("\n\n");
         msg.append("  ").append(I18n.t("ctl.msg.node")).append(": ").append(ref).append("\n");
@@ -2538,6 +2538,19 @@ public class IEDNavigatorApp extends JFrame {
             for (IEC61850Client.PreflightCheck c : checks) if (c.blocking) anyBlocking = true;
             if (anyBlocking) {
                 SwingUtilities.invokeLater(() -> showPreflightDialog(ref, checks));
+            } else if (testFlag && behEnServicio(checks)) {
+                // Rechazo explicado: orden de prueba contra una LN en servicio.
+                //
+                // Con Test=true y Beh=on el servidor debe rechazar con Blocked-by-Mode
+                // (addCause 8): un comando de prueba no puede ejecutarse sobre un nodo en
+                // servicio. El preflight no encuentra nada bloqueante porque, para una
+                // orden normal, no hay nada: lo que bloquea es la combinacion.
+                //
+                // Antes se caia en el aviso de "sin causa legible", que culpaba al mando
+                // local y mostraba Loc/LocKey/LocSta -- irrelevantes aca. Medido el
+                // 2026-09-10 contra el simulador con CID del NARI: mismo nodo, con Test
+                // desmarcado opera y con Test marcado el SBOw se rechaza.
+                SwingUtilities.invokeLater(() -> mostrarRechazoPorModoTest(ref, checks, cr));
             } else {
                 // El equipo rechazo la orden y ninguna condicion leida la bloquea. Antes
                 // esta rama se iba en silencio y el usuario quedaba sin explicacion.
@@ -2547,9 +2560,70 @@ public class IEDNavigatorApp extends JFrame {
                 // IED que rechazan sin poblarlos. Verificado sobre un NARI PCS-9611S con el
                 // selector en las dos posiciones: en local rechaza, en remoto acepta, y los
                 // tres atributos valen false en ambos casos.
-                SwingUtilities.invokeLater(() -> mostrarRechazoSinCausaLegible(ref, checks));
+                SwingUtilities.invokeLater(() -> mostrarRechazoSinCausaLegible(ref, checks, cr));
             }
         });
+    }
+
+    /** true si algun Beh leido en el preflight vale "on": la LN esta en servicio. */
+    private boolean behEnServicio(java.util.List<IEC61850Client.PreflightCheck> checks) {
+        if (checks == null) return false;
+        for (IEC61850Client.PreflightCheck c : checks) {
+            if (c.reference != null && c.reference.endsWith(".Beh.stVal")
+                    && "on".equals(c.value)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Lo que el IED dijo del rechazo: AddCause con su nombre, o el ServiceError si no
+     * hay AddCause, y el LastApplError crudo. El cliente ya lo leia y se descartaba.
+     */
+    private void appendApplError(StringBuilder html, IEC61850Client.ControlResult cr) {
+        if (cr == null) return;
+        String causa = cr.addCauseName();
+        String linea = null;
+        if (causa != null) {
+            linea = "AddCause " + cr.addCause + " - " + causa;
+        } else if (cr.serviceErrorName() != null) {
+            linea = "ServiceError " + cr.serviceError + " - " + cr.serviceErrorName();
+        }
+        if (linea == null && cr.lastApplError == null) return;
+        html.append("<br><i>").append(escapeHtml(I18n.t("ctl.rej.applerr"))).append("</i><br>");
+        if (linea != null) html.append(escapeHtml(linea)).append("<br>");
+        if (cr.lastApplError != null) html.append(escapeHtml(cr.lastApplError)).append("<br>");
+    }
+
+    /**
+     * El rechazo se explica: se pidio una orden de prueba (Test) sobre una LN que esta
+     * en servicio (Beh=on). Es lo que manda la norma -- Blocked-by-Mode, addCause 8 --
+     * y tiene dos salidas, asi que se nombran las dos en lugar de mandar a revisar el
+     * selector local, que no interviene.
+     */
+    private void mostrarRechazoPorModoTest(String ref,
+                                           java.util.List<IEC61850Client.PreflightCheck> checks,
+                                           IEC61850Client.ControlResult cr) {
+        StringBuilder html = new StringBuilder("<html><body style='width:430px'>");
+        html.append("<b>").append(escapeHtml(ref)).append("</b><br><br>");
+        html.append(escapeHtml(I18n.t("ctl.rej.test.msg"))).append("<br><br>");
+        html.append(escapeHtml(I18n.t("ctl.rej.test.fix"))).append("<br>");
+
+        // Los Beh leidos: son la evidencia de este rechazo, como Loc lo es del otro.
+        if (checks != null) {
+            html.append("<br><table>");
+            for (IEC61850Client.PreflightCheck c : checks) {
+                if (c.reference == null || !c.reference.endsWith(".Beh.stVal")) continue;
+                html.append("<tr><td>").append(escapeHtml(c.reference)).append("</td><td><b>")
+                    .append(escapeHtml(String.valueOf(c.value))).append("</b></td></tr>");
+            }
+            html.append("</table>");
+        }
+        appendApplError(html, cr);
+        html.append("</body></html>");
+
+        JOptionPane.showMessageDialog(this, html.toString(),
+            I18n.t("ctl.rej.test.title"), JOptionPane.WARNING_MESSAGE);
+        log(I18n.t("ctl.rej.test.title") + " - " + ref + ": " + I18n.t("ctl.rej.test.msg"));
     }
 
     /**
@@ -2561,7 +2635,8 @@ public class IEDNavigatorApp extends JFrame {
      * que se consultaron.
      */
     private void mostrarRechazoSinCausaLegible(String ref,
-                                               java.util.List<IEC61850Client.PreflightCheck> checks) {
+                                               java.util.List<IEC61850Client.PreflightCheck> checks,
+                                               IEC61850Client.ControlResult cr) {
         StringBuilder html = new StringBuilder("<html><body style='width:430px'>");
         html.append("<b>").append(escapeHtml(ref)).append("</b><br><br>");
         html.append(escapeHtml(I18n.t("ctl.rej.nocause"))).append("<br><br>");
@@ -2580,6 +2655,7 @@ public class IEDNavigatorApp extends JFrame {
             }
             html.append("</table>");
         }
+        appendApplError(html, cr);
         html.append("</body></html>");
 
         JOptionPane.showMessageDialog(this, html.toString(),
@@ -2742,7 +2818,7 @@ public class IEDNavigatorApp extends JFrame {
                 JOptionPane.showMessageDialog(IEDNavigatorApp.this, msg, dlgTitle, dlgType);
                 updateSingleNodeInTree(ref.substring(0, ref.lastIndexOf('.')));
             } else {
-                reportControlRejection(operNode, ref, ctlVal,
+                reportControlRejection(operNode, ref, ctlVal, testFlag,
                     "ctl.oper.rejected.msg", "ctl.rejected.title", cr, IEDNavigatorApp.this);
             }
         });
