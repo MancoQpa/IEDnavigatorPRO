@@ -23,6 +23,16 @@ v4.13.4
   desplegar el arbol ni activar el sondeo. Alarga la conexion --unos 20 segundos en
   un equipo de 100.000 nodos-- y el costo crece con el tamano del modelo, por eso
   no viene activada.
+- Ordenes de prueba (Modo Test) rechazadas: la aplicacion dice ahora por que. Si se
+  marca Modo Test y la Logical Node esta en servicio (Beh=on), el IED debe rechazar
+  la orden --un comando de prueba no puede ejecutarse sobre un nodo en servicio-- y
+  hasta ahora el aviso culpaba al mando local y mostraba Loc, LocKey y LocSta, que no
+  intervienen. Ahora nombra el modo del nodo, muestra los Beh leidos e indica las dos
+  salidas: poner la LN en modo test (Mod=test) para una prueba simulada, o desmarcar
+  Modo Test para una maniobra real.
+- Los avisos de rechazo muestran lo que informo el equipo: el AddCause con su nombre
+  --o el ServiceError si el IED no publica AddCause-- y el LastApplError. La
+  aplicacion ya lo leia y no lo mostraba, asi que habia que deducir el motivo.
 - Ordenes rechazadas sin causa legible: cuando el IED rechaza una maniobra y
   ninguna de las condiciones que se pueden leer la bloquea, la aplicacion lo dice
   en lugar de quedarse callada. Indica que la causa mas frecuente es que el equipo
