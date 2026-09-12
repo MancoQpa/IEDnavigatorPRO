@@ -89,6 +89,9 @@ class GoosePanel {
     private volatile boolean internalLoopbackEnabled = false;
     private volatile boolean udpBridgeEnabled = false;
 
+    /** Casilla de publicación simulada (S-bit + campo simulation del PDU). */
+    private JCheckBox cbSimulado;
+
     /** Filtro de retransmisión: solo muestra cambios de stNum (omite heartbeats/sqNum). */
     private volatile boolean filterRetransmissions = false;
     /** Último stNum visto por gocbRef/appId para filtrar retransmisiones. */
@@ -261,12 +264,31 @@ class GoosePanel {
         cbFilterRetrans.addActionListener(e -> {
             filterRetransmissions = cbFilterRetrans.isSelected();
             lastStNumBySource.clear();
+            // Vaciar tambien la tabla. Si no, las filas anteriores al tildado --todas
+            // retransmisiones-- quedan en pantalla con la casilla marcada, y eso se
+            // lee como que el filtro no funciona. Paso el 2026-09-11: el filtro estaba
+            // filtrando bien y la conclusion fue la contraria, mirando el arrastre.
+            if (filterRetransmissions) {
+                gooseDataTableModel.setRowCount(0);
+                logGoose(I18n.t("log.goose.filtercleared"));
+            }
         });
         row2.add(cbFilterRetrans);
 
         row2.add(Box.createHorizontalStrut(20));
 
         row2.add(new JLabel(I18n.t("lbl.publish")));
+
+        // Visible y al lado de Publicar a proposito: cambia lo que la trama declara ser,
+        // y desmarcarla hace que la aplicacion se haga pasar por un equipo real.
+        cbSimulado = new JCheckBox(I18n.t("goose.pub.sim"));
+        cbSimulado.setToolTipText(I18n.t("goose.pub.sim.tip"));
+        cbSimulado.setOpaque(false);
+        cbSimulado.setForeground(new Color(150, 70, 0));
+        cbSimulado.setSelected(true);
+        cbSimulado.addActionListener(e -> aplicarModoSimulado(cbSimulado.isSelected()));
+        row2.add(cbSimulado);
+
         btnGoosePublish = new JButton(I18n.t("goose.publishbtn"));
         btnGoosePublish.setBackground(new Color(21, 101, 192));
         btnGoosePublish.setForeground(Color.WHITE);
@@ -298,7 +320,11 @@ class GoosePanel {
         panel.add(topPanel, BorderLayout.NORTH);
 
         // ===== CENTER: Messages Table =====
-        String[] captureColumns = {"Tiempo", "AppID", "st#", "sq#", "gocbRef", "Datos"};
+        // "Origen" y "Sim" salen de datos que los suscriptores ya traian y se
+        // descartaban: sin la MAC no se distingue lo propio de lo ajeno, y sin el bit
+        // de simulacion una trama inyectada por un equipo de ensayo se ve igual que
+        // la del IED al que suplanta.
+        String[] captureColumns = {"Tiempo", "Origen", "AppID", "st#", "sq#", "Sim", "gocbRef", "Datos"};
         gooseDataTableModel = new DefaultTableModel(captureColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -306,12 +332,14 @@ class GoosePanel {
         gooseDataTable = new JTable(gooseDataTableModel);
         gooseDataTable.setRowHeight(20);
         gooseDataTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
-        gooseDataTable.getColumnModel().getColumn(0).setPreferredWidth(80);
-        gooseDataTable.getColumnModel().getColumn(1).setPreferredWidth(55);
-        gooseDataTable.getColumnModel().getColumn(2).setPreferredWidth(40);
-        gooseDataTable.getColumnModel().getColumn(3).setPreferredWidth(40);
-        gooseDataTable.getColumnModel().getColumn(4).setPreferredWidth(180);
-        gooseDataTable.getColumnModel().getColumn(5).setPreferredWidth(250);
+        gooseDataTable.getColumnModel().getColumn(0).setPreferredWidth(80);   // Tiempo
+        gooseDataTable.getColumnModel().getColumn(1).setPreferredWidth(115);  // Origen
+        gooseDataTable.getColumnModel().getColumn(2).setPreferredWidth(55);   // AppID
+        gooseDataTable.getColumnModel().getColumn(3).setPreferredWidth(40);   // st#
+        gooseDataTable.getColumnModel().getColumn(4).setPreferredWidth(40);   // sq#
+        gooseDataTable.getColumnModel().getColumn(5).setPreferredWidth(40);   // Sim
+        gooseDataTable.getColumnModel().getColumn(6).setPreferredWidth(180);  // gocbRef
+        gooseDataTable.getColumnModel().getColumn(7).setPreferredWidth(250);  // Datos
 
         gooseDataTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
@@ -320,7 +348,7 @@ class GoosePanel {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 if (!isSelected) {
                     try {
-                        Object stNumObj = table.getValueAt(row, 2);
+                        Object stNumObj = table.getValueAt(row, 3);   // st#, corrido por Origen
                         if (stNumObj != null) {
                             int stNum = Integer.parseInt(stNumObj.toString());
                             c.setBackground(stNum > 1 ? new Color(255, 253, 208) : Color.WHITE);
@@ -883,6 +911,9 @@ class GoosePanel {
 
     private GoosePublisher createPublisherForGoCB(SclGoCB gcb, int gcbIndex) {
         GoosePublisher pub = new GoosePublisher();
+        // Nace con lo que diga la casilla, no con el default de la clase: si el usuario
+        // la desmarco antes de cargar los GoCB, los nuevos tienen que respetarlo.
+        pub.setTestMode(cbSimulado == null || cbSimulado.isSelected());
 
         String gocbRef = gcb.ldInst + "/LLN0$GO$" + gcb.cbName;
         pub.setGocbRef(gocbRef);
@@ -1370,6 +1401,23 @@ class GoosePanel {
     // ─── Message handlers ──────────────────────────────────────────────────────
 
     /**
+     * Propaga el modo simulado al publicador suelto y a todos los de GoCB, incluso si
+     * ya estan publicando: la bandera se escribe al armar cada trama, asi que el cambio
+     * se ve en la siguiente.
+     *
+     * Desmarcarla hace que las tramas salgan indistinguibles de las de un IED real. Se
+     * avisa en el registro porque es una decision con consecuencias fuera de la
+     * aplicacion, no una preferencia de presentacion.
+     */
+    private void aplicarModoSimulado(boolean simulado) {
+        if (goosePublisher != null) goosePublisher.setTestMode(simulado);
+        for (GoosePublisher pub : activePublishers.values()) {
+            if (pub != null) pub.setTestMode(simulado);
+        }
+        logGoose(I18n.t(simulado ? "log.goose.simon" : "log.goose.simoff"));
+    }
+
+    /**
      * Filtro de retransmisión: devuelve true si el mensaje debe mostrarse.
      * Muestra la primera aparición de cada stNum y omite las siguientes con el mismo stNum.
      */
@@ -1401,9 +1449,11 @@ class GoosePanel {
 
             gooseDataTableModel.insertRow(0, new Object[]{
                 msg.timestamp,
+                msg.srcMac != null ? msg.srcMac : "",
                 String.format("%04X", msg.appId),
                 msg.stNum,
                 msg.sqNum,
+                msg.test ? "sim" : "",
                 msg.gocbRef != null ? msg.gocbRef : (msg.goId != null ? msg.goId : ""),
                 dataStr.toString()
             });
@@ -1429,9 +1479,11 @@ class GoosePanel {
 
             gooseDataTableModel.insertRow(0, new Object[]{
                 msg.timestamp,
+                msg.srcMac != null ? msg.srcMac : "",
                 String.format("%04X", msg.appId),
                 msg.stNum,
                 msg.sqNum,
+                msg.test ? "sim" : "",
                 msg.goCbRef != null ? msg.goCbRef : (msg.goId != null ? msg.goId : ""),
                 dataStr.toString()
             });

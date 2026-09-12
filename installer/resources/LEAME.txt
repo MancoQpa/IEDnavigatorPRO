@@ -23,6 +23,31 @@ v4.13.4
   desplegar el arbol ni activar el sondeo. Alarga la conexion --unos 20 segundos en
   un equipo de 100.000 nodos-- y el costo crece con el tamano del modelo, por eso
   no viene activada.
+- CAMBIO DE COMPORTAMIENTO - La publicacion GOOSE ahora sale marcada como simulada.
+  Hasta esta version las tramas que publicaba la aplicacion salian declarandose reales:
+  el bit S de la cabecera iba en cero fijo y el campo simulation del PDU tambien, sin
+  forma de cambiarlos. Un IED suscripto no podia distinguirlas de las de un equipo en
+  servicio. Verificado sobre la misma PC y la misma placa de red contra otra herramienta
+  de ensayo: la otra publica con las dos banderas en true; esta publicaba las 610 tramas
+  de la prueba con las dos en false.
+  La norma resuelve esto con la bandera, no con la direccion MAC: un suscriptor acepta
+  tramas simuladas solo si el mismo esta en modo simulacion (LPHD.Sim). Publicar en false
+  saltea esa proteccion.
+  Hay una casilla nueva, "Publicar como simulado", al lado del boton Publicar y marcada
+  de fabrica. Si usted usaba la publicacion para alimentar una herramienta que respeta la
+  norma, esa herramienta ahora va a ignorar las tramas mientras no este en modo
+  simulacion: desmarque la casilla para volver al comportamiento anterior. Al desmarcarla
+  queda un aviso en el registro, porque las consecuencias salen de la aplicacion.
+- Filtrar retransmisiones (pestana GOOSE): al activar la casilla ahora se vacia la
+  tabla de mensajes. Antes quedaban en pantalla las filas anteriores al tildado,
+  todas retransmisiones, y con la casilla marcada eso se leia como que el filtro no
+  funcionaba. El filtro funcionaba: lo que fallaba era lo que se veia.
+- La tabla de mensajes GOOSE suma dos columnas. "Origen" muestra la MAC que publico
+  la trama, para distinguir lo que la aplicacion publica --aparece como LOCAL-- de lo
+  que llega de la red. "Sim" marca las tramas con el bit de simulacion activado: un
+  equipo de ensayo que suplanta a un IED publica con ese bit, y hasta ahora sus
+  tramas se veian iguales que las del equipo real. Los dos datos ya se leian del
+  cable y no se mostraban.
 - Ordenes de prueba (Modo Test) rechazadas: la aplicacion dice ahora por que. Si se
   marca Modo Test y la Logical Node esta en servicio (Beh=on), el IED debe rechazar
   la orden --un comando de prueba no puede ejecutarse sobre un nodo en servicio-- y
