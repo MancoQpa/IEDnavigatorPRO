@@ -24,12 +24,16 @@ Es la versión evolucionada (núcleo activo) del proyecto IEDNavigator, con inte
 - Suscripción a reportes (URCB / BRCB).
 - Setting Groups (SGCB) y panel de Ajustes de protección (SP).
 - Construcción del modelo por reflexión para IEDs que rechazan el `retrieveModel` estándar.
+- Opción **Leer todos los valores al conectar** (apagada de fábrica): trae el valor de todos los objetos de datos al conectarse, sin desplegar el árbol ni activar el sondeo.
 
 #### Control de maniobra
 - Modelos de control (ctlModel): directo, SBO con seguridad normal y **SBO con seguridad reforzada** (select-with-value). Como `iec61850bean` 1.9.0 no implementa el select-with-value del modelo reforzado (ctlModel = 4), el intercambio `SBOw` → `Oper` (con el mismo `ctlNum`) está implementado manualmente conforme a IEC 61850-7-2 §20. Verificado contra un relé de protección **NARI PCS-9611S** real.
 - Diálogo de maniobra con **SBO en dos pasos**: *Seleccionar (SBOw)* — con cuenta regresiva del temporizador de reserva (`sboTimeout`) —, *Ejecutar (OPER)* y *Cancelar SELECT*.
 - Bandera `Test`, campo `Check` (`synchroChk` / `interlkChk`), identificador de operador (`orIdent`).
 - **Verificación de posición post-operación**: tras un OPERATE aceptado, la herramienta lee el `stVal` del objeto controlado hasta confirmar (o no) la maniobra física.
+- **Cancelar** conforme a IEC 61850-7-2 §20.8: el `Cancel` repite el `ctlVal` del SELECT. Verificado contra el registro de control del propio relé.
+- **Verificación previa de condiciones** antes y después de una orden: `Beh`, `Health`, autoridad de mando (`Loc`, `LocKey`, `LocSta`), enclavamiento (`CILO.EnaOpn` / `EnaCls`) y sincronismo (`RSYN.Rel`).
+- Ante un rechazo se informa **lo que devolvió el equipo**: el `AddCause` con su nombre —o el `ServiceError` si el IED no publica `AddCause`— junto con el `LastApplError`. Si la orden se pidió con **Modo Test** sobre un nodo en servicio (`Beh=on`), se nombra ese motivo (*Blocked-by-Mode*) en lugar de atribuirlo al mando local.
 
 #### Modo Servidor / Simulador de IED
 - Carga de archivos SCL (ICD / CID / SCD) e instanciación de un servidor IEC 61850.
@@ -42,12 +46,16 @@ Es la versión evolucionada (núcleo activo) del proyecto IEDNavigator, con inte
 - Esquema de retransmisión conforme a la norma (número de secuencia `sqNum` monótono).
 - Puente **GOOSE-sobre-UDP** (puerto 62746) para redes enrutadas / Wi-Fi.
 - GOOSE / Sampled Values nativo vía `libiec61850` (JNA), incluido en `lib/`.
+- Publicación **marcada como simulada de fábrica** (bit S de la cabecera y campo `simulation` del PDU): un suscriptor conforme solo la acepta si él mismo está en modo simulación (`LPHD.Sim`). Se puede desmarcar desde el panel, con aviso en el registro.
+- **Filtro de retransmisiones**: muestra solo los cambios de estado (`stNum` nuevo) y omite los latidos.
+- La tabla de mensajes indica la **MAC origen** de cada trama y si lleva la **bandera de simulación**.
 
 #### Utilidades SCL y diccionario
 - Comparación de archivos SCL (diferencias por IED, LN, DataSet, GoCB, Report, comunicación).
 - Análisis del mapa de suscripciones GOOSE (publicadores/suscriptores) desde SCD.
 - Generación de reporte HTML del modelo del IED.
 - Diccionario IEC 61850 integrado (descripciones de LN, CDC, FC, DO).
+- **Generación de archivo CID desde el equipo conectado**: lee todos los valores antes de exportar, de modo que el archivo lleve la configuración real del IED. Los objetos que el equipo no entrega quedan sin valor, en lugar de escribirse con un valor por defecto.
 
 ### Equipos verificados
 
@@ -80,8 +88,8 @@ no para afirmaciones de rendimiento. El 6MD85 se exploró sobre mesa, alimentado
 **Opción A — Instalador (recomendado)**
 1. Descargar el instalador desde [Releases](https://github.com/MancoQpa/IEDnavigatorPRO/releases) (paquete autocontenido, incluye el runtime de Java).
 2. Extraer toda la carpeta (por ejemplo a `C:\IEDNavigatorPRO`).
-3. Clic derecho en `INSTALAR.bat` → **Ejecutar como administrador**.
-4. Instalar Npcap desde <https://npcap.com/#download> (solo si se usará GOOSE/SV).
+3. Clic derecho en `INSTALAR.bat` → **Ejecutar como administrador**. Se abre una ventana con las opciones **Instalar** y **Desinstalar**; si detecta que falta Npcap, ofrece un botón que lo descarga e instala.
+4. Npcap solo hace falta para GOOSE/SV en Capa 2. También puede instalarse por separado desde <https://npcap.com/#download>.
 5. Iniciar con el ícono del Escritorio o con `IEDNavigatorPRO.exe`.
 
 **Opción B — Maven (desde el código)**

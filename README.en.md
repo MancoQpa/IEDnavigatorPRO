@@ -24,12 +24,16 @@ This is the evolved (actively maintained) version of the IEDNavigator project, w
 - Report subscription (URCB / BRCB).
 - Setting Groups (SGCB) and protection settings panel (SP).
 - Reflection-based model construction for IEDs that reject the standard `retrieveModel`.
+- **Read all values on connect** option (off by default): retrieves the value of every data object on connection, without expanding the tree or enabling polling.
 
 #### Switching / Control Operations
 - Control models (ctlModel): direct, SBO with normal security, and **SBO with enhanced security** (select-with-value). Since `iec61850bean` 1.9.0 does not implement select-with-value for the enhanced model (ctlModel = 4), the `SBOw` → `Oper` exchange (with matching `ctlNum`) is implemented manually per IEC 61850-7-2 §20. Verified against a real **NARI PCS-9611S** protection relay.
 - Two-step SBO control dialog: *Select (SBOw)* — with a countdown of the reservation timer (`sboTimeout`) —, *Execute (OPER)*, and *Cancel SELECT*.
 - `Test` flag, `Check` field (`synchroChk` / `interlkChk`), operator identifier (`orIdent`).
 - **Post-operation position verification**: after an accepted OPERATE, the tool reads the `stVal` of the controlled object until the physical operation is confirmed (or not).
+- **Cancel** per IEC 61850-7-2 §20.8: the `Cancel` repeats the `ctlVal` of the SELECT. Verified against the relay's own control log.
+- **Pre-flight condition checks** before and after a command: `Beh`, `Health`, command authority (`Loc`, `LocKey`, `LocSta`), interlocking (`CILO.EnaOpn` / `EnaCls`) and synchrocheck (`RSYN.Rel`).
+- On a rejection, **what the device returned** is shown: the `AddCause` with its name —or the `ServiceError` if the IED does not publish `AddCause`— along with the `LastApplError`. If the command was issued with **Test Mode** on a node in service (`Beh=on`), that reason is named (*Blocked-by-Mode*) instead of blaming local control.
 
 #### Server Mode / IED Simulator
 - Loads SCL files (ICD / CID / SCD) and instantiates an IEC 61850 server.
@@ -42,12 +46,16 @@ This is the evolved (actively maintained) version of the IEDNavigator project, w
 - Standard-compliant retransmission scheme (monotonic `sqNum` sequence number).
 - **GOOSE-over-UDP** bridge (port 62746) for routed networks / Wi-Fi.
 - Native GOOSE / Sampled Values via `libiec61850` (JNA), included in `lib/`.
+- Publishing is **marked as simulated by default** (header S bit and the PDU `simulation` field): a compliant subscriber accepts it only if it is itself in simulation mode (`LPHD.Sim`). It can be cleared from the panel, with a notice in the log.
+- **Retransmission filter**: shows only state changes (new `stNum`) and omits heartbeats.
+- The message table shows each frame's **source MAC** and whether it carries the **simulation flag**.
 
 #### SCL Utilities and Dictionary
 - SCL file comparison (differences by IED, LN, DataSet, GoCB, Report, communication).
 - GOOSE subscription map analysis (publishers/subscribers) from SCD.
 - HTML report generation of the IED model.
 - Built-in IEC 61850 dictionary (LN, CDC, FC, DO descriptions).
+- **CID file generation from the connected device**: all values are read before exporting, so the file carries the IED's actual configuration. Objects the device does not return are left without a value instead of being written with a default.
 
 ### Verified equipment
 
@@ -79,8 +87,8 @@ used as test-bench units: they support functional verification, not performance 
 **Option A — Installer (recommended)**
 1. Download the installer from [Releases](https://github.com/MancoQpa/IEDnavigatorPRO/releases) (self-contained package, includes the Java runtime).
 2. Extract the entire folder (e.g. to `C:\IEDNavigatorPRO`).
-3. Right-click `INSTALAR.bat` → **Run as administrator**.
-4. Install Npcap from <https://npcap.com/#download> (only if GOOSE/SV will be used).
+3. Right-click `INSTALAR.bat` → **Run as administrator**. A window opens with **Install** and **Uninstall** options; if Npcap is missing, it offers a button that downloads and installs it.
+4. Npcap is only needed for Layer 2 GOOSE/SV. It can also be installed separately from <https://npcap.com/#download>.
 5. Launch via the Desktop icon or `IEDNavigatorPRO.exe`.
 
 **Option B — Maven (from source)**
