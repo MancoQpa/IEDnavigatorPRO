@@ -24,12 +24,16 @@
 - 报告订阅（URCB / BRCB）。
 - 定值组（SGCB）及保护定值面板（SP）。
 - 针对拒绝标准 `retrieveModel` 的 IED，通过反射方式构建模型。
+- **连接时读取全部值**选项（出厂关闭）：连接时即取回所有数据对象的值，无需展开树形结构或启用轮询。
 
 #### 操作控制
 - 控制模型（ctlModel）：直接控制、普通安全 SBO，以及 **增强安全 SBO**（select-with-value）。由于 `iec61850bean` 1.9.0 未实现增强模型（ctlModel = 4）的 select-with-value，`SBOw` → `Oper` 的交互（使用相同的 `ctlNum`）已按照 IEC 61850-7-2 §20 手动实现，并在真实的 **NARI PCS-9611S** 保护装置上进行了验证。
 - 两步式 SBO 操作对话框：*选择（SBOw）*——带预留计时器（`sboTimeout`）倒计时——、*执行（OPER）* 和 *取消 SELECT*。
 - `Test` 标志位、`Check` 字段（`synchroChk` / `interlkChk`）、操作员标识（`orIdent`）。
 - **操作后位置校验**：OPERATE 被接受后，工具会持续读取受控对象的 `stVal`，直至确认（或未确认）实际物理动作。
+- **取消（Cancel）** 符合 IEC 61850-7-2 §20.8：`Cancel` 重复 SELECT 的 `ctlVal`。已对照继电器自身的控制日志验证。
+- 命令前后的**条件预检**：`Beh`、`Health`、操作权限（`Loc`、`LocKey`、`LocSta`）、闭锁（`CILO.EnaOpn` / `EnaCls`）与同期检查（`RSYN.Rel`）。
+- 被拒绝时会显示**设备返回的内容**：带名称的 `AddCause`——若 IED 不发布 `AddCause` 则显示 `ServiceError`——以及 `LastApplError`。若命令是在节点处于运行状态（`Beh=on`）时以**测试模式**发出的，会直接指出该原因（*Blocked-by-Mode*），而不是归咎于就地控制。
 
 #### 服务端模式 / IED 仿真器
 - 加载 SCL 文件（ICD / CID / SCD）并实例化一个 IEC 61850 服务端。
@@ -42,12 +46,16 @@
 - 符合标准的重传机制（单调递增的序列号 `sqNum`）。
 - **GOOSE-over-UDP** 桥接（端口 62746），适用于路由网络 / Wi-Fi。
 - 通过 `libiec61850`（JNA）实现原生 GOOSE / 采样值（Sampled Values），已包含在 `lib/` 目录中。
+- 发布**出厂即标记为仿真**（报头 S 位与 PDU 的 `simulation` 字段）：符合标准的订阅方仅在自身处于仿真模式（`LPHD.Sim`）时才会接受。可在面板中取消勾选，并在日志中留下提示。
+- **重传过滤**：仅显示状态变化（新的 `stNum`），略过心跳报文。
+- 报文表格会显示每一帧的**源 MAC** 以及是否携带**仿真标志**。
 
 #### SCL 工具与词典
 - SCL 文件比较（按 IED、LN、DataSet、GoCB、Report、通信方式列出差异）。
 - 从 SCD 文件分析 GOOSE 订阅关系图（发布者/订阅者）。
 - 生成 IED 模型的 HTML 报告。
 - 内置 IEC 61850 词典（LN、CDC、FC、DO 说明）。
+- **从已连接设备生成 CID 文件**：导出前读取全部值，使文件承载 IED 的真实配置。设备未返回的对象将留空，而不是写入默认值。
 
 ### 已验证设备
 
@@ -77,8 +85,8 @@
 **方式 A —— 安装程序（推荐）**
 1. 从 [Releases](https://github.com/MancoQpa/IEDnavigatorPRO/releases) 下载安装包（自包含，内置 Java 运行时）。
 2. 解压整个文件夹（例如解压到 `C:\IEDNavigatorPRO`）。
-3. 右键点击 `INSTALAR.bat` → **以管理员身份运行**。
-4. 从 <https://npcap.com/#download> 安装 Npcap（仅在需要使用 GOOSE/SV 时）。
+3. 右键点击 `INSTALAR.bat` → **以管理员身份运行**。将打开一个窗口，提供**安装**与**卸载**选项；若检测到缺少 Npcap，会提供一个按钮自动下载并安装。
+4. Npcap 仅在使用二层 GOOSE/SV 时才需要，也可从 <https://npcap.com/#download> 单独安装。
 5. 通过桌面图标或 `IEDNavigatorPRO.exe` 启动。
 
 **方式 B —— Maven（从源码构建）**
