@@ -58,7 +58,12 @@ public class GoosePublisher {
     // el cambio de estado, y unifica la convención "publicar y LUEGO incrementar" para que
     // sqNum sea estrictamente monótono dentro de un mismo stNum (IEC 61850-8-1).
     private final Object counterLock = new Object();
-    private boolean testMode = false;
+    // Simulado por defecto: esto corre en una PC, no en un IED. Declararlo es lo que
+    // permite que un equipo suscripto ignore estas tramas mientras no este el mismo en
+    // modo simulacion (LPHD.Sim), que es la proteccion que evita que una inyeccion de
+    // ensayo haga actuar a la proteccion real. Se puede desmarcar desde el panel para
+    // alimentar herramientas que no entiendan de simulacion.
+    private boolean testMode = true;
     private boolean needsCommissioning = false;
 
     // VLAN 802.1Q (de Communication/GSE del SCL); -1 = sin etiqueta VLAN
@@ -279,8 +284,10 @@ public class GoosePublisher {
         baos.write((length >> 8) & 0xFF);
         baos.write(length & 0xFF);
 
-        // Reserved1 (2 bytes)
-        baos.write(0);
+        // Reserved1 (2 bytes). El bit 15 es el S-bit ("Simulated") y debe coincidir con
+        // el campo simulation del PDU; Wireshark marca como trama invalida el caso de una
+        // puesta y la otra no. Antes iba a cero fijo, sin campo ni setter que lo alcanzara.
+        baos.write(testMode ? 0x80 : 0x00);
         baos.write(0);
 
         // Reserved2 (2 bytes)
@@ -491,6 +498,7 @@ public class GoosePublisher {
     public void setAppId(int appId) { this.appId = appId; }
     public void setConfRev(int confRev) { this.confRev = confRev; }
     public void setTestMode(boolean testMode) { this.testMode = testMode; }
+    public boolean isTestMode() { return testMode; }
     public int getHeartbeatInterval() { return this.heartbeatInterval; }
     public void setHeartbeatInterval(int ms) { this.heartbeatInterval = ms; }
     public void setDstMac(String mac) { this.dstMac = MacAddress.getByName(mac); }
