@@ -67,7 +67,7 @@ endorsement by any manufacturer.
 | --- | --- |
 | Siemens SIPROTEC 5 7SJ85 | Model discovery and **SBO with enhanced security operated in the field**, with position verification |
 | Siemens SIPROTEC 5 6MD85 | Bench model discovery (31 logical devices, 117 logical nodes, 2,009 data objects) and control model readout |
-| NARI PCS-9611S | Model discovery and SBO control in the lab |
+| NARI PCS-9611S | Model discovery (via manual construction: it rejects the standard `retrieveModel`), **SBO operations with enhanced security** for open and close, and **Cancel per §20.8** confirmed in the relay's own control log. Rejection with the selector in **local control** verified in both positions: the device rejects without populating `Loc` / `LocKey` / `LocSta`. Full model read and CID export carrying the device's values |
 | ZIV 2IRX | Model discovery and **direct control** (`ctlModel` = 3) |
 | ABB REC670 | Model discovery, report control blocks and pre-command condition checks |
 | Ingeteam Ingepac EF-ZTO | Model discovery |
