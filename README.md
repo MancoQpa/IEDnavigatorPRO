@@ -67,7 +67,7 @@ declarada, homologación ni respaldo de ningún fabricante.
 | --- | --- |
 | Siemens SIPROTEC 5 7SJ85 | Exploración de modelo y **maniobra SBO con seguridad reforzada en campo**, con verificación de posición |
 | Siemens SIPROTEC 5 6MD85 | Exploración de modelo en banco (31 dispositivos lógicos, 117 nodos lógicos, 2.009 objetos de datos) y lectura del modelo de control |
-| NARI PCS-9611S | Exploración de modelo y control SBO en laboratorio |
+| NARI PCS-9611S | Exploración de modelo (por construcción manual: rechaza el `retrieveModel` estándar), **maniobras SBO con seguridad reforzada** de apertura y cierre, y **Cancel conforme a §20.8** confirmado en el registro de control del propio relé. Rechazo con el selector en **mando local** verificado en ambas posiciones: el equipo rechaza sin poblar `Loc` / `LocKey` / `LocSta`. Lectura completa del modelo y exportación de CID con los valores del equipo |
 | ZIV 2IRX | Exploración de modelo y **mando directo** (`ctlModel` = 3) |
 | ABB REC670 | Exploración de modelo, bloques de control de reporte y verificación previa de condiciones |
 | Ingeteam Ingepac EF-ZTO | Exploración de modelo |

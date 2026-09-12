@@ -67,7 +67,7 @@ compatibilidade declarada, homologação nem endosso de nenhum fabricante.
 | --- | --- |
 | Siemens SIPROTEC 5 7SJ85 | Descoberta do modelo e **manobra SBO com segurança reforçada em campo**, com verificação de posição |
 | Siemens SIPROTEC 5 6MD85 | Descoberta do modelo em bancada (31 dispositivos lógicos, 117 nós lógicos, 2.009 objetos de dados) e leitura do modelo de controle |
-| NARI PCS-9611S | Descoberta do modelo e controle SBO em laboratório |
+| NARI PCS-9611S | Descoberta do modelo (por construção manual: rejeita o `retrieveModel` padrão), **manobras SBO com segurança reforçada** de abertura e fechamento, e **Cancel conforme a §20.8** confirmado no registro de controle do próprio relé. Rejeição com a chave em **comando local** verificada nas duas posições: o equipamento rejeita sem preencher `Loc` / `LocKey` / `LocSta`. Leitura completa do modelo e exportação de CID com os valores do equipamento |
 | ZIV 2IRX | Descoberta do modelo e **comando direto** (`ctlModel` = 3) |
 | ABB REC670 | Descoberta do modelo, blocos de controle de relatório e verificação prévia de condições |
 | Ingeteam Ingepac EF-ZTO | Descoberta do modelo |
