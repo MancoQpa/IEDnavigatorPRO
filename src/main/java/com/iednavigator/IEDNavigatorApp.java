@@ -2621,7 +2621,7 @@ public class IEDNavigatorApp extends JFrame {
         appendApplError(html, cr);
         html.append("</body></html>");
 
-        JOptionPane.showMessageDialog(this, html.toString(),
+        JOptionPane.showMessageDialog(this, panelDesplazable(html.toString()),
             I18n.t("ctl.rej.test.title"), JOptionPane.WARNING_MESSAGE);
         log(I18n.t("ctl.rej.test.title") + " - " + ref + ": " + I18n.t("ctl.rej.test.msg"));
     }
@@ -2658,9 +2658,42 @@ public class IEDNavigatorApp extends JFrame {
         appendApplError(html, cr);
         html.append("</body></html>");
 
-        JOptionPane.showMessageDialog(this, html.toString(),
+        JOptionPane.showMessageDialog(this, panelDesplazable(html.toString()),
             I18n.t("ctl.rej.title"), JOptionPane.WARNING_MESSAGE);
         log(I18n.t("ctl.rej.title") + " — " + ref + ": " + I18n.t("ctl.rej.nocause"));
+    }
+
+    /**
+     * Envuelve el HTML de un diálogo en un panel desplazable de altura acotada.
+     *
+     * {@link JOptionPane} dimensiona la ventana al contenido sin techo, asi que una
+     * lista larga --el preflight de un vano con varios aparatos enumera un CILO por
+     * seccionador vecino-- crece hasta salirse de la pantalla, y lo que queda fuera
+     * es el final de la lista. Para leerlo habia que mover la ventana con atajos de
+     * teclado.
+     *
+     * Si el contenido entra, se ve exactamente igual que antes y sin barra. Si no
+     * entra, se acota y aparece la barra vertical.
+     */
+    private JComponent panelDesplazable(String html) {
+        JLabel etiqueta = new JLabel(html);
+        etiqueta.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+
+        JScrollPane scroll = new JScrollPane(etiqueta,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);   // el HTML ya trae ancho fijo
+        scroll.setBorder(null);
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);  // rueda utilizable
+
+        Dimension pref = etiqueta.getPreferredSize();
+        int tope = (int) (Toolkit.getDefaultToolkit().getScreenSize().height * 0.65);
+        int alto = Math.min(pref.height, tope);
+        // Se reserva el ancho de la barra solo cuando efectivamente va a aparecer.
+        int ancho = pref.width + (alto < pref.height ? 26 : 8);
+        scroll.setPreferredSize(new Dimension(ancho, alto));
+        return scroll;
     }
 
     /**
@@ -2708,7 +2741,8 @@ public class IEDNavigatorApp extends JFrame {
         }
         html.append("</table></body></html>");
 
-        JOptionPane.showMessageDialog(this, html.toString(), I18n.t("ctl.pre.title"),
+        JOptionPane.showMessageDialog(this, panelDesplazable(html.toString()),
+            I18n.t("ctl.pre.title"),
             blocking > 0 ? JOptionPane.WARNING_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
 
         log(preflightLogLine(ref, checks));
