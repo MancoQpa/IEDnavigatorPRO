@@ -285,6 +285,7 @@ public class IEC61850Client implements ClientEventListener {
             // Una sola línea por conexión, después de que cualquiera de las rutas haya dejado
             // el modelo puesto: así la salida es comparable entre equipos y entre rutas.
             logModelShape(System.currentTimeMillis() - modelStart);
+            iniciarMantenimiento();
             System.out.println("[OK] Connected to " + host + ":" + port);
 
             return true;
@@ -320,6 +321,7 @@ public class IEC61850Client implements ClientEventListener {
         serverModel = model;
         connected = true;
         modelPath = "scl-externo";
+        iniciarMantenimiento();
         System.out.println("[INFO] SCL fallback: modelo externo inyectado (" + countNodes(model) + " nodos)");
         return true;
     }
@@ -571,6 +573,7 @@ public class IEC61850Client implements ClientEventListener {
      * Desconecta del servidor
      */
     public void disconnect() {
+        detenerMantenimiento();
         if (association != null) {
             try {
                 association.close();
@@ -625,7 +628,7 @@ public class IEC61850Client implements ClientEventListener {
         try {
             ModelNode node = serverModel.findModelNode(reference, fc);
             if (node instanceof FcModelNode) {
-                association.getDataValues((FcModelNode) node);
+                leer((FcModelNode) node);
 
                 String value = formatValue(node);
                 String type = getValueType(node);
@@ -709,7 +712,7 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 ModelNode node = serverModel.findModelNode(fullRef, Fc.DC);
                 if (node instanceof FcModelNode) {
-                    association.getDataValues((FcModelNode) node);
+                    leer((FcModelNode) node);
                     String val = formatValue(node);
                     System.out.println("[Nameplate] " + fullRef + " = '" + val + "'");
                     if (val != null && !val.isEmpty() && !val.equals("null")) {
@@ -735,10 +738,140 @@ public class IEC61850Client implements ClientEventListener {
         }
 
         try {
-            association.getDataValues(node);
+            leer(node);
         } catch (ServiceError e) {
             throw new IOException("ServiceError: " + e.getErrorCode(), e);
         }
+    }
+
+    // ==================== MANTENIMIENTO DE LA ASOCIACIÓN ====================
+
+    /**
+     * Silencio máximo antes de mandar una lectura de mantenimiento.
+     *
+     * Hay equipos que cortan la asociación cuando el cliente pasa un rato sin pedir nada, y
+     * la norma se lo permite: el ABORT es un servicio legítimo y la gestión de recursos queda
+     * a criterio del fabricante. Medido el 2026-09-30 contra un Ingeteam eF (ZT0): ABORT a los
+     * 88-90 s de silencio, en tres sesiones, y el ICD del propio equipo lo declara en
+     * genIPRV1.AplicTms ("Time Out para desconexion") = 90. Con una lectura cada 30 s la misma
+     * asociación seguía viva a los 200 s.
+     *
+     * Con el polling apagado la aplicación queda muda después de conectar, así que ese
+     * temporizador corta siempre. 60 s deja 30 de margen contra los 90 de fábrica.
+     */
+    static final long KEEPALIVE_MS = 60_000;
+
+    /** Cada cuánto se mira si hace falta la lectura. El silencio real llega a KEEPALIVE_MS + esto. */
+    private static final long KEEPALIVE_CHEQUEO_MS = 5_000;
+
+    /** Último pedido MMS enviado o respondido. Lo usa el mantenimiento para no pisar tráfico. */
+    private volatile long ultimoTraficoMs = System.currentTimeMillis();
+
+    private ScheduledExecutorService mantenimiento;
+    private volatile boolean mantenimientoAvisado = false;
+
+    private void marcarTrafico() {
+        ultimoTraficoMs = System.currentTimeMillis();
+    }
+
+    /**
+     * La asociación, marcando que se la va a usar.
+     *
+     * Todo pedido al IED tiene que pasar por acá, por {@link #leer} o por {@link #escribir}.
+     * No es contabilidad: {@code ClientAssociation} no admite dos pedidos simultáneos
+     * —comparte el buffer de salida y la cola de respuestas— y la lectura de mantenimiento
+     * sólo sale si nadie pidió nada en los últimos {@link #KEEPALIVE_MS}. Un pedido que no
+     * pase por acá puede cruzarse con ella.
+     */
+    private ClientAssociation mms() {
+        marcarTrafico();
+        return association;
+    }
+
+    /** getDataValues marcando el tráfico al salir y al volver: una lectura lenta también cuenta. */
+    private void leer(FcModelNode n) throws ServiceError, IOException {
+        marcarTrafico();
+        try {
+            association.getDataValues(n);
+        } finally {
+            marcarTrafico();
+        }
+    }
+
+    /** setDataValues con el mismo criterio que {@link #leer}. */
+    private void escribir(FcModelNode n) throws ServiceError, IOException {
+        marcarTrafico();
+        try {
+            association.setDataValues(n);
+        } finally {
+            marcarTrafico();
+        }
+    }
+
+    private synchronized void iniciarMantenimiento() {
+        detenerMantenimiento();
+        marcarTrafico();
+        mantenimientoAvisado = false;
+        mantenimiento = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "mantenimiento-asociacion");
+            t.setDaemon(true);
+            return t;
+        });
+        mantenimiento.scheduleWithFixedDelay(this::mantenerAsociacion,
+            KEEPALIVE_CHEQUEO_MS, KEEPALIVE_CHEQUEO_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private synchronized void detenerMantenimiento() {
+        if (mantenimiento != null) {
+            mantenimiento.shutdownNow();
+            mantenimiento = null;
+        }
+    }
+
+    private void mantenerAsociacion() {
+        try {
+            if (connectInProgress || !isConnected()) return;
+            if (System.currentTimeMillis() - ultimoTraficoMs < KEEPALIVE_MS) return;
+            if (!mantenimientoAvisado) {
+                mantenimientoAvisado = true;
+                logDiag("[ENLACE] " + (KEEPALIVE_MS / 1000) + " s sin pedidos al IED: se mantiene "
+                    + "la asociacion con una lectura minima cada " + (KEEPALIVE_MS / 1000)
+                    + " s de silencio (hay equipos que cortan por inactividad)");
+            }
+            heartbeat();
+        } catch (Throwable t) {
+            // Una excepción que escapa de una tarea programada la cancela en silencio.
+            System.err.println("[ENLACE] mantenimiento: " + t);
+        }
+    }
+
+    /**
+     * Frase para el log cuando el IED cierra la asociación: cuánto llevaba el cliente sin
+     * pedir nada, y si el modelo trae el parámetro de Ingeteam que gobierna ese corte.
+     * Sin esto el usuario ve "Received an ABORT SPDU" y no tiene cómo saber que no es la red.
+     */
+    private String explicarCierre(IOException e) {
+        long silencioS = (System.currentTimeMillis() - ultimoTraficoMs) / 1000;
+        String msg = (e != null && e.getMessage() != null) ? e.getMessage() : "";
+        StringBuilder sb = new StringBuilder("[ENLACE] Asociacion cerrada tras ")
+            .append(silencioS).append(" s sin pedidos del cliente");
+        if (msg.contains("ABORT") && silencioS >= 20) {
+            sb.append(". El IED envio ABORT: probable temporizador de inactividad del equipo");
+            if (tieneAplicTmsIngeteam()) {
+                sb.append(" (en Ingeteam: genIPRV1.AplicTms, \"Time Out para desconexion\")");
+            }
+        }
+        return sb.toString();
+    }
+
+    private boolean tieneAplicTmsIngeteam() {
+        ServerModel m = serverModel;
+        if (m == null || m.getChildren() == null) return false;
+        for (ModelNode ld : m.getChildren()) {
+            ModelNode ln = ld.getChild("genIPRV1");
+            if (ln != null && ln.getChild("AplicTms") != null) return true;
+        }
+        return false;
     }
 
     // ==================== LATIDO DE ENLACE ====================
@@ -772,7 +905,7 @@ public class IEC61850Client implements ClientEventListener {
         if (node == null) return true;   // sin nodo de prueba no se concluye nada
 
         try {
-            association.getDataValues(node);
+            leer(node);
             return true;
         } catch (ServiceError e) {
             // Un ServiceError normalmente significa que el equipo contestó, aunque sea para
@@ -1144,7 +1277,7 @@ public class IEC61850Client implements ClientEventListener {
                 setBasicDataAttributeValue(bda, value);
 
                 if (node instanceof FcModelNode) {
-                    association.setDataValues((FcModelNode) node);
+                    escribir((FcModelNode) node);
                 }
 
                 System.out.println("[OK] Wrote value: " + reference + " = " + value);
@@ -1181,7 +1314,7 @@ public class IEC61850Client implements ClientEventListener {
             }
 
             // Ejecutar operacion
-            association.operate(controlNode);
+            mms().operate(controlNode);
 
             System.out.println("[OK] Control executed: " + controlNode.getReference() + " = " + value);
             return true;
@@ -1416,7 +1549,7 @@ public class IEC61850Client implements ClientEventListener {
         for (FcModelNode n : objetivos) {
             pedidos++;
             try {
-                association.getDataValues(n);
+                leer(n);
                 leidos.add(n.getReference().toString() + "$" + n.getFc());
             } catch (Exception e) {
                 fallidos++;
@@ -1478,7 +1611,7 @@ public class IEC61850Client implements ClientEventListener {
                 Object respuesta;
                 try {
                     Object peticion = mReq.invoke(association, ldName, "", false);
-                    respuesta = mEnviar.invoke(association, peticion);
+                    respuesta = mEnviar.invoke(mms(), peticion);
                 } catch (Exception e) {
                     omitidos++;
                     motivos.add(ldName + ": no se pudo listar los DataSets - " + causa(e));
@@ -1503,7 +1636,7 @@ public class IEC61850Client implements ClientEventListener {
                 // Y aca lo que importa: un try por DataSet, no uno para todos
                 for (Object id : ids) {
                     try {
-                        mDir.invoke(association, id, ldNodo);
+                        mDir.invoke(mms(), id, ldNodo);
                         recuperados++;
                     } catch (Exception e) {
                         omitidos++;
@@ -1592,7 +1725,7 @@ public class IEC61850Client implements ClientEventListener {
         int leidos = 0, fallidos = 0, i = 0;
         for (FcModelNode fcdo : objetivos) {
             try {
-                association.getDataValues(fcdo);
+                leer(fcdo);
                 leidos++;
             } catch (Exception e) {
                 fallidos++;
@@ -1628,11 +1761,11 @@ public class IEC61850Client implements ClientEventListener {
             externalReportListener = listener;
 
             // Leer valores actuales del RCB desde el servidor
-            association.getRcbValues(rcb);
+            mms().getRcbValues(rcb);
 
             if (rcb instanceof Urcb) {
                 Urcb urcb = (Urcb) rcb;
-                association.reserveUrcb(urcb);
+                mms().reserveUrcb(urcb);
                 enableRcb(urcb);
             } else if (rcb instanceof Brcb) {
                 Brcb brcb = (Brcb) rcb;
@@ -1653,10 +1786,10 @@ public class IEC61850Client implements ClientEventListener {
     private void enableRcb(Rcb rcb) throws ServiceError, IOException {
         // Use the official enableReporting() API which calls setDataValues(rptEnaBda)
         // directly — this triggers the correct RptEna handler in ServerAssociation.
-        association.enableReporting(rcb);
+        mms().enableReporting(rcb);
 
         try {
-            association.getRcbValues(rcb);
+            mms().getRcbValues(rcb);
         } catch (ServiceError e) {
             System.out.println("[WARN] getRcbValues post-enable: " + e.getMessage());
         }
@@ -1676,10 +1809,10 @@ public class IEC61850Client implements ClientEventListener {
         }
 
         try {
-            association.disableReporting(rcb);
+            mms().disableReporting(rcb);
 
             if (rcb instanceof Urcb) {
-                try { association.cancelUrcbReservation((Urcb) rcb); } catch (Exception ignore) {}
+                try { mms().cancelUrcbReservation((Urcb) rcb); } catch (Exception ignore) {}
             }
 
             System.out.println("[OK] RCB disabled: " + rcb.getName());
@@ -1725,6 +1858,9 @@ public class IEC61850Client implements ClientEventListener {
         }
 
         System.out.println("[WARN] Association closed" + (e != null ? ": " + e.getMessage() : ""));
+        detenerMantenimiento();
+        // Antes de soltar el modelo: la explicación lo consulta.
+        if (connected) logDiag(explicarCierre(e));
         connected = false;
         serverModel = null;
         association = null;
@@ -1746,7 +1882,7 @@ public class IEC61850Client implements ClientEventListener {
         }
 
         try {
-            List<FileInformation> files = association.getFileDirectory(directory);
+            List<FileInformation> files = mms().getFileDirectory(directory);
             System.out.println("[INFO] Files in '" + directory + "': " + (files != null ? files.size() : 0));
             return files != null ? files : new ArrayList<>();
         } catch (ServiceError e) {
@@ -1871,7 +2007,7 @@ public class IEC61850Client implements ClientEventListener {
         final boolean[] done = new boolean[1];
 
         try {
-            association.getFile(filename, new GetFileListener() {
+            mms().getFile(filename, new GetFileListener() {
                 @Override
                 public boolean dataReceived(byte[] data, boolean moreFollows) {
                     try {
@@ -1947,12 +2083,12 @@ public class IEC61850Client implements ClientEventListener {
                 found = true;
                 // Intentar leer los valores del SGCB
                 if (child instanceof FcModelNode) {
-                    try { association.getDataValues((FcModelNode) child); } catch (Exception ignored) {}
+                    try { leer((FcModelNode) child); } catch (Exception ignored) {}
                 }
                 for (ModelNode attr : child.getChildren()) {
                     String attrName = attr.getName().toLowerCase();
                     if (attr instanceof FcModelNode) {
-                        try { association.getDataValues((FcModelNode) attr); } catch (Exception ignored) {}
+                        try { leer((FcModelNode) attr); } catch (Exception ignored) {}
                     }
                     if (attr instanceof BasicDataAttribute) {
                         int val = getIntValue((BasicDataAttribute) attr);
@@ -1997,14 +2133,14 @@ public class IEC61850Client implements ClientEventListener {
                             String.valueOf(groupNumber));
                     }
                     if (attr instanceof FcModelNode) {
-                        association.setDataValues((FcModelNode) attr);
+                        escribir((FcModelNode) attr);
                         System.out.println("[SGCB] actSG=" + groupNumber + " escrito en " + ldName);
                         return;
                     }
                 }
                 // Si actSG no está como nodo hijo independiente, escribir el SGCB completo
                 if (child instanceof FcModelNode) {
-                    association.setDataValues((FcModelNode) child);
+                    escribir((FcModelNode) child);
                     return;
                 }
             }
@@ -2041,7 +2177,7 @@ public class IEC61850Client implements ClientEventListener {
         if (dataSet == null) {
             throw new IOException("DataSet no encontrado: " + dsRef);
         }
-        List<ServiceError> errors = association.getDataSetValues(dataSet);
+        List<ServiceError> errors = mms().getDataSetValues(dataSet);
         if (errors != null) {
             int errCount = 0;
             for (ServiceError se : errors) if (se != null) errCount++;
@@ -2059,7 +2195,7 @@ public class IEC61850Client implements ClientEventListener {
      */
     public DataSet readDataSetValues(DataSet dataSet) throws IOException {
         if (!isConnected()) throw new IOException("No conectado a ningún IED");
-        List<ServiceError> errors = association.getDataSetValues(dataSet);
+        List<ServiceError> errors = mms().getDataSetValues(dataSet);
         if (errors != null) {
             int errCount = 0;
             for (ServiceError se : errors) if (se != null) errCount++;
@@ -2092,7 +2228,7 @@ public class IEC61850Client implements ClientEventListener {
             if (blkEnaNode instanceof BdaBoolean) {
                 ((BdaBoolean) blkEnaNode).setValue(block);
             }
-            association.setDataValues(blkEnaNode);
+            escribir(blkEnaNode);
         } catch (ServiceError e) {
             throw new IOException("ServiceError setBlocking: " + e.getErrorCode(), e);
         }
@@ -2242,7 +2378,7 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 ModelNode node = serverModel.findModelNode(doRef + ".ctlModel", fc);
                 if (!(node instanceof FcModelNode)) continue;
-                try { association.getDataValues((FcModelNode) node); } catch (Exception ignore) {}
+                try { leer((FcModelNode) node); } catch (Exception ignore) {}
                 Integer v = ordinalDeBda(node);
                 if (v != null) return v & 0xFF;
             } catch (Exception ignore) {}
@@ -2411,7 +2547,7 @@ public class IEC61850Client implements ClientEventListener {
                 for (Fc fc : new Fc[]{Fc.CO, Fc.ST, Fc.MX, Fc.SP, Fc.CF, Fc.DC}) {
                     ModelNode laeNode = serverModel.findModelNode(ref, fc);
                     if (!(laeNode instanceof FcModelNode)) continue;
-                    try { association.getDataValues((FcModelNode) laeNode); } catch (Exception ignore) {}
+                    try { leer((FcModelNode) laeNode); } catch (Exception ignore) {}
                     StringBuilder sb = new StringBuilder();
                     int addCause = -1;
                     if (laeNode.getChildren() != null) {
@@ -2679,7 +2815,7 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 ModelNode n = serverModel.findModelNode(ref, fc);
                 if (!(n instanceof FcModelNode)) continue;
-                try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
+                try { leer((FcModelNode) n); } catch (Exception ignore) {}
                 Integer v = ordinalDeBda(n);
                 if (v != null) return v;
             } catch (Exception ignore) {}
@@ -2692,7 +2828,7 @@ public class IEC61850Client implements ClientEventListener {
         try {
             ModelNode n = serverModel.findModelNode(ref, Fc.ST);
             if (!(n instanceof FcModelNode)) return null;
-            try { association.getDataValues((FcModelNode) n); } catch (Exception ignore) {}
+            try { leer((FcModelNode) n); } catch (Exception ignore) {}
             String v;
             if (n instanceof BdaDoubleBitPos)   v = formatDoubleBitPos((BdaDoubleBitPos) n);
             else if (n instanceof BdaBoolean)   v = ((BdaBoolean) n).getValue() ? "on" : "off";
@@ -2735,7 +2871,7 @@ public class IEC61850Client implements ClientEventListener {
             ModelNode stDo = serverModel.findModelNode(doRef, Fc.ST);
             ModelNode stVal = (stDo != null) ? stDo.getChild("stVal") : null;
             if (!(stVal instanceof FcModelNode) || !(stVal instanceof BasicDataAttribute)) return null;
-            try { association.getDataValues((FcModelNode) stVal); } catch (Exception ignore) {}
+            try { leer((FcModelNode) stVal); } catch (Exception ignore) {}
             String actual = normalizeStVal(stVal);
             if (actual == null) return null;
             if (!actual.equals("on") && !actual.equals("off")) return null;  // intermediate / bad
@@ -3014,7 +3150,7 @@ public class IEC61850Client implements ClientEventListener {
                 ModelNode n = serverModel.findModelNode(ref, fc);
                 if (!(n instanceof FcModelNode)) continue;
                 try {
-                    association.getDataValues((FcModelNode) n);
+                    leer((FcModelNode) n);
                 } catch (Exception e) {
                     // Mismo motivo que en addEnumCheck: un booleano no leido queda en false,
                     // que para Loc o EnaCls es una afirmacion fuerte y equivocada.
@@ -3051,7 +3187,7 @@ public class IEC61850Client implements ClientEventListener {
                 ModelNode n = serverModel.findModelNode(ref, fc);
                 if (!(n instanceof FcModelNode)) continue;
                 try {
-                    association.getDataValues((FcModelNode) n);
+                    leer((FcModelNode) n);
                 } catch (Exception e) {
                     // Si la lectura falla, el modelo local conserva el valor por defecto —0 para
                     // los enumerados— y presentarlo como si viniera del IED es mentir: se veia
@@ -3142,7 +3278,7 @@ public class IEC61850Client implements ClientEventListener {
         }
 
         try {
-            association.setDataValues(cancelNode);
+            escribir(cancelNode);
             System.out.println("[SBO] CANCEL enviado: " + operNode.getReference());
             if (ps != null && ps.operNode == operNode) pendingSelect = null;
             return ControlResult.ok(ctlModel, ctlModelName);
@@ -3208,7 +3344,7 @@ public class IEC61850Client implements ClientEventListener {
             if (ctlModel == 2) {
                 // SBO normal: beanit select() LEE el atributo SBO (VisibleString)
                 System.out.println("[SBO] SELECT → " + operNode.getReference());
-                boolean selected = association.select(controlDo);
+                boolean selected = mms().select(controlDo);
                 if (!selected) {
                     ApplError ae = readApplError(operNode);
                     System.out.println("[SBO] SELECT rechazado. LastApplError: " + (ae != null ? ae.raw : null));
@@ -3218,7 +3354,7 @@ public class IEC61850Client implements ClientEventListener {
                 System.out.println("[SBO] SELECT aceptado. Enviando OPERATE...");
             }
 
-            association.operate(controlDo);
+            mms().operate(controlDo);
             System.out.println("[OK] OPERATE ejecutado: " + operNode.getReference()
                 + " = " + ctlValStr + (testFlag ? " [TEST MODE]" : ""));
             return ControlResult.ok(ctlModel, ctlModelName);
@@ -3263,7 +3399,7 @@ public class IEC61850Client implements ClientEventListener {
         try {
             System.out.println("[SBOe] SELECT-WITH-VALUE (SBOw ctlNum=" + ctlNum + ") → "
                 + sbow.getReference());
-            association.setDataValues(sbow);
+            escribir(sbow);
             System.out.println("[SBOe] SELECT-WITH-VALUE aceptado. Enviando OPERATE...");
         } catch (ServiceError e) {
             ApplError ae = readApplError(operNode);
@@ -3277,7 +3413,7 @@ public class IEC61850Client implements ClientEventListener {
         setOperCtlVal(operNode, ctlValStr);
         fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck, ctlNum);
         try {
-            association.setDataValues(operNode);
+            escribir(operNode);
             System.out.println("[OK] OPERATE (enhanced) ejecutado: " + operNode.getReference()
                 + " = " + ctlValStr + (testFlag ? " [TEST MODE]" : ""));
             return ControlResult.ok(4, ctlModelName);
@@ -3344,7 +3480,7 @@ public class IEC61850Client implements ClientEventListener {
                 ModelNode doNode = serverModel.findModelNode(doRef, fc);
                 ModelNode to = (doNode != null) ? doNode.getChild("sboTimeout") : null;
                 if (to instanceof FcModelNode) {
-                    try { association.getDataValues((FcModelNode) to); } catch (Exception ignore) {}
+                    try { leer((FcModelNode) to); } catch (Exception ignore) {}
                     String v = formatValue(to);
                     if (v != null) {
                         try {
@@ -3393,7 +3529,7 @@ public class IEC61850Client implements ClientEventListener {
             fillControlStructure(sbow, testFlag, orIdent, synchroCheck, interlockCheck, ctlNum);
             try {
                 System.out.println("[SBOe] SELECT-WITH-VALUE (SBOw ctlNum=" + ctlNum + ") → " + sbow.getReference());
-                association.setDataValues(sbow);
+                escribir(sbow);
             } catch (ServiceError e) {
                 ApplError ae = readApplError(operNode);
                 return ControlResult.failWith(4, ctlModelName,
@@ -3407,7 +3543,7 @@ public class IEC61850Client implements ClientEventListener {
             fillControlStructure(operNode, testFlag, orIdent, synchroCheck, interlockCheck);
             try {
                 System.out.println("[SBO] SELECT → " + operNode.getReference());
-                boolean selected = association.select(controlDo);
+                boolean selected = mms().select(controlDo);
                 if (!selected) {
                     ApplError ae = readApplError(operNode);
                     return ControlResult.failWith(2, ctlModelName, "SELECT rechazado por el IED", ae);
@@ -3451,7 +3587,7 @@ public class IEC61850Client implements ClientEventListener {
             setOperCtlVal(operNode, ps.ctlVal);
             fillControlStructure(operNode, ps.testFlag, ps.orIdent, ps.synchroCheck, ps.interlockCheck, ps.ctlNum, ps.orCat);
             try {
-                association.setDataValues(operNode);
+                escribir(operNode);
                 System.out.println("[OK] OPERATE (enhanced, 2-pasos) ejecutado: " + operNode.getReference()
                     + " = " + ps.ctlVal + (ps.testFlag ? " [TEST]" : ""));
                 pendingSelect = null;
@@ -3465,7 +3601,7 @@ public class IEC61850Client implements ClientEventListener {
             setOperCtlVal(operNode, ps.ctlVal);
             fillControlStructure(operNode, ps.testFlag, ps.orIdent, ps.synchroCheck, ps.interlockCheck, -1, ps.orCat);
             try {
-                association.operate(controlDo);
+                mms().operate(controlDo);
                 System.out.println("[OK] OPERATE (SBO, 2-pasos) ejecutado: " + operNode.getReference()
                     + " = " + ps.ctlVal + (ps.testFlag ? " [TEST]" : ""));
                 pendingSelect = null;
@@ -3529,7 +3665,7 @@ public class IEC61850Client implements ClientEventListener {
         String observed = null;
         while (System.currentTimeMillis() - start < timeoutMs) {
             try {
-                association.getDataValues((FcModelNode) stValNode);
+                leer((FcModelNode) stValNode);
                 observed = normalizeStVal(stValNode);
                 if (expected.equals(observed)) {
                     long elapsed = System.currentTimeMillis() - start;
