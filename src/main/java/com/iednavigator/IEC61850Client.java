@@ -856,7 +856,7 @@ public class IEC61850Client implements ClientEventListener {
         StringBuilder sb = new StringBuilder("[ENLACE] Asociacion cerrada tras ")
             .append(silencioS).append(" s sin pedidos del cliente");
         if (msg.contains("ABORT") && silencioS >= 20) {
-            sb.append(". El IED la abortó: probable temporizador de inactividad del equipo");
+            sb.append(". El IED envio ABORT: probable temporizador de inactividad del equipo");
             if (tieneAplicTmsIngeteam()) {
                 sb.append(" (en Ingeteam: genIPRV1.AplicTms, \"Time Out para desconexion\")");
             }
