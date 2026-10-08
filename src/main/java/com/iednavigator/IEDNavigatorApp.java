@@ -971,10 +971,10 @@ public class IEDNavigatorApp extends JFrame {
             File file = fc.getSelectedFile();
             log(I18n.t("log.app.loadingsclgocb", file.getName()));
 
-            // Delegate to goosePanel (handles IED detection, parsing, and table refresh)
+            // Delegate to goosePanel (handles IED detection, parsing, and table refresh).
+            // Corre en segundo plano: el conteo de GoCBs lo registra el panel al terminar.
             if (goosePanel != null) {
                 goosePanel.loadSclFile(file);
-                log(I18n.t("log.app.gocbsloaded", sclGoCBs.size()));
             }
         }
     }
