@@ -464,13 +464,24 @@ class ConnectionManager {
             }
 
             String host = (ctx.getClient() != null) ? ctx.getClient().getHost() : null;
-            // Fabricante / tipo / configRev: del nameplate que ya se leyó al conectar
+            // Fabricante / tipo / configVersion. Primero del SCL que entregó este mismo
+            // equipo, que trae los tres. El arreglo es [manufacturer, type, desc,
+            // configVersion]: se leían np[1] y np[2], y el CID salía con el tipo como
+            // fabricante (manufacturer="Ingeteam_eF").
             String mfr = null, tipo = null, cfg = null;
             String[] np = ctx.getLoadedIedNameplate();
-            if (np != null) {
-                if (np.length > 1) mfr  = np[1];
-                if (np.length > 2) tipo = np[2];
-                if (np.length > 3) cfg  = np[3];
+            if (np != null && np.length > 3) {
+                mfr  = vacioANull(np[0]);
+                tipo = vacioANull(np[1]);
+                cfg  = vacioANull(np[3]);
+            }
+            // Lo que falte, de la placa que el equipo informa por MMS. Cuando el IED no
+            // tiene el CID como archivo no hay SCL del que sacarlo.
+            if ((mfr == null || tipo == null || cfg == null) && ctx.getClient() != null) {
+                Map<String, String> placa = ctx.getClient().readDeviceNameplate();
+                if (mfr  == null) mfr  = vacioANull(placa.get("vendor"));
+                if (tipo == null) tipo = vacioANull(placa.get("phy.model"));
+                if (cfg  == null) cfg  = vacioANull(placa.get("configRev"));
             }
 
             // Lectura completa antes de exportar. El exportador toma los valores del
@@ -784,6 +795,9 @@ class ConnectionManager {
             return;
         }
 
+        // También acá, no sólo al desconectar: si la conexión anterior se cortó por un
+        // camino que no pasó por handleDisconnect(), el equipo nuevo no hereda nada.
+        olvidarEquipoAnterior();
         ctx.setBtnConnectEnabled(false);
         ctx.updateStatus(false, I18n.t("status.connecting", host, port));
         ctx.setStatusIndicatorConnecting();
@@ -1027,7 +1041,27 @@ class ConnectionManager {
         ctx.log(I18n.t("log.cm.disconnected"));
     }
 
+    private static String vacioANull(String s) {
+        return (s == null || s.isBlank()) ? null : s;
+    }
+
+    /**
+     * Descarta lo que pertenece al equipo de la conexión que termina: el CID que entregó
+     * por archivo y la placa leída de ese SCL.
+     *
+     * Sin esto sobrevivían al cambio de equipo. Medido el 2026-10-07: tras usar un
+     * Ingeteam y conectar a otro IED que no tiene CID como archivo, "Guardar CID" ofrecía
+     * "Archivo del IED" con el ICD del Ingeteam, y el CID reconstruido del segundo equipo
+     * salía con el fabricante y la configVersion del primero.
+     */
+    private void olvidarEquipoAnterior() {
+        downloadedCidData = null;
+        downloadedCidFilename = null;
+        ctx.setLoadedIedNameplate(null);
+    }
+
     void handleDisconnect() {  // F26: package-private so IEDNavigatorApp can delegate
+        olvidarEquipoAnterior();
         ctx.setConnected(false);
         currentHost = "";
         currentPort = 0;
