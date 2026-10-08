@@ -507,11 +507,43 @@ public final class SclExporter {
             sb.append(" buffered=\"").append(buffered).append("\"");
             String intgPd = childString(rcb, "IntgPd");
             if (intgPd != null && !intgPd.isEmpty()) sb.append(" intgPd=\"").append(esc(intgPd)).append("\"");
+
+            // bufTime, TrgOps y OptFields son del equipo, no de una plantilla: medido
+            // contra el CID de ZIV, urcb01 trae dchg/dataSet/configRef en false y se
+            // emitian en true, y bufTime="50" de los BRCB no salia. Sólo si el bloque se
+            // leyó del IED; si no, sus valores locales son los por defecto y se mantiene
+            // lo de antes.
+            Rcb leido = (rcb instanceof Rcb && fueLeido((Rcb) rcb)) ? (Rcb) rcb : null;
+            if (leido != null && leido.getBufTm() != null) {
+                sb.append(" bufTime=\"").append(leido.getBufTm().getValue()).append("\"");
+            }
             sb.append(">\n");
-            sb.append("              <TrgOps dchg=\"true\" qchg=\"true\" dupd=\"false\" period=\"")
-              .append(intgPd != null && !intgPd.isEmpty() && !"0".equals(intgPd)).append("\"/>\n");
-            sb.append("              <OptFields seqNum=\"true\" timeStamp=\"true\" dataSet=\"true\" reasonCode=\"true\"")
-              .append(" dataRef=\"false\" entryID=\"").append(buffered).append("\" configRef=\"true\"/>\n");
+            BdaTriggerConditions t = (leido != null) ? leido.getTrgOps() : null;
+            if (t != null) {
+                sb.append("              <TrgOps dchg=\"").append(t.isDataChange())
+                  .append("\" qchg=\"").append(t.isQualityChange())
+                  .append("\" dupd=\"").append(t.isDataUpdate())
+                  .append("\" period=\"").append(t.isIntegrity())
+                  .append("\" gi=\"").append(t.isGeneralInterrogation()).append("\"/>\n");
+            } else {
+                sb.append("              <TrgOps dchg=\"true\" qchg=\"true\" dupd=\"false\" period=\"")
+                  .append(intgPd != null && !intgPd.isEmpty() && !"0".equals(intgPd)).append("\"/>\n");
+            }
+            BdaOptFlds o = (leido != null) ? leido.getOptFlds() : null;
+            if (o != null) {
+                sb.append("              <OptFields seqNum=\"").append(o.isSequenceNumber())
+                  .append("\" timeStamp=\"").append(o.isReportTimestamp())
+                  .append("\" dataSet=\"").append(o.isDataSetName())
+                  .append("\" reasonCode=\"").append(o.isReasonForInclusion())
+                  .append("\" dataRef=\"").append(o.isDataReference())
+                  .append("\" bufOvfl=\"").append(o.isBufferOverflow())
+                  .append("\" entryID=\"").append(o.isEntryId())
+                  .append("\" configRef=\"").append(o.isConfigRevision())
+                  .append("\" segmentation=\"").append(o.isSegmentation()).append("\"/>\n");
+            } else {
+                sb.append("              <OptFields seqNum=\"true\" timeStamp=\"true\" dataSet=\"true\" reasonCode=\"true\"")
+                  .append(" dataRef=\"false\" entryID=\"").append(buffered).append("\" configRef=\"true\"/>\n");
+            }
             sb.append("            </ReportControl>\n");
         }
     }
@@ -542,6 +574,11 @@ public final class SclExporter {
 
     private static boolean isControlBlockFc(Fc fc) {
         return fc == Fc.RP || fc == Fc.BR;
+    }
+
+    /** ¿El bloque se leyó del equipo? Sin conjunto de leídos (llamador viejo) se asume que sí. */
+    private boolean fueLeido(Rcb rcb) {
+        return leidos == null || leidos.contains(rcb.getReference().toString() + "$" + rcb.getFc());
     }
 
     private String childString(ModelNode parent, String childName) {

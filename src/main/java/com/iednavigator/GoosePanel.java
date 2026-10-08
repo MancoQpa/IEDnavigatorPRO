@@ -1527,6 +1527,8 @@ class GoosePanel {
         }
 
         try {
+            // Un mismo nodo aparece una vez por FC en el modelo; sin esto se listaba repetido.
+            java.util.Set<String> vistos = new java.util.HashSet<>();
             for (ModelNode ld : model.getChildren()) {
                 String ldName = ld.getName();
 
@@ -1534,10 +1536,13 @@ class GoosePanel {
                     if (ln.getChildren() == null) continue;
                     String lnName = ln.getName();
 
-                    if (lnName.equals("LLN0")) {
-                        ctx.log(I18n.t("log.goose.searchinggocbs", ldName, lnName,
-                            (ln.getChildren() != null ? ln.getChildren().size() : 0)));
-                    }
+                    // Los GoCB viven sólo en LLN0 (IEC 61850-7-2). Buscar en todos los LN
+                    // hacía pasar por GoCB a LGOS*.GoCBRef, que es la referencia de
+                    // *suscripción* de un nodo LGOS: contra un Ingeteam eF se listaban 64
+                    // "GoCBs" —32 LGOS, cada uno dos veces— en un equipo que no publica.
+                    if (!lnName.equals("LLN0")) continue;
+                    ctx.log(I18n.t("log.goose.searchinggocbs", ldName, lnName,
+                        ln.getChildren().size()));
 
                     for (ModelNode node : ln.getChildren()) {
                         String nodeName = node.getName();
@@ -1590,6 +1595,7 @@ class GoosePanel {
 
                         if (isGoCB) {
                             String ref = lnName + "." + nodeName;
+                            if (!vistos.add(ldName + "/" + ref)) continue;
                             String displayDatSet = !datSet.isEmpty() ? datSet : (!goID.isEmpty() ? goID : nodeName);
                             gooseTableModel.addRow(new Object[]{ldName + "/" + ref, goID, displayDatSet, "", "", "", "MMS"});
                             ctx.log(I18n.t("log.goose.gocbfound", ldName, ref));
