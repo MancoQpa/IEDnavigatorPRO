@@ -307,6 +307,9 @@ public final class SclExporter {
             if ("LLN0".equalsIgnoreCase(ln.getName())) ln0 = ln; else lns.add(ln);
         }
 
+        // Grupos de ajuste del LD: del SGCB de su LLN0, si se leyó del equipo.
+        gruposLd = (ln0 != null) ? leerGrupos(ln0) : null;
+
         if (ln0 != null) appendLogicalNode(sb, ln0, ldInst, iedName, true);
         for (LogicalNode ln : lns) appendLogicalNode(sb, ln, ldInst, iedName, false);
 
@@ -329,7 +332,7 @@ public final class SclExporter {
         for (ModelNode child : ln.getChildren()) {
             if (!(child instanceof FcDataObject)) continue;
             FcDataObject fcdo = (FcDataObject) child;
-            if (isControlBlockFc(fcdo.getFc())) continue;
+            if (isControlBlockFc(fcdo.getFc()) || esSgcb(fcdo)) continue;
             byDo.computeIfAbsent(child.getName(), k -> new ArrayList<>()).add(fcdo);
         }
 
@@ -351,6 +354,12 @@ public final class SclExporter {
             appendDoiValues(sb, e.getKey(), e.getValue());
         }
 
+        // SettingControl va en LN0 después de los DOI (orden de tLN0 en el esquema SCL).
+        if (isLn0 && gruposLd != null) {
+            sb.append("            <SettingControl numOfSGs=\"").append(gruposLd[0])
+              .append("\" actSG=\"").append(gruposLd[1]).append("\"/>\n");
+        }
+
         sb.append("          </").append(tag).append(">\n");
     }
 
@@ -365,7 +374,14 @@ public final class SclExporter {
                 String clave = fcdo.getReference().toString() + "$" + fcdo.getFc();
                 if (!leidos.contains(clave)) { dosOmitidos++; continue; }
             }
-            collectDais(inner, fcdo, "", 14);
+            // SE es el buffer de edición de un grupo, no configuración: no va al archivo.
+            if (fcdo.getFc() == Fc.SE) continue;
+            // Un ajuste SG leído por MMS es el del grupo ACTIVO, no "el" valor. Se marca con
+            // ese sGroup. Los demás grupos no se leen: requeriría SelectEditSG, una acción
+            // sobre el relé que una exportación no debe hacer.
+            String sGroup = (fcdo.getFc() == Fc.SG && gruposLd != null)
+                          ? String.valueOf(gruposLd[1]) : null;
+            collectDais(inner, fcdo, "", 14, sGroup);
         }
         if (inner.length() == 0) return;
         sb.append("            <DOI name=\"").append(esc(doName)).append("\">\n");
@@ -378,6 +394,10 @@ public final class SclExporter {
      * Los atributos estructurados se emiten con SDI anidado, como exige SCL.
      */
     private void collectDais(StringBuilder sb, ModelNode node, String path, int indent) {
+        collectDais(sb, node, path, indent, null);
+    }
+
+    private void collectDais(StringBuilder sb, ModelNode node, String path, int indent, String sGroup) {
         if (node.getChildren() == null) return;
         for (ModelNode child : node.getChildren()) {
             String ind = " ".repeat(indent);
@@ -386,10 +406,11 @@ public final class SclExporter {
                 String v = safeValue(bda);
                 if (v == null) continue;
                 sb.append(ind).append("  <DAI name=\"").append(esc(bda.getName())).append("\">")
-                  .append("<Val>").append(esc(v)).append("</Val></DAI>\n");
+                  .append(sGroup != null ? "<Val sGroup=\"" + sGroup + "\">" : "<Val>")
+                  .append(esc(v)).append("</Val></DAI>\n");
             } else if (child instanceof ConstructedDataAttribute) {
                 StringBuilder nested = new StringBuilder();
-                collectDais(nested, child, path + child.getName() + ".", indent + 2);
+                collectDais(nested, child, path + child.getName() + ".", indent + 2, sGroup);
                 if (nested.length() > 0) {
                     sb.append(ind).append("  <SDI name=\"").append(esc(child.getName())).append("\">\n");
                     sb.append(nested);
@@ -407,17 +428,31 @@ public final class SclExporter {
     private String safeValue(BasicDataAttribute bda) {
         BdaType t = bda.getBasicType();
         if (t == null) return null;
-        switch (t) {
-            case BOOLEAN:
-            case INT8: case INT16: case INT32: case INT64:
-            case INT8U: case INT16U: case INT32U:
-            case FLOAT32: case FLOAT64:
-            case VISIBLE_STRING: case UNICODE_STRING:
-                break;
-            default:
-                return null;   // TIMESTAMP, QUALITY, CHECK, OCTET_STRING, ENTRY_TIME, ...
-        }
         try {
+            // Por tipo y con el getter de cada uno. getValueString() de iec61850bean devuelve
+            // null para INT8U, INT16, INT16U e INT64 —esos valores se perdían del CID sin
+            // aviso— y para FLOAT64 devuelve los bytes crudos ("[11, 0, 0, ...]"), que salían
+            // escritos como si fueran el valor. Medido 2026-10-08.
+            switch (t) {
+                case INT8U:  return String.valueOf(((BdaInt8U) bda).getValue());
+                case INT16:  return String.valueOf(((BdaInt16) bda).getValue());
+                case INT16U: return String.valueOf(((BdaInt16U) bda).getValue());
+                case INT64:  return String.valueOf(((BdaInt64) bda).getValue());
+                case FLOAT64: {
+                    Double d = ((BdaFloat64) bda).getDouble();
+                    return d == null ? null : String.valueOf(d);
+                }
+                case FLOAT32: {
+                    Float f = ((BdaFloat32) bda).getFloat();
+                    return f == null ? null : String.valueOf(f);
+                }
+                case BOOLEAN:
+                case INT8: case INT32: case INT32U:
+                case VISIBLE_STRING: case UNICODE_STRING:
+                    break;
+                default:
+                    return null;   // TIMESTAMP, QUALITY, CHECK, OCTET_STRING, ENTRY_TIME, ...
+            }
             String v = bda.getValueString();
             if (v == null || v.isEmpty() || "null".equals(v)) return null;
             // Los enteros llegan a veces con el nombre decodificado; SCL espera el crudo.
@@ -570,6 +605,41 @@ public final class SclExporter {
             if (buscado.equals(ds.getReferenceStr())) return true;
         }
         return false;
+    }
+
+    /** [numOfSGs, actSG] del LD en curso, o null si no tiene SGCB o no se leyó. */
+    private int[] gruposLd;
+
+    /**
+     * El SGCB es un bloque de control: en SCL va como {@code <SettingControl>}, no como DO
+     * del LNodeType. En el modelo MMS llega como FcDataObject "SGCB" con FC=SP.
+     */
+    private static boolean esSgcb(FcDataObject fcdo) {
+        return fcdo.getFc() == Fc.SP && "SGCB".equals(fcdo.getName());
+    }
+
+    /** NumOfSG y ActSG del SGCB de este LLN0, sólo si se leyó del equipo. */
+    private int[] leerGrupos(LogicalNode ln0) {
+        for (ModelNode c : ln0.getChildren()) {
+            if (!(c instanceof FcDataObject) || !esSgcb((FcDataObject) c)) continue;
+            FcDataObject sgcb = (FcDataObject) c;
+            if (leidos != null && !leidos.contains(sgcb.getReference().toString() + "$" + sgcb.getFc())) {
+                return null;
+            }
+            Integer num = entero(sgcb.getChild("NumOfSG"));
+            Integer act = entero(sgcb.getChild("ActSG"));
+            if (num == null || act == null || num < 1 || act < 1 || act > num) return null;
+            return new int[] { num, act };
+        }
+        return null;
+    }
+
+    private static Integer entero(ModelNode n) {
+        if (n instanceof BdaInt8U)  return (int) ((BdaInt8U) n).getValue();
+        if (n instanceof BdaInt8)   return (int) ((BdaInt8) n).getValue();
+        if (n instanceof BdaInt16U) return ((BdaInt16U) n).getValue();
+        if (n instanceof BdaInt32)  return ((BdaInt32) n).getValue();
+        return null;
     }
 
     private static boolean isControlBlockFc(Fc fc) {
@@ -733,8 +803,9 @@ public final class SclExporter {
             xml.append("      <BDA name=\"").append(esc(e.getKey())).append("\" bType=\"")
                .append(esc(e.getValue().bType(this))).append("\"");
             if (e.getValue().isStruct()) {
-                xml.append(" type=\"").append(esc(registerDaType(e.getValue().node))).append("\"");
+                xml.append(" type=\"").append(esc(registerDaType(e.getValue().elem()))).append("\"");
             }
+            if (e.getValue().isArray()) xml.append(" count=\"").append(e.getValue().count()).append("\"");
             xml.append("/>\n");
         }
         xml.append("    </DAType>\n");
@@ -773,21 +844,40 @@ public final class SclExporter {
         final Fc fc;
         DaInfo(ModelNode node, Fc fc) { this.node = node; this.fc = fc; }
 
-        boolean isStruct() { return node instanceof ConstructedDataAttribute; }
+        /**
+         * ¿Es un arreglo? En SCL se declara como un DA/BDA con {@code count} y el bType/type
+         * de su elemento. Antes caía en la rama "Struct" sin {@code type}: un archivo que
+         * ningún parser carga ("DAType Struct not declared"). Visto con el ZIV real
+         * (CDC HAR, {@code phsAHar}) el 2026-10-08.
+         */
+        boolean isArray() { return node instanceof com.beanit.iec61850bean.Array; }
+
+        int count() { return isArray() ? ((com.beanit.iec61850bean.Array) node).size() : 0; }
+
+        /** El nodo del que salen bType y type: el primer elemento si es un arreglo. */
+        ModelNode elem() {
+            if (isArray() && count() > 0) return ((com.beanit.iec61850bean.Array) node).getChild(0);
+            return node;
+        }
+
+        boolean isStruct() { return elem() instanceof ConstructedDataAttribute; }
 
         String bType(SclExporter ex) {
-            if (isStruct()) return "Struct";
-            if (node instanceof BasicDataAttribute) {
-                return ex.mapBType(((BasicDataAttribute) node).getBasicType());
+            ModelNode n = elem();
+            if (n instanceof ConstructedDataAttribute) return "Struct";
+            if (n instanceof BasicDataAttribute) {
+                return ex.mapBType(((BasicDataAttribute) n).getBasicType());
             }
             return "Struct";
         }
 
         String signature(SclExporter ex) {
-            if (!isStruct()) return bType(ex) + (fc != null ? "@" + fc : "");
-            StringBuilder sb = new StringBuilder("S{");
-            if (node.getChildren() != null) {
-                for (ModelNode c : node.getChildren()) {
+            String arr = isArray() ? "A" + count() : "";
+            if (!isStruct()) return arr + bType(ex) + (fc != null ? "@" + fc : "");
+            StringBuilder sb = new StringBuilder(arr + "S{");
+            ModelNode n = elem();
+            if (n.getChildren() != null) {
+                for (ModelNode c : n.getChildren()) {
                     Fc cfc = (c instanceof FcModelNode) ? ((FcModelNode) c).getFc() : null;
                     sb.append(c.getName()).append(':')
                       .append(new DaInfo(c, cfc).signature(ex)).append(',');
@@ -801,9 +891,10 @@ public final class SclExporter {
             sb.append("      <DA name=\"").append(esc(name)).append("\"");
             if (fc != null) sb.append(" fc=\"").append(fc).append("\"");
             sb.append(" bType=\"").append(esc(bType(ex))).append("\"");
-            if (isStruct()) sb.append(" type=\"").append(esc(ex.registerDaType(node))).append("\"");
-            if (node instanceof BasicDataAttribute) {
-                BasicDataAttribute bda = (BasicDataAttribute) node;
+            if (isStruct()) sb.append(" type=\"").append(esc(ex.registerDaType(elem()))).append("\"");
+            if (isArray()) sb.append(" count=\"").append(count()).append("\"");
+            if (elem() instanceof BasicDataAttribute) {
+                BasicDataAttribute bda = (BasicDataAttribute) elem();
                 if (bda.getDchg()) sb.append(" dchg=\"true\"");
                 if (bda.getQchg()) sb.append(" qchg=\"true\"");
                 if (bda.getDupd()) sb.append(" dupd=\"true\"");
