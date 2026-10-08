@@ -3346,6 +3346,7 @@ public class IEDNavigatorApp extends JFrame {
             public String[] getLoadedIedNameplate() { return loadedIedNameplate; }
             public void setLoadedIedNameplate(String[] np) { loadedIedNameplate = np; }
             public List<SclGoCB> getSclGoCBs() { return sclGoCBs; }
+            public List<SclDataSet> getSclDataSets() { return sclDataSets; }
             public void switchUiToServerMode() {
                 currentMode = AppMode.SERVER;
                 cardLayout.show(cardPanel, "SERVER");

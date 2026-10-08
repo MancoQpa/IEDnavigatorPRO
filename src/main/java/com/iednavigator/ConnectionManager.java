@@ -44,6 +44,7 @@ class ConnectionManager {
         String[] getLoadedIedNameplate();
         void setLoadedIedNameplate(String[] np);
         List<SclGoCB> getSclGoCBs();
+        List<SclDataSet> getSclDataSets();
 
         // UI callbacks (implemented by IEDNavigatorApp)
         void switchUiToServerMode();
@@ -102,6 +103,10 @@ class ConnectionManager {
     // Connection state fields
     private byte[] downloadedCidData = null;
     private String downloadedCidFilename = null;
+    // El archivo temporal con el SCL que entrego el propio equipo. Si sigue siendo el SCL
+    // cargado, sus GoCBs, DataSets y nombre de IED pertenecen a la conexion. Si el usuario
+    // cargo otro a mano despues, ese es suyo y no se toca.
+    private volatile File sclDelEquipo = null;
     private String currentHost = "";
     private int currentPort = 0;
     private String connectedLocalIp = "";
@@ -243,6 +248,7 @@ class ConnectionManager {
 
                     ctx.parseGoCBsFromScl(tempFile);
                     ctx.setLoadedSclFile(tempFile);
+                    sclDelEquipo = tempFile;
 
                     SwingUtilities.invokeLater(() -> {
                         ctx.refreshGooseControlBlocks();
@@ -322,6 +328,7 @@ class ConnectionManager {
 
                 ctx.parseGoCBsFromScl(tempFile);
                 ctx.setLoadedSclFile(tempFile);
+                sclDelEquipo = tempFile;
 
                 // Actualizar UI
                 SwingUtilities.invokeLater(() -> {
@@ -1059,6 +1066,18 @@ class ConnectionManager {
         downloadedCidData = null;
         downloadedCidFilename = null;
         ctx.setLoadedIedNameplate(null);
+
+        // Lo que se parseo de ese CID: GoCBs, DataSets y nombre del IED. Si quedaban, la
+        // tabla GOOSE mostraba los GoCBs del equipo anterior y las referencias FCDA se
+        // armaban con su nombre. Un SCL que el usuario cargo a mano no se toca: es suyo.
+        if (sclDelEquipo != null && sclDelEquipo.equals(ctx.getLoadedSclFile())) {
+            ctx.getSclGoCBs().clear();
+            ctx.getSclDataSets().clear();
+            ctx.setLoadedIedName(null);
+            ctx.setLoadedSclFile(null);
+            ctx.refreshGooseControlBlocks();
+        }
+        sclDelEquipo = null;
     }
 
     void handleDisconnect() {  // F26: package-private so IEDNavigatorApp can delegate
