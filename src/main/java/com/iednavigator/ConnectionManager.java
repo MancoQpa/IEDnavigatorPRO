@@ -475,13 +475,14 @@ class ConnectionManager {
                 tipo = vacioANull(np[1]);
                 cfg  = vacioANull(np[3]);
             }
-            // Lo que falte, de la placa que el equipo informa por MMS. Cuando el IED no
-            // tiene el CID como archivo no hay SCL del que sacarlo.
-            if ((mfr == null || tipo == null || cfg == null) && ctx.getClient() != null) {
+            // Fabricante y modelo que falten, de la placa que el equipo informa por MMS:
+            // cuando el IED no tiene el CID como archivo no hay SCL del que sacarlos.
+            // configVersion NO: NamPlt.configRev es la revisión del LLN0, otro dato. Contra
+            // el CID de ZIV daba "837 2024.12.18..." donde el SCL dice "2.0". Mejor ausente.
+            if ((mfr == null || tipo == null) && ctx.getClient() != null) {
                 Map<String, String> placa = ctx.getClient().readDeviceNameplate();
                 if (mfr  == null) mfr  = vacioANull(placa.get("vendor"));
                 if (tipo == null) tipo = vacioANull(placa.get("phy.model"));
-                if (cfg  == null) cfg  = vacioANull(placa.get("configRev"));
             }
 
             // Lectura completa antes de exportar. El exportador toma los valores del
