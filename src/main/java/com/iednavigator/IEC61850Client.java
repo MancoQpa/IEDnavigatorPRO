@@ -599,6 +599,7 @@ public class IEC61850Client implements ClientEventListener {
         connected = false;
         heartbeatNode = null;
         valueCache.clear();
+        ctlModelLeido.clear();
 
         // Shutdown executor if needed
         if (connectionExecutor != null && !connectionExecutor.isShutdown()) {
@@ -1865,6 +1866,7 @@ public class IEC61850Client implements ClientEventListener {
         serverModel = null;
         association = null;
         heartbeatNode = null;   // pertenece al modelo que se acaba de descartar
+        ctlModelLeido.clear();
 
         if (valueChangeListener != null) {
             valueChangeListener.onConnectionClosed(e != null ? e.getMessage() : "Connection closed");
@@ -2378,13 +2380,51 @@ public class IEC61850Client implements ClientEventListener {
             try {
                 ModelNode node = serverModel.findModelNode(doRef + ".ctlModel", fc);
                 if (!(node instanceof FcModelNode)) continue;
-                try { leer((FcModelNode) node); } catch (Exception ignore) {}
+                Exception error = null;
+                try { leer((FcModelNode) node); } catch (Exception e) { error = e; }
                 Integer v = ordinalDeBda(node);
-                if (v != null) return v & 0xFF;
+                if (v == null) continue;
+                int local = v & 0xFF;
+                if (error == null) {
+                    ctlModelLeido.put(doRef, local);
+                    return local;
+                }
+                return ctlModelSinLectura(doRef, local, error);
             } catch (Exception ignore) {}
         }
         // El modelo no declara ctlModel: se asume direct-with-normal-security, que es lo que
         // hacía antes. Es una suposición, pero acá sí está justificada — no hay dato.
+        return 1;
+    }
+
+    /** ctlModel leído del equipo en esta conexión, por DO. Respaldo si una lectura falla. */
+    private final Map<String, Integer> ctlModelLeido = new ConcurrentHashMap<>();
+
+    /**
+     * Qué ctlModel usar cuando el equipo no respondió a la lectura.
+     *
+     * Antes se tragaba el error y se devolvía el valor local, que en un atributo nunca leído
+     * es el 0 por defecto: status-only, indistinguible de un punto que realmente lo es.
+     * Costó un diagnóstico (2026-08-24): la pantalla decía status-only y no se sabía si era
+     * el archivo o la comunicación.
+     *
+     * El valor local sólo vale si es del equipo o del archivo: el último leído en esta
+     * conexión, o el del SCL cuando el modelo vino de ahí. Si no, el default documentado (1),
+     * que es lo que hace el cliente cuando el modelo no declara ctlModel. Si el punto en
+     * realidad exige selección previa, el IED rechaza la orden directa: falla segura.
+     */
+    private int ctlModelSinLectura(String doRef, int local, Exception error) {
+        Integer previo = ctlModelLeido.get(doRef);
+        String causa = (error.getMessage() != null) ? error.getMessage() : error.getClass().getSimpleName();
+        if (previo != null) {
+            logDiag("[CTL] No se pudo leer " + doRef + ".ctlModel (" + causa
+                + "): se usa el ultimo leido del equipo, " + previo);
+            return previo;
+        }
+        if ("scl-externo".equals(modelPath)) return local;
+        logDiag("[CTL] No se pudo leer " + doRef + ".ctlModel (" + causa
+            + "): se asume 1 (direct-with-normal-security). El " + local
+            + " del modelo local es un valor por defecto, no del equipo");
         return 1;
     }
 

@@ -746,7 +746,7 @@ class GoosePanel {
             } else if (selected.contains("UDP")) {
                 udpBridgeEnabled = true;
                 logGoose(I18n.t("log.goose.udpmode.header"));
-                logGoose(I18n.t("log.goose.udpmode.port", GooseUdpBridge.DEFAULT_PORT));
+                logGoose(I18n.t("log.goose.udpmode.port", String.valueOf(GooseUdpBridge.DEFAULT_PORT)));
                 logGoose(I18n.t("log.goose.udpmode.desc"));
 
                 if (gooseUdpBridge.startReceiving()) {
@@ -1631,26 +1631,116 @@ class GoosePanel {
 
     /** Public entry point for loading an SCL file (called from IEDNavigatorApp.loadSclForGoCBs). */
     void loadSclFile(File file) {
+        cargarSclEnSegundoPlano(file, false);
+    }
+
+    /**
+     * Carga un SCL para GOOSE fuera del hilo de la interfaz.
+     *
+     * Antes corría directo en el manejador del selector de archivos: con un SCD de 14 MB la
+     * ventana quedaba congelada 2 min 37 s sin ningún aviso, y con uno de 23,6 MB seis
+     * minutos (medido 2026-08). La herramienta comercial de referencia también tarda con esos
+     * archivos, así que el problema no es la velocidad: es que no se distinguía "colgado" de
+     * "procesando".
+     *
+     * Si tarda más de medio segundo aparece un diálogo con el archivo y los segundos
+     * transcurridos. No ofrece "Cancelar": el análisis va reemplazando GoCBs, DataSets, nombre
+     * del IED y tablas de enumerados sobre la marcha, y cortarlo a mitad dejaría el estado
+     * mezclado. Ofrece "Seguir en segundo plano", que devuelve la interfaz; el resultado se
+     * aplica al terminar y queda en el log.
+     */
+    private void cargarSclEnSegundoPlano(File file, boolean avisarErrorConDialogo) {
         ctx.log(I18n.t("log.goose.loadingsclgocb", file.getName()));
         logGoose(I18n.t("log.goose.loading", file.getName()));
-        try {
-            int iedIndex = detectAndSelectIED(file);
-            if (iedIndex == -2) return;
 
-            if (iedIndex >= 0) {
-                parseGoCBsFromScl(file, iedIndex);
-            } else {
-                parseGoCBsFromScl(file);
+        final long inicio = System.currentTimeMillis();
+        final java.util.concurrent.atomic.AtomicBoolean terminado =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        Window duena = SwingUtilities.getWindowAncestor(ctx.parentWindow());
+        if (duena == null && ctx.parentWindow() instanceof Window) duena = (Window) ctx.parentWindow();
+        JDialog espera = new JDialog(duena, I18n.t("goose.sclwait.title"),
+            Dialog.ModalityType.APPLICATION_MODAL);
+        espera.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        JLabel lblTiempo = new JLabel(I18n.t("goose.sclwait.elapsed", "0"));
+        JProgressBar barra = new JProgressBar();
+        barra.setIndeterminate(true);
+        JButton btnFondo = new JButton(I18n.t("goose.sclwait.background"));
+        JPanel cuerpo = new JPanel(new BorderLayout(8, 8));
+        cuerpo.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+        JPanel textos = new JPanel(new GridLayout(0, 1, 0, 4));
+        textos.add(new JLabel(I18n.t("goose.sclwait.msg", file.getName())));
+        textos.add(lblTiempo);
+        cuerpo.add(textos, BorderLayout.NORTH);
+        cuerpo.add(barra, BorderLayout.CENTER);
+        JPanel botones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        botones.add(btnFondo);
+        cuerpo.add(botones, BorderLayout.SOUTH);
+        espera.setContentPane(cuerpo);
+        espera.pack();
+        espera.setLocationRelativeTo(ctx.parentWindow());
+
+        javax.swing.Timer reloj = new javax.swing.Timer(1000, e -> lblTiempo.setText(
+            I18n.t("goose.sclwait.elapsed",
+                   String.valueOf((System.currentTimeMillis() - inicio) / 1000))));
+        btnFondo.addActionListener(e -> {
+            ctx.log(I18n.t("log.goose.sclbackground", file.getName()));
+            reloj.stop();
+            espera.dispose();
+        });
+        // Sólo si tarda: un CID chico se carga en milisegundos y el diálogo sería un parpadeo.
+        javax.swing.Timer mostrar = new javax.swing.Timer(500, e -> {
+            if (!terminado.get()) { reloj.start(); espera.setVisible(true); }
+        });
+        mostrar.setRepeats(false);
+        mostrar.start();
+
+        // Hilo propio y no backgroundExecutor(): con un SCD grande serían minutos, y la
+        // conexión y la exportación de CID esperarían en esa misma cola.
+        Thread t = new Thread(() -> {
+            Exception error = null;
+            boolean abandonado = false;
+            try {
+                int iedIndex = detectAndSelectIED(file);
+                if (iedIndex == -2) {
+                    abandonado = true;
+                } else if (iedIndex >= 0) {
+                    parseGoCBsFromScl(file, iedIndex);
+                } else {
+                    parseGoCBsFromScl(file);
+                }
+            } catch (Exception e) {
+                error = e;
             }
-            ctx.setLoadedSclFile(file);
-            refreshGooseControlBlocks();
-            ctx.log(I18n.t("log.goose.gocbsloaded", ctx.getSclGoCBs().size()));
-            logGoose(I18n.t("log.goose.gocbsfound", ctx.getSclGoCBs().size()));
-            ctx.onSclLoaded();
-        } catch (Exception e) {
-            ctx.log(I18n.t("log.goose.sclloaderror", e.getMessage()));
-            logGoose(I18n.t("log.native.generror", e.getMessage()));
-        }
+            final Exception fallo = error;
+            final boolean sinElegir = abandonado;
+            SwingUtilities.invokeLater(() -> {
+                terminado.set(true);
+                mostrar.stop();
+                reloj.stop();
+                espera.dispose();
+                if (sinElegir) return;
+                if (fallo != null) {
+                    ctx.log(I18n.t("log.goose.sclloaderror", fallo.getMessage()));
+                    logGoose(I18n.t("log.native.generror", fallo.getMessage()));
+                    if (avisarErrorConDialogo) {
+                        JOptionPane.showMessageDialog(ctx.parentWindow(),
+                            I18n.t("goose.sclloaderror.dlg", fallo.getMessage()),
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                    return;
+                }
+                ctx.setLoadedSclFile(file);
+                refreshGooseControlBlocks();
+                ctx.log(I18n.t("log.goose.gocbsloaded", ctx.getSclGoCBs().size()));
+                logGoose(I18n.t("log.goose.gocbsfound", ctx.getSclGoCBs().size()));
+                ctx.log(I18n.t("log.goose.scltime", file.getName(),
+                    String.valueOf((System.currentTimeMillis() - inicio) / 1000)));
+                ctx.onSclLoaded();
+            });
+        }, "carga-scl-goose");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void cargarSclParaGoose() {
@@ -1674,31 +1764,7 @@ class GoosePanel {
         }
 
         if (fc.showOpenDialog(ctx.parentWindow()) == JFileChooser.APPROVE_OPTION) {
-            File file = fc.getSelectedFile();
-            ctx.log(I18n.t("log.goose.loadingsclgocb", file.getName()));
-            logGoose(I18n.t("log.goose.loading", file.getName()));
-
-            try {
-                int iedIndex = detectAndSelectIED(file);
-                if (iedIndex == -2) return;
-
-                if (iedIndex >= 0) {
-                    parseGoCBsFromScl(file, iedIndex);
-                } else {
-                    parseGoCBsFromScl(file);
-                }
-                ctx.setLoadedSclFile(file);
-                refreshGooseControlBlocks();
-                ctx.log(I18n.t("log.goose.gocbsloaded", ctx.getSclGoCBs().size()));
-                logGoose(I18n.t("log.goose.gocbsfound", ctx.getSclGoCBs().size()));
-                ctx.onSclLoaded();
-            } catch (Exception e) {
-                ctx.log(I18n.t("log.goose.sclloaderror", e.getMessage()));
-                logGoose(I18n.t("log.native.generror", e.getMessage()));
-                JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    I18n.t("goose.sclloaderror.dlg", e.getMessage()),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            }
+            cargarSclEnSegundoPlano(fc.getSelectedFile(), true);
         }
     }
 
@@ -1715,6 +1781,14 @@ class GoosePanel {
     /** Package-visible wrapper so IEDNavigatorApp can use IED detection logic. */
     int detectAndSelectIEDPublic(File sclFile) {
         return detectAndSelectIED(sclFile);
+    }
+
+    /** El diálogo de selección es Swing: si se llega desde la carga en segundo plano, se lo pide a la interfaz. */
+    private int elegirIedEnLaInterfaz(List<String> iedNames, String fileName) throws Exception {
+        if (SwingUtilities.isEventDispatchThread()) return ctx.showIEDSelectionDialog(iedNames, fileName);
+        final int[] elegido = { -1 };
+        SwingUtilities.invokeAndWait(() -> elegido[0] = ctx.showIEDSelectionDialog(iedNames, fileName));
+        return elegido[0];
     }
 
     private int detectAndSelectIED(File sclFile) {
@@ -1739,7 +1813,7 @@ class GoosePanel {
 
             ctx.log(I18n.t("log.goose.scdieds", iedNames.size(), iedNames));
 
-            int selected = ctx.showIEDSelectionDialog(iedNames, sclFile.getName());
+            int selected = elegirIedEnLaInterfaz(iedNames, sclFile.getName());
             if (selected < 0) return -2;
             return selected;
 
