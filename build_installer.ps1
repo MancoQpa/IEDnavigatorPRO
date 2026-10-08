@@ -95,14 +95,26 @@ Banco (Join-Path $ROOT "classes\i18n") "el repo"
 
 # ── Armar el paquete ─────────────────────────────────────────────────────────
 Step "Copiando plantilla"
+# Los registros de sesion (logs\, iednavigator.log) viven dentro de la carpeta del
+# paquete. Se apartan y se devuelven DESPUES de comprimir: el ZIP toma la carpeta
+# entera, y esos registros tienen IPs y nombres de sitio. Antes se borraban con el
+# resto en cada reconstruccion (se perdieron los del 14-09 al 30-09).
+$apartado = "$DEST.reconstruyendo"
 if (Test-Path $DEST) {
-    # Si la aplicacion esta abierta desde esta misma carpeta, jre\bin\server\jvm.dll
-    # queda tomado y el borrado falla a mitad de camino. Conviene decirlo en una linea
-    # en vez de dejar un volcado de PowerShell.
+    # Antes de borrar nada, ver si algo tiene la carpeta tomada: la aplicacion abierta
+    # desde ahi (jre\bin\server\jvm.dll), una ventana del Explorador o una consola parada
+    # adentro. Remove-Item borra archivo por archivo y falla en el primero bloqueado,
+    # dejando el paquete a medio vaciar e inutilizable (paso el 2026-10-01 y el 07).
+    # Renombrar la carpeta falla entera y no toca nada.
+    # Si quedo de una corrida que fallo despues de apartar, ahi estan los registros de
+    # sesion: no se borra a ciegas.
+    if (Test-Path $apartado) {
+        Fail "Quedo $apartado de una reconstruccion que no termino. Tiene el paquete anterior y sus registros de sesion (logs\): recuperalos y borra esa carpeta antes de volver a correr el script."
+    }
     try {
-        Remove-Item $DEST -Recurse -Force -Confirm:$false -ErrorAction Stop
+        Rename-Item $DEST $apartado -ErrorAction Stop
     } catch {
-        Fail "No se pudo vaciar $DEST -- probablemente la aplicacion este abierta desde esa carpeta. Cerrala y volve a correr el script.`n       Detalle: $($_.Exception.Message)"
+        Fail "No se pudo reconstruir $DEST -- algo la tiene tomada: la aplicacion abierta desde ahi, una ventana del Explorador o una consola parada en esa carpeta. No se borro nada.`n       Detalle: $($_.Exception.Message)"
     }
 }
 New-Item -ItemType Directory -Path $DEST -Force | Out-Null
@@ -206,6 +218,15 @@ Step "Comprimiendo"
 $zip = Join-Path $OUTDIR "$NAME.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force -Confirm:$false }
 Compress-Archive -Path $DEST -DestinationPath $zip -CompressionLevel Optimal
+
+# Recien ahora, con el ZIP cerrado, vuelven los registros de sesion de la carpeta vieja.
+if (Test-Path $apartado) {
+    foreach ($item in @("logs", "iednavigator.log")) {
+        $src = Join-Path $apartado $item
+        if (Test-Path $src) { Move-Item $src -Destination $DEST -Force }
+    }
+    Remove-Item $apartado -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
+}
 
 # ── Resumen ──────────────────────────────────────────────────────────────────
 Step "Listo"
