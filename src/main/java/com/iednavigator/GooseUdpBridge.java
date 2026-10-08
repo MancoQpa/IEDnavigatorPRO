@@ -70,12 +70,12 @@ public class GooseUdpBridge {
             if (targetIp != null && !targetIp.isEmpty()) {
                 targetAddress = InetAddress.getByName(targetIp);
                 useBroadcast = false;
-                log(I18n.t("log.udp.unicast", targetIp, port));
+                log(I18n.t("log.udp.unicast", targetIp, String.valueOf(port)));
             } else {
                 // Use broadcast
                 targetAddress = InetAddress.getByName("255.255.255.255");
                 useBroadcast = true;
-                log(I18n.t("log.udp.broadcast", port));
+                log(I18n.t("log.udp.broadcast", String.valueOf(port)));
             }
 
             return true;
@@ -94,7 +94,7 @@ public class GooseUdpBridge {
             receiveSocket.setBroadcast(true);
             receiveSocket.setSoTimeout(1000); // 1 second timeout for clean shutdown
 
-            log(I18n.t("log.udp.receiver.listening", port));
+            log(I18n.t("log.udp.receiver.listening", String.valueOf(port)));
             return true;
         } catch (Exception e) {
             log(I18n.t("log.udp.receiver.initerror", e.getMessage()));

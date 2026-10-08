@@ -731,8 +731,8 @@ class ConnectionManager {
                             ctx.updateStatus(true, I18n.t("status.simactive"));
                             ctx.updateConnectionInfo(localIp + " (servidor)", finalPort);
                             ctx.log(I18n.t("log.cm.simactive"));
-                            ctx.log(I18n.t("log.cm.ipport", localIp, finalPort));
-                            ctx.log(I18n.t("log.cm.connectclientto", localIp, finalPort));
+                            ctx.log(I18n.t("log.cm.ipport", localIp, String.valueOf(finalPort)));
+                            ctx.log(I18n.t("log.cm.connectclientto", localIp, String.valueOf(finalPort)));
 
                             // Reconstruir el arbol del modelo. displayServerModel() solo se
                             // llamaba al cargar el SCL, asi que si el archivo ya estaba
@@ -750,7 +750,7 @@ class ConnectionManager {
                             ctx.updateStatus(false, I18n.t("status.simerror"));
                             ctx.updateConnectionInfo("", 0);
                             ctx.log(I18n.t("log.cm.srvstartfailed"));
-                            ctx.log(I18n.t("log.cm.checkport", finalPort));
+                            ctx.log(I18n.t("log.cm.checkport", String.valueOf(finalPort)));
                         }
                     });
                 });
@@ -807,9 +807,9 @@ class ConnectionManager {
         // camino que no pasó por handleDisconnect(), el equipo nuevo no hereda nada.
         olvidarEquipoAnterior();
         ctx.setBtnConnectEnabled(false);
-        ctx.updateStatus(false, I18n.t("status.connecting", host, port));
+        ctx.updateStatus(false, I18n.t("status.connecting", host, String.valueOf(port)));
         ctx.setStatusIndicatorConnecting();
-        ctx.log(I18n.t("log.cm.connectingto", host, port));
+        ctx.log(I18n.t("log.cm.connectingto", host, String.valueOf(port)));
 
         ctx.backgroundExecutor().submit(() -> {
             try {

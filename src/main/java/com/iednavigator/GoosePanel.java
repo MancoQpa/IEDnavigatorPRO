@@ -746,7 +746,7 @@ class GoosePanel {
             } else if (selected.contains("UDP")) {
                 udpBridgeEnabled = true;
                 logGoose(I18n.t("log.goose.udpmode.header"));
-                logGoose(I18n.t("log.goose.udpmode.port", GooseUdpBridge.DEFAULT_PORT));
+                logGoose(I18n.t("log.goose.udpmode.port", String.valueOf(GooseUdpBridge.DEFAULT_PORT)));
                 logGoose(I18n.t("log.goose.udpmode.desc"));
 
                 if (gooseUdpBridge.startReceiving()) {
