@@ -1197,7 +1197,7 @@ public class IEC61850Client implements ClientEventListener {
                     if (name.equals("addcause"))
                         return decodeEnum(v, ADD_CAUSE_MAP, bda);
                 }
-                return bda.getValueString();
+                return ValorBda.texto(bda);
             }
             return node.toString();
         } catch (Exception e) {
@@ -1216,7 +1216,7 @@ public class IEC61850Client implements ClientEventListener {
 
     private String decodeEnum(int value, Map<Integer, String> map, BasicDataAttribute bda) {
         String text = map.get(value);
-        return text != null ? text : bda.getValueString() + "(?)";
+        return text != null ? text : ValorBda.texto(bda) + "(?)";
     }
 
     /**
@@ -1839,7 +1839,7 @@ public class IEC61850Client implements ClientEventListener {
                 if (node instanceof BasicDataAttribute) {
                     BasicDataAttribute bda = (BasicDataAttribute) node;
                     String ref = bda.getReference().toString();
-                    String val = bda.getValueString();
+                    String val = ValorBda.texto(bda);
                     valueChangeListener.onValueChanged(ref, val, getValueType(bda));
                 }
             }
@@ -2095,7 +2095,10 @@ public class IEC61850Client implements ClientEventListener {
                     if (attr instanceof BasicDataAttribute) {
                         int val = getIntValue((BasicDataAttribute) attr);
                         if (attrName.equals("actsg"))   actSg  = val;
-                        if (attrName.equals("numofsgs")) numSgs = val;
+                        // En el modelo es NumOfSG (IEC 61850-7-2); "numOfSGs" es el nombre del
+                        // atributo en SCL. Comparando sólo contra este último nunca coincidía y
+                        // quedaba el 1 por defecto: el ZIV real informaba 1 grupo teniendo 4.
+                        if (attrName.equals("numofsg") || attrName.equals("numofsgs")) numSgs = val;
                     }
                 }
                 break;

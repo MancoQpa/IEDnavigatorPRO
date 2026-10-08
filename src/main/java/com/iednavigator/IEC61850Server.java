@@ -1200,7 +1200,7 @@ public class IEC61850Server implements ServerEventListener {
                     setBasicDataAttributeValue(bda, value);
                 }
 
-                String newValue = bda.getValueString();
+                String newValue = ValorBda.texto(bda);
                 System.out.println("[SERVER] Value set: " + cleanRef + " [" + fc + "] = " + newValue);
 
                 return true;
@@ -1382,7 +1382,7 @@ public class IEC61850Server implements ServerEventListener {
 
         for (BasicDataAttribute bda : bdas) {
             String ref = bda.getReference().toString();
-            String value = bda.getValueString();
+            String value = ValorBda.texto(bda);
             System.out.println("[SERVER] Write: " + ref + " = " + value);
 
             if (listener != null) {

@@ -186,7 +186,7 @@ class SettingGroupsPanel {
             BasicDataAttribute bda = (BasicDataAttribute) node;
             sgValuesTableModel.addRow(new Object[]{
                 prefix + node.getName(),
-                bda.getValueString(),
+                ValorBda.texto(bda),
                 bda.getFc().toString(),
                 bda.getClass().getSimpleName().replace("Bda", "")
             });

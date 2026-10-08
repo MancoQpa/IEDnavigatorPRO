@@ -183,7 +183,7 @@ class ProtectionSettingsPanel {
         IEC61850Client client = clientSupplier.get();
         try {
             if (client != null) return client.formatValue(bda);
-            String v = bda.getValueString();
+            String v = ValorBda.texto(bda);
             return v != null ? v : "";
         } catch (Exception e) {
             return "";

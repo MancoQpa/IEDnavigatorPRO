@@ -458,7 +458,7 @@ public final class ServicesApi {
 
     private static String extractNodeValue(ModelNode node) {
         if (node instanceof BasicDataAttribute) {
-            return ((BasicDataAttribute) node).getValueString();
+            return com.iednavigator.ValorBda.texto((BasicDataAttribute) node);
         }
         StringBuilder sb = new StringBuilder();
         for (ModelNode child : node) {

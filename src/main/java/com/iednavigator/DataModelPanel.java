@@ -151,7 +151,7 @@ class DataModelPanel {
 
             if (node instanceof BasicDataAttribute) {
                 BasicDataAttribute bda = (BasicDataAttribute) node;
-                dataModelAttrTableModel.addRow(new Object[]{"Valor",     bda.getValueString(),              bda.getClass().getSimpleName()});
+                dataModelAttrTableModel.addRow(new Object[]{"Valor",     ValorBda.texto(bda),              bda.getClass().getSimpleName()});
                 dataModelAttrTableModel.addRow(new Object[]{"Clase BDA", bda.getClass().getSimpleName(),   "Class"});
             }
 
