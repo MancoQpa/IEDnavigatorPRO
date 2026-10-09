@@ -58,7 +58,7 @@ class MonitorManager {
                     String displayName = formatReference(ref);
                     MonitorItem item = new MonitorItem(ref, displayName, fc.toString(), type, fcNode);
                     if (info.node instanceof BasicDataAttribute) {
-                        item.value = ctx.formatEnumValue(info.node, ((BasicDataAttribute) info.node).getValueString());
+                        item.value = ctx.formatEnumValue(info.node, ValorBda.texto((BasicDataAttribute) info.node));
                         if (item.value == null) item.value = "";
                     }
                     ctx.getMonitorItems().put(fullRef, item);
@@ -231,7 +231,7 @@ class MonitorManager {
                 ModelNode node = model.findModelNode(item.reference, fc);
                 if (node instanceof BasicDataAttribute) {
                     BasicDataAttribute bda = (BasicDataAttribute) node;
-                    String newVal = ctx.formatEnumValue(node, bda.getValueString());
+                    String newVal = ctx.formatEnumValue(node, ValorBda.texto(bda));
                     if (newVal == null) newVal = "";
                     if (!newVal.equals(item.value)) {
                         item.oldValue = item.value;
@@ -254,7 +254,7 @@ class MonitorManager {
 
             if (item.node instanceof BasicDataAttribute) {
                 BasicDataAttribute bda = (BasicDataAttribute) item.node;
-                String newVal = bda.getValueString();
+                String newVal = ValorBda.texto(bda);
                 if (newVal == null) newVal = "";
 
                 if (!newVal.equals(item.value)) {

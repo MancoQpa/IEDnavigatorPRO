@@ -133,7 +133,7 @@ class ModelTreeBuilder {
         if (treeNode != null && treeNode.getUserObject() instanceof NodeInfo) {
             NodeInfo info = (NodeInfo) treeNode.getUserObject();
             if (info.node instanceof BasicDataAttribute) {
-                info.value = formatFn.apply(info.node, ((BasicDataAttribute) info.node).getValueString());
+                info.value = formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node));
                 treeModel.nodeChanged(treeNode);
                 return;
             }
@@ -145,7 +145,7 @@ class ModelTreeBuilder {
                 if (node.getUserObject() instanceof NodeInfo) {
                     NodeInfo info = (NodeInfo) node.getUserObject();
                     if (info.node instanceof BasicDataAttribute) {
-                        info.value = formatFn.apply(info.node, ((BasicDataAttribute) info.node).getValueString());
+                        info.value = formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node));
                         treeModel.nodeChanged(node);
                     }
                 }
@@ -209,7 +209,7 @@ class ModelTreeBuilder {
 
         if (node instanceof BasicDataAttribute) {
             BasicDataAttribute bda = (BasicDataAttribute) node;
-            String raw = bda.getValueString();
+            String raw = ValorBda.texto(bda);
             info.value = (enumFormatter != null) ? enumFormatter.apply(node, raw) : raw;
             info.type  = bda.getClass().getSimpleName().replace("Bda", "");
         }
@@ -470,7 +470,7 @@ class ModelTreeBuilder {
         if (node instanceof BasicDataAttribute) {
             BasicDataAttribute bda = (BasicDataAttribute) node;
             String ref = bda.getReference().toString();
-            updateNodeValue(ref, bda.getValueString(), nodeMap, treeModel);
+            updateNodeValue(ref, ValorBda.texto(bda), nodeMap, treeModel);
         }
 
         Collection<ModelNode> children = node.getChildren();
@@ -490,7 +490,7 @@ class ModelTreeBuilder {
             NodeInfo info = (NodeInfo) userObj;
             if (info.node instanceof BasicDataAttribute) {
                 BasicDataAttribute bda = (BasicDataAttribute) info.node;
-                info.value = bda.getValueString();
+                info.value = ValorBda.texto(bda);
                 treeModel.nodeChanged(treeNode);
             }
         }

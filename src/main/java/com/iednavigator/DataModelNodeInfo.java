@@ -24,7 +24,7 @@ class DataModelNodeInfo {
             sb.append(" [").append(((FcModelNode) node).getFc()).append("]");
         }
         if (node instanceof BasicDataAttribute) {
-            String val = ((BasicDataAttribute) node).getValueString();
+            String val = ValorBda.texto((BasicDataAttribute) node);
             if (val != null && !val.isEmpty()) sb.append(" = ").append(val);
         }
         return sb.toString();

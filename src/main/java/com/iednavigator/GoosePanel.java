@@ -1571,14 +1571,14 @@ class GoosePanel {
                                 if (attrName.equals("goid")) {
                                     hasGoID = true;
                                     if (attr instanceof BasicDataAttribute) {
-                                        goID = ((BasicDataAttribute) attr).getValueString();
+                                        goID = ValorBda.texto((BasicDataAttribute) attr);
                                         if (goID == null) goID = "";
                                     }
                                 }
                                 if (attrName.equals("datset")) {
                                     hasDatSet = true;
                                     if (attr instanceof BasicDataAttribute) {
-                                        datSet = ((BasicDataAttribute) attr).getValueString();
+                                        datSet = ValorBda.texto((BasicDataAttribute) attr);
                                         if (datSet == null) datSet = "";
                                     }
                                 }

@@ -257,7 +257,7 @@ class PollingManager {
                     ctx.getClient().readNodeValues((FcModelNode) info.node);
                     if (info.node instanceof BasicDataAttribute) {
                         BasicDataAttribute bda = (BasicDataAttribute) info.node;
-                        info.value = bda.getValueString();
+                        info.value = ValorBda.texto(bda);
                         ctx.getTreeModel().nodeChanged(treeNode);
                         ctx.log(I18n.t("log.value", info.value));
                     } else {
@@ -317,7 +317,7 @@ class PollingManager {
             NodeInfo info = (NodeInfo) userObj;
             if (info.node instanceof BasicDataAttribute) {
                 BasicDataAttribute bda = (BasicDataAttribute) info.node;
-                String newValue = ctx.formatEnumValue(info.node, bda.getValueString());
+                String newValue = ctx.formatEnumValue(info.node, ValorBda.texto(bda));
                 if (newValue == null) newValue = "";
                 if (!newValue.equals(info.value == null ? "" : info.value)) {
                     info.value = newValue;

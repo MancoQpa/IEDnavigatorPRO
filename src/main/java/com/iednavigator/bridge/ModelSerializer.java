@@ -53,7 +53,7 @@ public final class ModelSerializer {
 
         if (node instanceof BasicDataAttribute) {
             dto.put("type", typeHelper.getValueType(node));
-            String v = ((BasicDataAttribute) node).getValueString();
+            String v = com.iednavigator.ValorBda.texto((BasicDataAttribute) node);
             if (v != null && !v.isEmpty()) {
                 dto.put("value", typeHelper.formatValue(node));
             }

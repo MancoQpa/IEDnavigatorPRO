@@ -187,7 +187,7 @@ class DatasetPanel {
         if (node instanceof BasicDataAttribute) {
             IEC61850Client client = clientSupplier != null ? clientSupplier.get() : null;
             return client != null ? client.formatValue(node)
-                                  : ((BasicDataAttribute) node).getValueString();
+                                  : ValorBda.texto((BasicDataAttribute) node);
         }
         Collection<ModelNode> children = node.getChildren();
         if (children == null || children.isEmpty()) return "";

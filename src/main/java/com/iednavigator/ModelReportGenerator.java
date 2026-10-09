@@ -189,7 +189,7 @@ public class ModelReportGenerator {
             String fc = bda.getFc() != null ? bda.getFc().toString() : "";
             String type = bda.getBasicType() != null ? bda.getBasicType().toString() : "";
             String val;
-            try { val = bda.getValueString(); } catch (Exception e) { val = ""; }
+            try { val = ValorBda.texto(bda); } catch (Exception e) { val = ""; }
             pw.println("<tr><td class='mono'>" + esc(bda.getReference().toString())
                 + "</td><td>" + esc(fc) + "</td><td>" + esc(type)
                 + "</td><td class='mono'>" + esc(val) + "</td></tr>");

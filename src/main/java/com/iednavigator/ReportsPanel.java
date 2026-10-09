@@ -466,7 +466,7 @@ class ReportsPanel {
     /** Recursively extract a readable value string from any ModelNode. */
     private String extractNodeValue(ModelNode node) {
         if (node instanceof BasicDataAttribute) {
-            return ((BasicDataAttribute) node).getValueString();
+            return ValorBda.texto((BasicDataAttribute) node);
         }
         StringBuilder sb = new StringBuilder();
         for (ModelNode child : node) {

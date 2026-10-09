@@ -54,7 +54,7 @@ public class SclReferenceUtils {
      * Convierte el valor de un BasicDataAttribute al tipo esperado por el GOOSE publisher.
      */
     public static Object convertBdaToPublisherValue(BasicDataAttribute bda, GoosePublisher.DataValue.Type targetType) {
-        String val = bda.getValueString();
+        String val = ValorBda.texto(bda);
         if (val == null) return null;
 
         switch (targetType) {
