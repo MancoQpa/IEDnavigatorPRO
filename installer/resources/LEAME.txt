@@ -2,6 +2,77 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.5
+-----
+- La conexion ya no se corta sola con los equipos que cierran la asociacion por
+  inactividad. Hay IED que la abortan si el cliente pasa un tiempo sin pedir nada
+  --se midieron 90 segundos--, y con el sondeo apagado la aplicacion quedaba muda
+  despues de conectar, asi que el corte era seguro. Ahora, tras 60 segundos sin
+  trafico, envia una lectura minima que mantiene la asociacion. Solo sale en
+  silencio: nunca se superpone con un pedido en curso. Si igual se corta, el
+  registro dice cuantos segundos llevaba el cliente sin pedir nada y nombra el
+  temporizador de inactividad del equipo como causa probable.
+- Los dialogos de verificacion previa y de rechazo de una orden tienen barra de
+  desplazamiento cuando no entran en pantalla. En un vano con varios aparatos la
+  lista se salia de la pantalla y el final --y el boton Aceptar-- quedaba fuera de
+  vista. Si el contenido entra, se ven igual que antes.
+- Generacion del CID, varias correcciones:
+  - El archivo podia llevar datos del equipo anterior. Al conectarse a un IED
+    despues de otro, el CID salia con el fabricante y la version del primero, y
+    "Guardar CID" podia ofrecer el archivo descargado del equipo anterior como si
+    fuera del actual. Ahora todo lo del equipo anterior se descarta al desconectar.
+  - El encabezado del IED tenia los campos corridos: el tipo aparecia como
+    fabricante. Ahora fabricante y tipo van en su lugar.
+  - Los bloques de reporte (RCB) llevan la configuracion leida del equipo
+    --bufTime, opciones de disparo y campos opcionales-- en lugar de una plantilla
+    fija.
+  - Los grupos de ajuste se exportan: el archivo declara cuantos tiene el equipo y
+    cual esta activo, y los ajustes van marcados con su grupo. Sale solo el grupo
+    activo, a proposito: leer los demas exige cambiar el grupo en edicion del rele,
+    y una exportacion no debe actuar sobre el equipo.
+  - Los arreglos de datos (por ejemplo, armonicos) se declaraban mal y el CID
+    exportado no se podia volver a abrir en el simulador. Ahora se declaran con su
+    tamano y el archivo recarga.
+  - Los valores enteros INT8U, INT16, INT16U e INT64 se perdian, y los FLOAT64
+    salian como bytes sueltos. Ahora salen con su valor.
+  - El aviso sobre GOOSE del dialogo decia que MMS no transmite esa seccion. Los
+    bloques GOOSE si viajan por MMS; lo que pasa es que la biblioteca usada no los
+    expone. El texto ahora lo dice asi.
+- Valores que no se veian en pantalla. Los enteros INT8U, INT16, INT16U e INT64
+  aparecian vacios, y los FLOAT64 como bytes sueltos, en el arbol, el monitor, los
+  paneles de datos, ajustes y reportes, y el informe del modelo. Ahora se muestran
+  todos. De paso, el panel de grupos de ajuste informaba 1 grupo en un equipo que
+  tiene 4: ahora lee el numero correcto.
+- El conteo de bloques GOOSE al conectar podia ser falso: contaba referencias de
+  suscripcion, y dos veces. Un equipo que no publica GOOSE figuraba con decenas.
+  Ahora solo cuenta los bloques que el equipo publica.
+- Si la lectura del modelo de control (ctlModel) falla, la aplicacion ya no lo
+  trata como "solo estado". Usa el ultimo valor leido en la conexion, o el del
+  archivo SCL, y lo deja anotado en el registro.
+- Cargar un SCL grande para GOOSE ya no congela la ventana. La carga corre en
+  segundo plano, con un dialogo que muestra los segundos transcurridos y permite
+  seguir usando la aplicacion mientras termina.
+- El registro escribia el puerto con separador de miles (10,102). Ahora sale sin
+  separador.
+- Permisos de administrador, al dia con lo que realmente hace falta:
+  - El aviso "PERMISO DENEGADO" del diagnostico de puerto decia que en Windows los
+    puertos menores a 1024 requieren administrador. Eso vale para Linux y Android,
+    no para Windows. Ahora explica la causa real --otro programa tiene el puerto
+    tomado, a menudo un servicio de un fabricante de IED, o Windows lo reservo-- y
+    remite a "Liberar Puerto", que es lo unico que requiere administrador.
+  - GOOSE y Sampled Values no requieren administrador si Npcap se instalo con la
+    opcion "Restrict Npcap driver's access to Administrators only" desmarcada.
+    Varios mensajes del panel GOOSE sugerian ejecutar como administrador siempre;
+    ahora lo hacen solo cuando Npcap quedo restringido. En ese caso la aplicacion
+    lo detecta y explica las dos salidas: ejecutar como administrador o reinstalar
+    Npcap desmarcando esa opcion.
+  - El instalador detecta esa misma opcion, ofrece "Reinstalar Npcap" si quedo
+    marcada y, al instalar Npcap, indica dejarla desmarcada.
+  - El instalador terminaba diciendo "Sin Npcap: MMS funciona, GOOSE y SV no"
+    aunque Npcap estuviera instalado. Ahora informa el estado real.
+  - El dialogo de error al iniciar la captura GOOSE estaba solo en espanol. Ahora
+    esta en los cuatro idiomas.
+
 v4.13.4
 -----
 - Conexion mas rapida con los equipos que rechazan la lectura directa del modelo.
