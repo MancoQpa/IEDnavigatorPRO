@@ -81,14 +81,15 @@ não para afirmações de desempenho. O 6MD85 foi explorado em bancada, alimenta
 ### Requisitos
 - **Windows 10 ou 11 de 64 bits.**
 - **Java**: não é necessário instalar se for usado o instalador da seção *Releases* (inclui seu próprio runtime, gerado com `jlink`). Para compilar a partir do código: **JDK 11 ou superior**.
-- **Npcap** (somente para captura/publicação GOOSE em Camada 2 e Sampled Values): instalado separadamente em <https://npcap.com/#download> (marcar *WinPcap API-compatible Mode*). Sem o Npcap, o cliente MMS e o servidor funcionam normalmente; apenas o GOOSE/SV em Camada 2 exige essa instalação.
+- **Npcap** (somente para captura/publicação GOOSE em Camada 2 e Sampled Values): instalado separadamente em <https://npcap.com/#download> (marcar *WinPcap API-compatible Mode* e deixar **desmarcada** a opção *Restrict Npcap driver's access to Administrators only*, para que o GOOSE/SV funcione sem executar a aplicação como administrador). Sem o Npcap, o cliente MMS e o servidor funcionam normalmente; apenas o GOOSE/SV em Camada 2 exige essa instalação.
+- **Administrador**: não é necessário para o uso normal. Somente a ferramenta *Liberar Porta* o exige, para encerrar um programa que ocupe a porta 102 (alguns aplicativos de fabricantes de IED rodam em segundo plano e se apropriam dessa porta).
 
 ### Instalação e execução
 
 **Opção A — Instalador (recomendado)**
 1. Baixar o instalador em [Releases](https://github.com/MancoQpa/IEDnavigatorPRO/releases) (pacote autocontido, inclui o runtime Java).
 2. Extrair a pasta inteira (por exemplo, para `C:\IEDNavigatorPRO`).
-3. Clique com o botão direito em `INSTALAR.bat` → **Executar como administrador**. Abre-se uma janela com as opções **Instalar** e **Desinstalar**; se detectar que falta o Npcap, oferece um botão que o baixa e instala.
+3. Clique duas vezes em `INSTALAR.bat` (não requer administrador). Abre-se uma janela com as opções **Instalar** e **Desinstalar**; se detectar que falta o Npcap, oferece um botão que o baixa e instala.
 4. O Npcap só é necessário para GOOSE/SV na Camada 2. Também pode ser instalado separadamente em <https://npcap.com/#download>.
 5. Iniciar pelo ícone da Área de Trabalho ou pelo `IEDNavigatorPRO.exe`.
 
@@ -162,6 +163,6 @@ O Npcap **não** é redistribuído com este projeto (sua licença não permite);
 Copyright © Emilio Medina.
 
 ### Problemas conhecidos e limitações
-- A captura/publicação GOOSE em Camada 2 pode não funcionar em todas as interfaces de rede no Windows e requer o Npcap com privilégios de administrador.
+- A captura/publicação GOOSE em Camada 2 pode não funcionar em todas as interfaces de rede no Windows e requer o Npcap. Só pede executar a aplicação como administrador se o Npcap foi instalado com a opção *Restrict Npcap driver's access to Administrators only*.
 - Ferramenta de laboratório e capacitação: **não** validada para colocação em operação produtiva.
 - A plataforma é voltada para Windows.

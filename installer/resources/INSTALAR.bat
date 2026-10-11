@@ -38,6 +38,7 @@ color 1F
 set "OK_JRE=0"
 set "OK_APP=0"
 set "OK_NPCAP=0"
+set "NPCAP_ADMIN=0"
 set "OK_LNK=0"
 set "ABORTAR=0"
 
@@ -111,9 +112,19 @@ if exist "%SystemRoot%\System32\Npcap\NPFInstall.exe" set "OK_NPCAP=1"
 if exist "%SystemRoot%\System32\wpcap.dll"            set "OK_NPCAP=1"
 reg query "HKLM\SOFTWARE\Npcap"             >nul 2>&1 && set "OK_NPCAP=1"
 reg query "HKLM\SOFTWARE\WOW6432Node\Npcap" >nul 2>&1 && set "OK_NPCAP=1"
-if "!OK_NPCAP!"=="1" (
-    echo           [ OK ]  Npcap instalado. GOOSE / SV disponibles.
-) else (
+:: AdminOnly=1: Npcap se instalo con "Restrict Npcap driver's access to
+:: Administrators only" y GOOSE/SV solo andan ejecutando la app como administrador.
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\npcap\Parameters" /v AdminOnly 2>nul | find "0x1" >nul && set "NPCAP_ADMIN=1"
+if "!OK_NPCAP!"=="1" if "!NPCAP_ADMIN!"=="1" (
+    echo           [ * ]  Npcap instalado, pero restringido a administradores.
+    echo                  GOOSE / SV solo funcionan ejecutando la aplicacion
+    echo                  como administrador. Al final se explica como quitarlo.
+)
+if "!OK_NPCAP!"=="1" if "!NPCAP_ADMIN!"=="0" (
+    echo           [ OK ]  Npcap instalado. GOOSE / SV disponibles,
+    echo                  sin permisos de administrador.
+)
+if "!OK_NPCAP!"=="0" (
     echo           [ - ]  Npcap NO instalado ^(es opcional^).
     echo                  La aplicacion abre y funciona igual para MMS.
     echo                  Al final se explica como habilitar GOOSE / SV.
@@ -176,11 +187,32 @@ if "!OK_NPCAP!"=="0" (
     echo.
     echo    Para habilitarlo ^(una sola vez^):
     echo      1. Descargue Npcap de   https://npcap.com/#download
-    echo      2. Al instalarlo, marque "WinPcap API-compatible Mode".
+    echo      2. Al instalarlo, marque "WinPcap API-compatible Mode" y deje
+    echo         DESMARCADA la opcion
+    echo         "Restrict Npcap driver's access to Administrators only".
+    echo         Asi GOOSE no pide ejecutar la aplicacion como administrador.
     echo      3. Vuelva a abrir IED Navigator PRO.
     echo.
     echo    Npcap no puede venir dentro de este paquete: su licencia
     echo    gratuita no permite redistribuirlo. Ver README.txt.
+    echo.
+)
+
+if "!NPCAP_ADMIN!"=="1" (
+    echo  ----------------------------------------------------------------
+    echo    Npcap RESTRINGIDO A ADMINISTRADORES
+    echo  ----------------------------------------------------------------
+    echo.
+    echo    Npcap se instalo con la opcion
+    echo    "Restrict Npcap driver's access to Administrators only".
+    echo    Con ella, GOOSE y Sampled Values solo
+    echo    funcionan si IED Navigator PRO se ejecuta como administrador.
+    echo.
+    echo    Para usarlos con un usuario comun ^(una sola vez^):
+    echo      1. Descargue Npcap de   https://npcap.com/#download
+    echo      2. Ejecute el instalador ^(reemplaza al actual^) y deje
+    echo         DESMARCADA esa opcion.
+    echo      3. Vuelva a abrir IED Navigator PRO.
     echo.
 )
 

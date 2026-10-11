@@ -30,7 +30,13 @@ QUÉ NECESITÁS INSTALAR (y qué NO)
 
    Descarga oficial de Npcap:
        https://npcap.com/#download
-   Al instalarlo, marcá la opción "WinPcap API-compatible Mode" si aparece.
+   Al instalarlo:
+     - marcá la opción "WinPcap API-compatible Mode" si aparece;
+     - dejá DESMARCADA la opción
+       "Restrict Npcap driver's access to Administrators only".
+       Si la marcás, GOOSE y Sampled Values solo funcionan ejecutando
+       IED Navigator PRO como administrador. Si ya la marcaste, volvé a
+       ejecutar el instalador de Npcap y desmarcala.
 
 
 PASOS DE INSTALACIÓN
@@ -52,9 +58,15 @@ a esta ubicación.
 REQUISITOS
 ----------
 - Windows 10 u 11 de 64 bits.
-- Administrador: NO hace falta para instalar ni para usar MMS. Sí lo pide el
-  instalador de Npcap, y la captura GOOSE/SV en Capa 2 suele necesitar que la
-  aplicación se ejecute como administrador.
+- Administrador: NO hace falta para instalar ni para el uso normal (MMS,
+  simulador, GOOSE y Sampled Values). Solo lo pide:
+    - el instalador de Npcap, una vez;
+    - la herramienta "Liberar Puerto", para terminar un programa que ocupe el
+      puerto 102 (algunas aplicaciones de fabricantes de IED corren en segundo
+      plano y se adueñan de ese puerto). Para eso, y solo para eso, iniciá la
+      aplicación con clic derecho > Ejecutar como administrador;
+    - GOOSE / SV, únicamente si Npcap se instaló con la opción "Restrict Npcap
+      driver's access to Administrators only" (ver arriba).
 
 
 LICENCIA Y CÓDIGO FUENTE

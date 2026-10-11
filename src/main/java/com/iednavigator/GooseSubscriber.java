@@ -110,6 +110,46 @@ public class GooseSubscriber {
     private static volatile boolean pcapUnavailable = false;
 
     /**
+     * true si Npcap se instalo con "Restrict Npcap driver's access to Administrators only"
+     * y esta aplicacion NO corre como administrador. En ese caso la captura y publicacion
+     * GOOSE/SV necesitan elevar permisos; con la opcion desmarcada no hacen falta.
+     * Se resuelve una sola vez: lee AdminOnly del registro y el nivel de integridad del
+     * proceso con las herramientas de Windows (reg, whoami), sin JNA.
+     */
+    public static synchronized boolean isNpcapRestrictedForThisUser() {
+        if (npcapRestricted == null) {
+            npcapRestricted = npcapAdminOnly() && !processElevated();
+        }
+        return npcapRestricted;
+    }
+
+    private static Boolean npcapRestricted;
+
+    private static boolean npcapAdminOnly() {
+        String out = runWindowsTool("reg", "query",
+                "HKLM\\SYSTEM\\CurrentControlSet\\Services\\npcap\\Parameters", "/v", "AdminOnly");
+        return out != null && out.contains("AdminOnly") && out.contains("0x1");
+    }
+
+    /** S-1-16-12288 = nivel de integridad alto: el proceso corre elevado. */
+    private static boolean processElevated() {
+        String out = runWindowsTool("whoami", "/groups");
+        return out != null && out.contains("S-1-16-12288");
+    }
+
+    private static String runWindowsTool(String... cmd) {
+        if (!System.getProperty("os.name", "").toLowerCase().contains("win")) return null;
+        try {
+            Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+            byte[] b = p.getInputStream().readAllBytes();
+            if (!p.waitFor(5, TimeUnit.SECONDS)) { p.destroyForcibly(); return null; }
+            return new String(b, java.nio.charset.Charset.defaultCharset());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Start capturing GOOSE on specified interface
      */
     public boolean start(PcapNetworkInterface nif) {

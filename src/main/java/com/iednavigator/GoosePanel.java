@@ -681,14 +681,23 @@ class GoosePanel {
                     logGoose(I18n.t("log.goose.ifacefound", desc, ips.toString()));
                 }
             }
+            boolean restringido = !GooseSubscriber.isPcapUnavailable()
+                    && GooseSubscriber.isNpcapRestrictedForThisUser();
             if (interfaces.isEmpty()) {
                 gooseInterfaceCombo.addItem(GooseSubscriber.isPcapUnavailable()
                         ? I18n.t("goose.iface.nopcap")
-                        : I18n.t("goose.iface.none"));
+                        : restringido ? I18n.t("goose.iface.adminonly")
+                                      : I18n.t("goose.iface.none"));
                 if (GooseSubscriber.isPcapUnavailable()) {
                     ctx.log(I18n.t("log.goose.nopcap"));
                     logGoose(I18n.t("log.goose.nopcap"));
                 }
+            }
+            // Aunque aparezcan interfaces, con Npcap restringido la captura falla o pide
+            // elevar permisos al abrirlas: se avisa igual, una vez por carga.
+            if (restringido) {
+                ctx.log(I18n.t("log.goose.adminonly"));
+                logGoose(I18n.t("log.goose.adminonly"));
             }
         } catch (Throwable e) {
             // Throwable y no Exception: sin Npcap, pcap4j falla con UnsatisfiedLinkError.
@@ -697,6 +706,12 @@ class GoosePanel {
             gooseInterfaceCombo.addItem(I18n.t("goose.iface.nopcap"));
             ctx.log(I18n.t("log.goose.ifaceloaderror", String.valueOf(e.getMessage())));
         }
+    }
+
+    /** Renglon extra para los errores de captura/publicacion, solo si Npcap quedo restringido. */
+    private static String avisoNpcapRestringido() {
+        return GooseSubscriber.isNpcapRestrictedForThisUser()
+                ? "\n\n" + I18n.t("goose.capture.starterror.admin") : "";
     }
 
     // ─── Capture toggle ────────────────────────────────────────────────────────
@@ -816,7 +831,11 @@ class GoosePanel {
                     } else {
                         logGoose(I18n.t("log.goose.capturefailed"));
                         logGoose(I18n.t("log.goose.possiblecauses"));
-                        logGoose(I18n.t("log.goose.causeadmin"));
+                        // Administrador solo si Npcap quedo restringido: con AdminOnly=0
+                        // la captura anda con un usuario comun y sugerirlo confunde.
+                        if (GooseSubscriber.isNpcapRestrictedForThisUser()) {
+                            logGoose(I18n.t("log.goose.causeadmin"));
+                        }
                         logGoose(I18n.t("log.goose.causenpcap"));
                         logGoose(I18n.t("log.goose.causepromisc"));
                         if (isWifi) {
@@ -835,11 +854,7 @@ class GoosePanel {
                 lblGooseStatus.setForeground(new Color(0, 150, 0));
             } else if (!internalLoopbackEnabled && !udpBridgeEnabled) {
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    "Error iniciando captura GOOSE.\n" +
-                    "Verifique:\n" +
-                    "- Ejecutar como Administrador\n" +
-                    "- Npcap instalado con 'WinPcap API-compatible Mode'\n" +
-                    "- Para WiFi, use 'GOOSE sobre UDP'",
+                    I18n.t("goose.capture.starterror") + avisoNpcapRestringido(),
                     "GOOSE Capture", JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -1308,7 +1323,7 @@ class GoosePanel {
                     publishStarted = true;
                 } else {
                     JOptionPane.showMessageDialog(ctx.parentWindow(),
-                        I18n.t("goose.pub.initerror"),
+                        I18n.t("goose.pub.initerror") + avisoNpcapRestringido(),
                         "GOOSE Publisher", JOptionPane.ERROR_MESSAGE);
                 }
             }
