@@ -54,6 +54,10 @@ v4.13.5
   seguir usando la aplicacion mientras termina.
 - El registro escribia el puerto con separador de miles (10,102). Ahora sale sin
   separador.
+- Pestana GOOSE: en pantallas de 1366x768 el boton "CAPTURAR GOOSE", el selector de
+  Estado y el boton "Cambio" no se veian. Las filas de controles saltaban de linea
+  pero el panel no crecia, y la segunda linea quedaba oculta. Ahora el panel toma la
+  altura que necesite y todos los controles quedan a la vista con cualquier ancho.
 - Permisos de administrador, al dia con lo que realmente hace falta:
   - El aviso "PERMISO DENEGADO" del diagnostico de puerto decia que en Windows los
     puertos menores a 1024 requieren administrador. Eso vale para Linux y Android,
