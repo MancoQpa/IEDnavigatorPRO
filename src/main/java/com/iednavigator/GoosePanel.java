@@ -222,7 +222,7 @@ class GoosePanel {
         topPanel.setBorder(BorderFactory.createEmptyBorder(3, 5, 3, 5));
 
         // Row 1: Interface + Capture Button
-        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
+        JPanel row1 = new JPanel(new WrapLayout(FlowLayout.LEFT, 8, 3));
         row1.setOpaque(false);
 
         row1.add(new JLabel(I18n.t("lbl.interface")));
@@ -255,7 +255,7 @@ class GoosePanel {
         topPanel.add(row1, BorderLayout.NORTH);
 
         // Row 2: Publisher controls + filtro de retransmisión
-        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
+        JPanel row2 = new JPanel(new WrapLayout(FlowLayout.LEFT, 8, 3));
         row2.setOpaque(false);
 
         JCheckBox cbFilterRetrans = new JCheckBox(I18n.t("goose.filter"));
