@@ -681,14 +681,23 @@ class GoosePanel {
                     logGoose(I18n.t("log.goose.ifacefound", desc, ips.toString()));
                 }
             }
+            boolean restringido = !GooseSubscriber.isPcapUnavailable()
+                    && GooseSubscriber.isNpcapRestrictedForThisUser();
             if (interfaces.isEmpty()) {
                 gooseInterfaceCombo.addItem(GooseSubscriber.isPcapUnavailable()
                         ? I18n.t("goose.iface.nopcap")
-                        : I18n.t("goose.iface.none"));
+                        : restringido ? I18n.t("goose.iface.adminonly")
+                                      : I18n.t("goose.iface.none"));
                 if (GooseSubscriber.isPcapUnavailable()) {
                     ctx.log(I18n.t("log.goose.nopcap"));
                     logGoose(I18n.t("log.goose.nopcap"));
                 }
+            }
+            // Aunque aparezcan interfaces, con Npcap restringido la captura falla o pide
+            // elevar permisos al abrirlas: se avisa igual, una vez por carga.
+            if (restringido) {
+                ctx.log(I18n.t("log.goose.adminonly"));
+                logGoose(I18n.t("log.goose.adminonly"));
             }
         } catch (Throwable e) {
             // Throwable y no Exception: sin Npcap, pcap4j falla con UnsatisfiedLinkError.

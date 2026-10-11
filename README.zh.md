@@ -78,14 +78,15 @@
 ### 系统要求
 - **64 位 Windows 10 或 11。**
 - **Java**：若使用 *Releases* 中的安装包则无需单独安装（内置由 `jlink` 生成的运行时）。若需从源码编译：需要 **JDK 11 或更高版本**。
-- **Npcap**（仅用于二层 GOOSE / 采样值的捕获和发布）：需从 <https://npcap.com/#download> 单独安装（勾选 *WinPcap API-compatible Mode*）。若未安装 Npcap，MMS 客户端和服务端仍可正常工作；只有二层 GOOSE/SV 功能需要它。
+- **Npcap**（仅用于二层 GOOSE / 采样值的捕获和发布）：需从 <https://npcap.com/#download> 单独安装（勾选 *WinPcap API-compatible Mode*，并**不要勾选** *Restrict Npcap driver's access to Administrators only*，这样无需以管理员身份运行本应用即可使用 GOOSE/SV）。若未安装 Npcap，MMS 客户端和服务端仍可正常工作；只有二层 GOOSE/SV 功能需要它。
+- **管理员权限**：正常使用无需管理员权限。只有*释放端口*工具需要，用于结束占用 102 端口的程序（某些 IED 厂商的应用会在后台运行并占用该端口）。
 
 ### 安装与运行
 
 **方式 A —— 安装程序（推荐）**
 1. 从 [Releases](https://github.com/MancoQpa/IEDnavigatorPRO/releases) 下载安装包（自包含，内置 Java 运行时）。
 2. 解压整个文件夹（例如解压到 `C:\IEDNavigatorPRO`）。
-3. 右键点击 `INSTALAR.bat` → **以管理员身份运行**。将打开一个窗口，提供**安装**与**卸载**选项；若检测到缺少 Npcap，会提供一个按钮自动下载并安装。
+3. 双击 `INSTALAR.bat`（无需管理员权限）。将打开一个窗口，提供**安装**与**卸载**选项；若检测到缺少 Npcap，会提供一个按钮自动下载并安装。
 4. Npcap 仅在使用二层 GOOSE/SV 时才需要，也可从 <https://npcap.com/#download> 单独安装。
 5. 通过桌面图标或 `IEDNavigatorPRO.exe` 启动。
 
@@ -159,6 +160,6 @@ Npcap **不** 随本项目一同分发（其许可证不允许此操作）；本
 版权所有 © Emilio Medina。
 
 ### 已知问题与限制
-- 二层 GOOSE 捕获/发布功能可能无法在 Windows 上所有网卡上正常工作，且需要以管理员权限运行的 Npcap。
+- 二层 GOOSE 捕获/发布功能可能无法在 Windows 上所有网卡上正常工作，且需要 Npcap。仅当 Npcap 安装时勾选了 *Restrict Npcap driver's access to Administrators only* 选项时，才需要以管理员身份运行本应用。
 - 本工具面向实验室与培训场景：**未** 经过生产环境投运验证。
 - 本平台面向 Windows 系统。

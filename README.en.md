@@ -80,14 +80,15 @@ used as test-bench units: they support functional verification, not performance 
 ### Requirements
 - **64-bit Windows 10 or 11.**
 - **Java**: not required if using the installer from the *Releases* section (it bundles its own runtime, built with `jlink`). To build from source: **JDK 11 or higher**.
-- **Npcap** (only for Layer 2 GOOSE/Sampled Values capture and publishing): installed separately from <https://npcap.com/#download> (check *WinPcap API-compatible Mode*). Without Npcap, the MMS client and server work normally; only Layer 2 GOOSE/SV requires it.
+- **Npcap** (only for Layer 2 GOOSE/Sampled Values capture and publishing): installed separately from <https://npcap.com/#download> (check *WinPcap API-compatible Mode* and leave *Restrict Npcap driver's access to Administrators only* **unchecked**, so GOOSE/SV work without running the application as administrator). Without Npcap, the MMS client and server work normally; only Layer 2 GOOSE/SV requires it.
+- **Administrator**: not needed for normal use. Only the *Release Port* tool requires it, to terminate a program holding port 102 (some IED manufacturer applications run in the background and take over that port).
 
 ### Installation and Setup
 
 **Option A — Installer (recommended)**
 1. Download the installer from [Releases](https://github.com/MancoQpa/IEDnavigatorPRO/releases) (self-contained package, includes the Java runtime).
 2. Extract the entire folder (e.g. to `C:\IEDNavigatorPRO`).
-3. Right-click `INSTALAR.bat` → **Run as administrator**. A window opens with **Install** and **Uninstall** options; if Npcap is missing, it offers a button that downloads and installs it.
+3. Double-click `INSTALAR.bat` (no administrator rights needed). A window opens with **Install** and **Uninstall** options; if Npcap is missing, it offers a button that downloads and installs it.
 4. Npcap is only needed for Layer 2 GOOSE/SV. It can also be installed separately from <https://npcap.com/#download>.
 5. Launch via the Desktop icon or `IEDNavigatorPRO.exe`.
 
@@ -161,6 +162,6 @@ Npcap is **not** redistributed with this project (its license does not permit it
 Copyright © Emilio Medina.
 
 ### Known Issues and Limitations
-- Layer 2 GOOSE capture/publishing may not work on all network interfaces on Windows and requires Npcap with administrator privileges.
+- Layer 2 GOOSE capture/publishing may not work on all network interfaces on Windows and requires Npcap. It only asks to run the application as administrator if Npcap was installed with *Restrict Npcap driver's access to Administrators only*.
 - Lab and training tool: **not** validated for production commissioning.
 - The platform is Windows-oriented.

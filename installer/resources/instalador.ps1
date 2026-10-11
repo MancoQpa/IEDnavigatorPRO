@@ -173,6 +173,17 @@ function HayNpcap {
     return $false
 }
 
+# Npcap se puede instalar con "Restrict Npcap driver's access to Administrators
+# only". Con esa opcion, GOOSE y SV solo andan si IEDNavigator PRO se ejecuta como
+# administrador; sin ella, andan con un usuario comun. El instalador de Npcap
+# guarda la eleccion en AdminOnly (1 = restringido).
+function NpcapSoloAdmin {
+    try {
+        $p = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\npcap\Parameters" -ErrorAction Stop
+        return ($p.AdminOnly -eq 1)
+    } catch { return $false }
+}
+
 $NPCAP_WEB = "https://npcap.com/#download"
 
 # Busca en la pagina oficial el enlace al instalador. No se fija una version en
@@ -280,11 +291,18 @@ $btnInst.Add_Click({
     $barra.Value = 2
 
     # 3. Npcap: opcional, informativo
-    if (HayNpcap) {
-        Marcar 2 "ok" "Detectado: GOOSE y Sampled Values disponibles"
+    $script:npcap = HayNpcap
+    $script:npcapRestringido = $script:npcap -and (NpcapSoloAdmin)
+    if ($script:npcapRestringido) {
+        Marcar 2 "aviso" "Detectado, pero solo para administradores. Use Reinstalar Npcap para quitarlo."
+        $btnNpcap.Text = "Reinstalar Npcap"
+        $btnNpcap.Visible = $true
+    } elseif ($script:npcap) {
+        Marcar 2 "ok" "Detectado: GOOSE y Sampled Values disponibles, sin permisos de administrador"
         $btnNpcap.Visible = $false
     } else {
         Marcar 2 "aviso" "No detectado. MMS funciona igual; GOOSE y SV quedan deshabilitados."
+        $btnNpcap.Text = "Instalar Npcap"
         $btnNpcap.Visible = $true
     }
     $barra.Value = 3
@@ -308,7 +326,9 @@ $btnInst.Add_Click({
     }
     $barra.Value = 4
 
-    if ($npcap) {
+    if ($script:npcapRestringido) {
+        $lblFin.Text = "Instalacion completa. Npcap pide administrador para GOOSE: ver Reinstalar Npcap."
+    } elseif ($script:npcap) {
         $lblFin.Text = "Instalacion completa. Ya puede abrir IED Navigator PRO."
     } else {
         $lblFin.Text = "Instalacion completa. Sin Npcap: MMS funciona, GOOSE y SV no."
@@ -323,6 +343,10 @@ $btnNpcap.Add_Click({
         "licencia no permite redistribuirlo." + [Environment]::NewLine + [Environment]::NewLine +
         "Se va a descargar el instalador oficial desde npcap.com y ejecutarlo." + [Environment]::NewLine +
         "Windows va a pedir permiso de administrador: lo pide Npcap, no esta ventana." + [Environment]::NewLine + [Environment]::NewLine +
+        "IMPORTANTE, en las opciones del instalador de Npcap:" + [Environment]::NewLine +
+        "  - Deje DESMARCADA  'Restrict Npcap driver's access to Administrators only'." + [Environment]::NewLine +
+        "    Asi GOOSE y SV funcionan sin ejecutar IED Navigator PRO como administrador." + [Environment]::NewLine +
+        "  - Deje MARCADA  'Install Npcap in WinPcap API-compatible Mode'." + [Environment]::NewLine + [Environment]::NewLine +
         "Hace falta conexion a internet. Continuar?",
         "Instalar Npcap",
         [System.Windows.Forms.MessageBoxButtons]::OKCancel,
@@ -371,8 +395,16 @@ $btnNpcap.Add_Click({
         return
     }
 
-    if (HayNpcap) {
-        Marcar 2 "ok" "Instalado: GOOSE y Sampled Values disponibles"
+    if ((HayNpcap) -and (NpcapSoloAdmin)) {
+        $script:npcap = $true; $script:npcapRestringido = $true
+        Marcar 2 "aviso" "Instalado, pero solo para administradores. Reinstale con esa opcion desmarcada."
+        $btnNpcap.Text = "Reinstalar Npcap"
+        $btnNpcap.Enabled = $true
+        $lblFin.Text = "Npcap quedo restringido: GOOSE y SV pediran ejecutar como administrador."
+        $lblFin.ForeColor = $cAviso
+    } elseif (HayNpcap) {
+        $script:npcap = $true; $script:npcapRestringido = $false
+        Marcar 2 "ok" "Instalado: GOOSE y Sampled Values disponibles, sin permisos de administrador"
         $btnNpcap.Visible = $false
         $lblFin.Text = "Instalacion completa, con GOOSE y Sampled Values."
         $lblFin.ForeColor = $cOk
