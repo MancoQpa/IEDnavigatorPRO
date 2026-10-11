@@ -708,6 +708,12 @@ class GoosePanel {
         }
     }
 
+    /** Renglon extra para los errores de captura/publicacion, solo si Npcap quedo restringido. */
+    private static String avisoNpcapRestringido() {
+        return GooseSubscriber.isNpcapRestrictedForThisUser()
+                ? "\n\n" + I18n.t("goose.capture.starterror.admin") : "";
+    }
+
     // ─── Capture toggle ────────────────────────────────────────────────────────
 
     private void toggleGooseCapture() {
@@ -825,7 +831,11 @@ class GoosePanel {
                     } else {
                         logGoose(I18n.t("log.goose.capturefailed"));
                         logGoose(I18n.t("log.goose.possiblecauses"));
-                        logGoose(I18n.t("log.goose.causeadmin"));
+                        // Administrador solo si Npcap quedo restringido: con AdminOnly=0
+                        // la captura anda con un usuario comun y sugerirlo confunde.
+                        if (GooseSubscriber.isNpcapRestrictedForThisUser()) {
+                            logGoose(I18n.t("log.goose.causeadmin"));
+                        }
                         logGoose(I18n.t("log.goose.causenpcap"));
                         logGoose(I18n.t("log.goose.causepromisc"));
                         if (isWifi) {
@@ -844,11 +854,7 @@ class GoosePanel {
                 lblGooseStatus.setForeground(new Color(0, 150, 0));
             } else if (!internalLoopbackEnabled && !udpBridgeEnabled) {
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
-                    "Error iniciando captura GOOSE.\n" +
-                    "Verifique:\n" +
-                    "- Ejecutar como Administrador\n" +
-                    "- Npcap instalado con 'WinPcap API-compatible Mode'\n" +
-                    "- Para WiFi, use 'GOOSE sobre UDP'",
+                    I18n.t("goose.capture.starterror") + avisoNpcapRestringido(),
                     "GOOSE Capture", JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -1317,7 +1323,7 @@ class GoosePanel {
                     publishStarted = true;
                 } else {
                     JOptionPane.showMessageDialog(ctx.parentWindow(),
-                        I18n.t("goose.pub.initerror"),
+                        I18n.t("goose.pub.initerror") + avisoNpcapRestringido(),
                         "GOOSE Publisher", JOptionPane.ERROR_MESSAGE);
                 }
             }
