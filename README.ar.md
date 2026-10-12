@@ -153,6 +153,10 @@ test/test_ied.cid             # ملف CID للاختبار
 
 الإشعارات والتراخيص الكاملة موجودة في [THIRD-PARTY-NOTICES.txt](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/THIRD-PARTY-NOTICES.txt).
 
+### الخصوصية
+
+لا يجمع التطبيق أي بيانات ولا يرسلها: لا قياس عن بُعد، ولا حسابات مستخدمين، ولا بحث تلقائي عن التحديثات. ما يحفظه على حاسوبك وكيفية حذفه خطوة بخطوة: [PRIVACIDAD.md](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/PRIVACIDAD.md) (باللغة الإسبانية).
+
 ### الترخيص
 
 يتم توزيع هذا المشروع بموجب **رخصة جنو العمومية الإصدار 3 (GPL v3)** — انظر [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE). وينشأ هذا الشرط من المكتبة الأصلية `libiec61850` (`iec61850.dll`، **GPL v3**)، المضمَّنة لتوفير وظائف GOOSE/SV الأصلية؛ أما بقية التبعيات فهي مرخَّصة بتراخيص متساهلة (Apache 2.0، MIT، LGPL/BSD). يمكنك استخدام البرمجية وتعديلها وإعادة توزيعها طالما حافظت على نفس الترخيص، وضمَّنت الشيفرة المصدرية، وحافظت على إشعارات حقوق النشر.

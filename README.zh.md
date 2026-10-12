@@ -151,6 +151,10 @@ test/test_ied.cid             # 测试用 CID 文件
 
 完整的声明和许可证内容见 [THIRD-PARTY-NOTICES.txt](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/THIRD-PARTY-NOTICES.txt)。
 
+### 隐私
+
+本应用不收集也不发送任何数据：没有遥测、没有用户账户，也不会自动检查更新。它在你的电脑上保存了哪些内容、如何逐步删除：[PRIVACIDAD.md](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/PRIVACIDAD.md)（西班牙语）。
+
 ### 许可证
 
 本项目基于 **GNU 通用公共许可证 v3（GPL v3）** 分发 —— 详见 [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE)。该许可要求源于原生库 `libiec61850`（`iec61850.dll`，**GPL v3**），该库用于实现原生 GOOSE/SV 功能；其余依赖均为宽松许可证（Apache 2.0、MIT、LGPL/BSD）。您可以使用、修改和再分发本软件，前提是保持相同的许可证、包含源代码并保留版权声明。
