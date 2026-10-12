@@ -154,6 +154,10 @@ test/test_ied.cid             # CID de prueba
 
 Los avisos y licencias completos están en [THIRD-PARTY-NOTICES.txt](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/THIRD-PARTY-NOTICES.txt).
 
+### Privacidad
+
+La aplicación no recopila ni envía datos: no tiene telemetría, cuentas de usuario ni búsqueda automática de actualizaciones. Qué guarda en tu computadora y cómo borrarlo, paso a paso: [PRIVACIDAD.md](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/PRIVACIDAD.md).
+
 ### Licencia
 
 Se distribuye bajo la **GNU General Public License v3 (GPL v3)** — ver [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE). Esta condición deriva de la biblioteca nativa `libiec61850` (`iec61850.dll`, **GPL v3**), que se incluye para las funciones GOOSE/SV nativas; las demás dependencias son permisivas (Apache 2.0, MIT, LGPL/BSD). Podés usar, modificar y redistribuir el software siempre que mantengas la misma licencia, incluyas el código fuente y conserves los avisos de copyright.
