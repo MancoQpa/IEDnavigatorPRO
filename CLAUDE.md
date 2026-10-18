@@ -8,7 +8,9 @@ Operates in two modes:
 - **Client**: Connects to remote IEDs via MMS/ACSE, discovers models, reads/writes data, monitors values, controls switches/breakers.
 - **Server**: Simulates IEDs from SCL files (ICD/CID/SCD), responds to MMS client requests.
 
-Additionally supports GOOSE messaging (publish/subscribe), Sampled Values (SV/SMV), and a GOOSE-over-UDP bridge for routed networks.
+Additionally supports GOOSE messaging (publish/subscribe) and a GOOSE-over-UDP encapsulation for
+routed networks (a didactic, non-standard format: it is not R-GOOSE). Sampled Values are **not**
+available in the desktop app.
 
 ## Tech Stack
 
@@ -17,7 +19,8 @@ Additionally supports GOOSE messaging (publish/subscribe), Sampled Values (SV/SM
 - **GUI**: Swing with FlatLaf 3.2 look-and-feel
 - **IEC 61850 Protocol**: iec61850bean 1.9.0 (com.beanit)
 - **Network Capture**: pcap4j 1.8.2 (requires Npcap on Windows)
-- **Native Access**: JNA 5.14.0 + libiec61850.dll for GOOSE/SV at Layer 2
+- **Native Access**: JNA 5.14.0, used by pcap4j to talk to Npcap. `libiec61850.dll` is loaded but
+  not used by the desktop app (see "Who does what" below)
 - **ASN.1**: asn1bean 1.13.0, jasn1 1.11.3
 - **Logging**: SLF4J 2.0.9 + slf4j-simple
 
@@ -41,7 +44,7 @@ src/main/java/com/iednavigator/
   SessionLog.java            # Per-session log file (see "Logs")
   Iec61850Dictionary.java    # Descriptions of LN classes, DOs, ServiceErrors, AddCauses
   ARQUITECTURA.md            # Architecture notes (written 2026-06; partly outdated)
-  native_lib/                # JNA bindings to iec61850.dll (GOOSE/SV)
+  native_lib/                # JNA bindings to iec61850.dll: loaded, unused by the desktop app
   bridge/                    # Headless REST bridge (BridgeMain, api/)
 src/main/java/com/iedexplorer/  # OLD package, not compiled by compile.ps1. Do not edit.
 test/                        # Standalone test programs (see "Tests")
@@ -74,7 +77,14 @@ Main class: `com.iednavigator.IEDNavigatorApp`
   managers that receive a small `Context` interface from it; it is now ~3700 lines.
 - **Listener/callback patterns**: Client and Server use listener interfaces to notify the GUI of events (connections, value changes, errors).
 - **CachedValue**: Inner class in IEC61850Client for tracking attribute values with timestamps.
-- **Dual native strategy**: Java-based pcap4j for basic GOOSE + JNA bindings to libiec61850.dll for advanced GOOSE/SV features.
+- **Who does what** (verified 2026-10-11 in the code, not deduced from names):
+  - MMS client and simulated server: iec61850bean.
+  - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
+    pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
+  - Sampled Values: not in the desktop app (the SV tab is commented out in
+    `IEDNavigatorApp`). Only the REST bridge (`bridge/api/SvApi`) uses `NativeSVSubscriber`.
+  - libiec61850: loaded at startup, used only by that bridge route. Removing it is planned
+    after 2026-10-27; JNA stays, because pcap4j needs it.
 - **Dependencies bundled in `lib/`**: JARs are committed to the repo alongside Maven; build scripts reference both.
 
 ## Key IEC 61850 Concepts in Code
@@ -86,7 +96,7 @@ Main class: `com.iednavigator.IEDNavigatorApp`
   steps), `operateControl()` (direct), `cancelControl()`. `preflightControl()` reads the
   conditions that govern an order (Beh, Loc, CILO, blocks) before sending it.
 - **GOOSE**: Generic Object Oriented Substation Event - Layer 2 multicast messaging (EtherType 0x88B8).
-- **Sampled Values (SMV)**: Streaming measurement data at Layer 2.
+- **Sampled Values (SMV)**: Streaming measurement data at Layer 2. Not implemented in the desktop app.
 
 ## Important Conventions
 
@@ -146,6 +156,28 @@ Some IEDs abort the MMS association after a period with no requests (measured: 9
 must go through `mms()`, `leer()` or `escribir()` in that class: they record the time of
 the last traffic, and the keep-alive only fires in silence because `ClientAssociation`
 does not support concurrent requests.
+
+### Periodic tasks: `scheduleWithFixedDelay`, never `scheduleAtFixedRate`
+
+On Windows `System.nanoTime` keeps counting while the PC hibernates, and
+`scheduleAtFixedRate` catches up every missed execution back to back. After 6 days of
+hibernation a simulated IED sent ~517,000 GOOSE heartbeats at ~340 frames/s for 25
+minutes; with polling on, a real IED would have received thousands of read rounds in a
+row. Every periodic task in `com.iednavigator` uses `scheduleWithFixedDelay`;
+`test/TestPlanificadorHueco` checks it.
+
+### Patched library classes
+
+`src/main/java/com/beanit/iec61850bean/` shadows classes of iec61850bean 1.9.0 (they win
+because `classes` comes first in the classpath). Each file says why and what changed:
+
+- `Fc.java`: unknown functional constraints no longer take the whole Logical Node down.
+- `ServerModel.java`: a Logical Device no longer lists the DataSets of another LD whose
+  name starts the same (`Ln1` / `Ln1_X`). Original v1.9.0 source, verified instruction by
+  instruction against the jar, one change.
+
+When upgrading iec61850bean, check whether each defect is still there before dropping
+the shadow class.
 
 ## Releasing: order matters
 
