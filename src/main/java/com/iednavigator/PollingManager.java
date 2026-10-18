@@ -71,7 +71,11 @@ class PollingManager {
         int interval = ctx.getPollingInterval();
         pollExecutor = Executors.newSingleThreadScheduledExecutor();
 
-        pollExecutor.scheduleAtFixedRate(() -> {
+        // Demora fija, no ritmo fijo: con scheduleAtFixedRate, al volver de una hibernación el
+        // planificador recuperaría de golpe todos los ciclos "perdidos" —miles de rondas de
+        // lecturas MMS seguidas contra el IED—. Y si un ciclo tarda más que el intervalo, el
+        // siguiente espera en lugar de encimarse.
+        pollExecutor.scheduleWithFixedDelay(() -> {
             if (ctx.isConnected()) {
                 try {
                     refreshAllValues();

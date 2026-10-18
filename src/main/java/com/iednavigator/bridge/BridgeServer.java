@@ -195,7 +195,8 @@ public final class BridgeServer {
             t.setDaemon(true);
             return t;
         });
-        watchdog.scheduleAtFixedRate(() -> {
+        // Demora fija: el ritmo fijo recupera ejecuciones atrasadas tras una hibernación.
+        watchdog.scheduleWithFixedDelay(() -> {
             long idleMs = System.currentTimeMillis() - lastActivity.get();
             boolean hasWsClients = eventBus.sessionCount() > 0;
             if (!hasWsClients && idleMs > watchdogSeconds * 1000L) {

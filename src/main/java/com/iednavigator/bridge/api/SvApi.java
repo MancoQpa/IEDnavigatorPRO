@@ -77,7 +77,8 @@ public final class SvApi {
         subscriber = sub;
         interfaceId = req.interfaceId;
         appId = req.appId;
-        flushTask = flusher.scheduleAtFixedRate(this::flush, FLUSH_MS, FLUSH_MS, TimeUnit.MILLISECONDS);
+        // Demora fija: el ritmo fijo recupera ejecuciones atrasadas tras una hibernación.
+        flushTask = flusher.scheduleWithFixedDelay(this::flush, FLUSH_MS, FLUSH_MS, TimeUnit.MILLISECONDS);
         ctx.json(statusJson());
     }
 
