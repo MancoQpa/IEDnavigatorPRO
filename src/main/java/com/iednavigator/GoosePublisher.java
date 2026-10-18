@@ -149,9 +149,15 @@ public class GoosePublisher {
         publishing = true;
         sqNum = 0;
 
-        // Schedule periodic publishing (misma convención publicar->incrementar, bajo lock)
-        scheduler.scheduleAtFixedRate(() -> {
+        // Latido con demora fija y no con ritmo fijo. scheduleAtFixedRate recupera las
+        // ejecuciones que se perdió: tras 6 días de hibernación (2026-10-12 → 10-18) el reloj
+        // del planificador había avanzado ~517.000 s y salieron ~517.000 latidos seguidos, a
+        // ~340 tramas/s durante 25 minutos. Un latido no es una cuota a completar: dice "sigo
+        // vivo y este es mi estado". Tras un hueco sale uno y se sigue al ritmo configurado.
+        ultimoLatidoNs = 0;
+        scheduler.scheduleWithFixedDelay(() -> {
             if (publishing) {
+                avisarSiHuboHueco();
                 synchronized (counterLock) { publishAndBump(); }
             }
         }, 0, heartbeatInterval, TimeUnit.MILLISECONDS);
@@ -189,6 +195,25 @@ public class GoosePublisher {
         scheduler.schedule(() -> { synchronized (counterLock) { publishAndBump(); } }, 4, TimeUnit.MILLISECONDS);
         scheduler.schedule(() -> { synchronized (counterLock) { publishAndBump(); } }, 8, TimeUnit.MILLISECONDS);
         scheduler.schedule(() -> { synchronized (counterLock) { publishAndBump(); } }, 16, TimeUnit.MILLISECONDS);
+    }
+
+    /** Momento del último latido (System.nanoTime), para detectar huecos. 0 = todavía ninguno. */
+    private volatile long ultimoLatidoNs = 0;
+
+    /**
+     * Si entre dos latidos pasó mucho más que el período —la PC hibernó o se suspendió—, lo
+     * deja en el log. Los suscriptores ya lo vieron por el timeAllowedToLive vencido; lo que
+     * faltaba era el rastro de este lado: el 2026-10-18 no había nada que lo mostrara.
+     */
+    private void avisarSiHuboHueco() {
+        long ahora = System.nanoTime();
+        long previo = ultimoLatidoNs;
+        ultimoLatidoNs = ahora;
+        if (previo == 0) return;
+        long huecoMs = (ahora - previo) / 1_000_000L;
+        if (huecoMs > 3L * heartbeatInterval) {
+            log(I18n.t("log.pub.resumed", String.valueOf(huecoMs / 1000)));
+        }
     }
 
     /**

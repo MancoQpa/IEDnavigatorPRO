@@ -57,7 +57,9 @@ public final class HeadlessPoller {
 
         stopTask();
         if (!watchlist.isEmpty()) {
-            task = executor.scheduleAtFixedRate(this::pollOnce, 0, intervalMs, TimeUnit.MILLISECONDS);
+            // Demora fija: con ritmo fijo, tras una hibernación saldrían de golpe todos los
+            // ciclos atrasados contra el IED (ver PollingManager).
+            task = executor.scheduleWithFixedDelay(this::pollOnce, 0, intervalMs, TimeUnit.MILLISECONDS);
         }
     }
 

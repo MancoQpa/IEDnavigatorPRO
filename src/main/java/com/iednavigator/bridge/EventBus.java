@@ -44,7 +44,9 @@ public final class EventBus {
             });
 
     public EventBus() {
-        flusher.scheduleAtFixedRate(this::flushValues, FLUSH_MS, FLUSH_MS, TimeUnit.MILLISECONDS);
+        // Demora fija, como todos los planificadores del proyecto: el ritmo fijo recupera
+        // ejecuciones atrasadas tras una hibernación.
+        flusher.scheduleWithFixedDelay(this::flushValues, FLUSH_MS, FLUSH_MS, TimeUnit.MILLISECONDS);
     }
 
     public void register(WsContext ctx) {
