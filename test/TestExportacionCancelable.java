@@ -9,9 +9,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Las dos lecturas previas a exportar un CID se pueden cortar.
  *
  * Contra un modelo grande la exportación son ~17.000 lecturas MMS, del orden de minutos, y
- * hasta 2026-10-19 no había forma de pararla. Ahora leerValoresParaExportar() y
- * leerTodosLosValores() reciben una condición de corte que se consulta antes de cada
- * lectura; ConnectionManager la conecta al botón Cancelar de la ventana de avance.
+ * hasta 2026-10-19 no había forma de pararla. Ahora leerTodosLosValores() recibe una
+ * condición de corte que se consulta antes de cada lectura; ConnectionManager la conecta
+ * al botón Cancelar de la ventana de avance. (Había una segunda lectura,
+ * leerValoresParaExportar(), que se quitó el mismo día por redundante.)
  *
  * Servidor local (ServerSap) con un SCL sintético de 200 LN x 3 DO, y el cliente de la app.
  *
@@ -45,13 +46,10 @@ public class TestExportacionCancelable {
         try {
             c.connect("127.0.0.1", puerto);
 
-            // Sin corte: completas, como antes
-            IEC61850Client.LecturaModelo m1 = c.leerValoresParaExportar(null, () -> false);
-            chk("paso 1 sin cortar: completo", !m1.cancelada && m1.leidos + m1.fallidos == m1.total,
-                m1.leidos + "+" + m1.fallidos + " de " + m1.total);
+            // Sin corte: completa, como antes
             IEC61850Client.LecturaValores v1 = c.leerTodosLosValores(null, () -> false);
             int total2 = v1.pedidos;
-            chk("paso 2 sin cortar: completo", !v1.cancelada && total2 >= 600, v1.pedidos + " pedidos");
+            chk("sin cortar: completa", !v1.cancelada && total2 >= 600, v1.pedidos + " pedidos");
 
             // Las firmas de antes siguen andando igual
             IEC61850Client.LecturaValores v0 = c.leerTodosLosValores(null);
@@ -59,13 +57,8 @@ public class TestExportacionCancelable {
 
             // Con corte a las 100 consultas
             AtomicInteger consultas = new AtomicInteger();
-            IEC61850Client.LecturaModelo m2 = c.leerValoresParaExportar(null, () -> consultas.incrementAndGet() > 100);
-            chk("paso 1 cortado: cancelada", m2.cancelada, "");
-            chk("  y se detuvo en la lectura 100", m2.leidos + m2.fallidos == 100, (m2.leidos + m2.fallidos) + " lecturas");
-
-            consultas.set(0);
             IEC61850Client.LecturaValores v2 = c.leerTodosLosValores(null, () -> consultas.incrementAndGet() > 100);
-            chk("paso 2 cortado: cancelada", v2.cancelada, "");
+            chk("cortada: cancelada", v2.cancelada, "");
             chk("  y se detuvo en la lectura 100", v2.pedidos == 100, v2.pedidos + " pedidos");
 
             // Cortado antes de empezar: ninguna lectura

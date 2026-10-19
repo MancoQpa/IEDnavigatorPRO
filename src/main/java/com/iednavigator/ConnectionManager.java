@@ -536,17 +536,30 @@ class ConnectionManager {
         ctx.log(I18n.t("log.cid.generating"));
         java.util.function.BooleanSupplier cancelar = progreso::cancelada;
         try {
-            // Sin esto el archivo sale con la estructura correcta y TODOS los valores en
-            // cero: retrieveModel() trae la estructura, no los valores. Ver
-            // IEC61850Client.leerValoresParaExportar().
-            IEC61850Client.LecturaModelo lectura = null;
+            // Lectura completa antes de exportar. retrieveModel() trae la estructura, no los
+            // valores, y el exportador toma los valores del modelo local: con carga perezosa
+            // la mayoria de los atributos nunca se leyeron, y un entero sin leer vale 0 y un
+            // booleano false. Sin esto el CID salia con TODOS los valores en cero, emitidos
+            // como si fueran del equipo. Se paga aca --del orden del minuto contra un modelo
+            // grande-- y no al conectar, que es donde molestaria.
+            //
+            // Una sola pasada. Hasta 2026-10-19 habia dos: leerValoresParaExportar() (del
+            // 24-08, sin CO ni SE) y despues esta (del 09-09), las dos por Data Object y con
+            // el mismo getDataValues. La segunda cubre todo lo de la primera, que solo
+            // aportaba los contadores del resumen: contra la simulacion, 844 + 936 lecturas.
+            IEC61850Client.LecturaValores lv = null;
             if (ctx.getClient() != null) {
-                lectura = ctx.getClient().leerValoresParaExportar((hechos, total) -> {
-                    ctx.log(I18n.t("log.cid.readprogress", hechos, total));
-                    progreso.avance(I18n.t("cid.prog.paso1"), hechos, total);
+                ctx.log(I18n.t("log.cid.leyendovalores"));
+                lv = ctx.getClient().leerTodosLosValores((hechos, total) -> {
+                    if (hechos % 200 == 0 || hechos == total) {
+                        ctx.log(I18n.t("log.cid.avance", hechos, total));
+                    }
+                    progreso.avance(I18n.t("cid.prog.leyendo"), hechos, total);
                 }, cancelar);
-                if (lectura.cancelada) { exportacionCancelada(); return; }
-                ctx.log(I18n.t("log.cid.readdone", lectura.leidos, lectura.fallidos));
+                if (lv.cancelada) { exportacionCancelada(); return; }
+                ctx.log(I18n.t("log.cid.valoresleidos", lv.leidos.size(), lv.pedidos, lv.fallidos));
+
+                if (cancelar.getAsBoolean()) { exportacionCancelada(); return; }
                 progreso.fase(I18n.t("cid.prog.datasets"));
                 // Los DataSets no vienen con el modelo cuando retrieveModel() falla y se
                 // cae a la construccion manual. Se recuperan aparte, tolerando el fallo
@@ -579,24 +592,6 @@ class ConnectionManager {
                 if (tipo == null) tipo = vacioANull(placa.get("phy.model"));
             }
 
-            // Lectura completa antes de exportar. El exportador toma los valores del
-            // modelo local, y con carga perezosa la mayoria de los atributos nunca se
-            // leyeron: un entero sin leer vale 0 y un booleano false, y se emitian
-            // como si fueran del equipo. Se paga aca --del orden del minuto contra un
-            // modelo grande-- y no al conectar, que es donde molestaria.
-            IEC61850Client.LecturaValores lv = null;
-            if (ctx.getClient() != null) {
-                if (cancelar.getAsBoolean()) { exportacionCancelada(); return; }
-                ctx.log(I18n.t("log.cid.leyendovalores"));
-                lv = ctx.getClient().leerTodosLosValores((hechos, total) -> {
-                    if (hechos % 200 == 0 || hechos == total) {
-                        ctx.log(I18n.t("log.cid.avance", hechos, total));
-                    }
-                    progreso.avance(I18n.t("cid.prog.paso2"), hechos, total);
-                }, cancelar);
-                if (lv.cancelada) { exportacionCancelada(); return; }
-                ctx.log(I18n.t("log.cid.valoresleidos", lv.leidos.size(), lv.pedidos, lv.fallidos));
-            }
             if (cancelar.getAsBoolean()) { exportacionCancelada(); return; }
             progreso.fase(I18n.t("cid.prog.escribiendo"));
 
@@ -626,9 +621,9 @@ class ConnectionManager {
             msg.append(I18n.t("cid.gen.stats", r.logicalDevices, r.logicalNodes,
                               r.dataObjects, r.dataSets, r.reportControls)).append("\n");
             msg.append(I18n.t("cid.gen.templates", r.lnodeTypes, r.doTypes, r.daTypes)).append("\n");
-            if (lectura != null) {
-                msg.append(I18n.t("cid.gen.values", lectura.leidos, lectura.total,
-                                  lectura.fallidos)).append("\n");
+            if (lv != null) {
+                msg.append(I18n.t("cid.gen.values", lv.leidos.size(), lv.pedidos,
+                                  lv.fallidos)).append("\n");
             }
             msg.append("\n");
             if (!r.uncertainCdc.isEmpty()) {
