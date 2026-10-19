@@ -140,6 +140,8 @@ java  -cp "classes;lib\*;test" TestX
 Several start a local `ServerSap` on a high port; `TestHeartbeat.AgujeroNegro` is a TCP
 proxy that stops forwarding without closing, to reproduce a silent link loss.
 Relevant ones: `TestHeartbeat`, `TestCtlModelLectura`, `TestEnumAncho`, `TestI18n`.
+`TestGooseReapertura` needs real hardware: a Wi-Fi adapter that rejects frames with a
+foreign source MAC (pass its IP and its permanent MAC while Windows uses a random one).
 
 ### Logs
 

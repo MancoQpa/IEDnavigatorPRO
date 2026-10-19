@@ -1911,24 +1911,38 @@ public class IEDNavigatorApp extends JFrame {
 
         if (userObj instanceof NodeInfo) {
             NodeInfo info = (NodeInfo) userObj;
-            String ref = info.node.getReference().toString();
+            ModelNode nodo = info.node;
+            String tipo = info.type;
             String currentValue = info.value != null ? info.value : "";
+
+            // Si lo seleccionado es un Data Object, el valor que se edita es su stVal, sea del
+            // tipo que sea. Antes solo el enumerado bajaba al hijo (via nodoDeEnum): con un
+            // entero, un DoubleBitPos o un booleano el dialogo escribia sobre la referencia del
+            // DO y fallaba con "nodo no encontrado" (2026-10-19, doble clic sobre XCBR1.OpCnt).
+            ModelNode stVal = (nodo instanceof FcDataObject) ? nodo.getChild("stVal") : null;
+            if (stVal instanceof BasicDataAttribute) {
+                nodo = stVal;
+                tipo = null;  // el tipo del DO no dice nada del atributo: decide el instanceof
+                currentValue = ValorBda.texto((BasicDataAttribute) stVal);
+                if (currentValue == null) currentValue = "";
+            }
+            String ref = nodo.getReference().toString();
 
             // Determinar el tipo de dato para mostrar opciones apropiadas
             String newValue = null;
 
-            if (info.node instanceof BdaDoubleBitPos ||
-                (info.type != null && info.type.contains("DoubleBit"))) {
+            if (nodo instanceof BdaDoubleBitPos ||
+                (tipo != null && tipo.contains("DoubleBit"))) {
                 // Mostrar dropdown para DoubleBitPos
                 newValue = showDoubleBitPosDialog(info.name, currentValue);
-            } else if (info.node instanceof BdaBoolean ||
-                       (info.type != null && info.type.equals("Boolean"))) {
+            } else if (nodo instanceof BdaBoolean ||
+                       (tipo != null && tipo.equals("Boolean"))) {
                 // Mostrar dropdown para Boolean
                 newValue = showBooleanDialog(info.name, currentValue);
-            } else if (info.node instanceof BdaTapCommand) {
+            } else if (nodo instanceof BdaTapCommand) {
                 // Mostrar dropdown para TapCommand
                 newValue = showTapCommandDialog(info.name, currentValue);
-            } else if (GoosePanel.esEnteroDeEnum(nodoDeEnum(info.node))) {
+            } else if (GoosePanel.esEnteroDeEnum(nodoDeEnum(nodo))) {
                 // Puede ser un enum (bType="Enum"). El ancho del entero lo elige SclParser
                 // segun el rango de ordinales del EnumType, asi que no siempre es BdaInt8.
                 //
@@ -1937,8 +1951,10 @@ public class IEDNavigatorApp extends JFrame {
                 // para decidir el menu. Sin esto el menu ofrece "Establecer valor (enum)..."
                 // y el dialogo cae igual al campo de texto libre — se veia en la aplicacion
                 // al hacer clic derecho sobre un DO Mod.
-                ModelNode objetivo = nodoDeEnum(info.node);
-                if (objetivo != info.node) ref = objetivo.getReference().toString();
+                // (Desde 2026-10-19 el paso al stVal se hace arriba para todos los tipos; esto
+                // queda por si el nodo no trae stVal como atributo basico.)
+                ModelNode objetivo = nodoDeEnum(nodo);
+                if (objetivo != nodo) ref = objetivo.getReference().toString();
                 int currentOrd = 0;
                 try { currentOrd = GoosePanel.enumOrdinalOf(objetivo); } catch (Exception ignore) {}
                 LinkedHashMap<Integer, String> enumVals = getEnumOptionsForNode(objetivo);

@@ -120,13 +120,18 @@ public class GoosePublisher {
      */
     public boolean init(PcapNetworkInterface nif) {
         try {
+            // La interfaz se relee por nombre: la que llega puede venir de una enumeracion
+            // vieja, con una MAC que ya no es la del adaptador (ver releer()).
+            nif = releer(nif);
             selectedInterface = nif;
 
             // Get source MAC address
-            srcMac = MacAddress.getByAddress(nif.getLinkLayerAddresses().get(0).getAddress());
+            srcMac = macDe(nif);
 
-            // Open handle for sending
-            sendHandle = nif.openLive(65536, PcapNetworkInterface.PromiscuousMode.PROMISCUOUS, 10);
+            // Open handle for sending (cerrando el anterior, que antes quedaba abierto)
+            closeSendHandle();
+            sendHandle = abrir(nif);
+            enviosFallidos = 0;
 
             log(I18n.t("log.pub.initialized", nif.getDescription()));
             log(I18n.t("log.pub.srcmac", srcMac));
@@ -224,11 +229,81 @@ public class GoosePublisher {
     private void publishAndBump() {
         try {
             publishGoose();
+            if (enviosFallidos > 0) {
+                log(I18n.t("log.pub.recovered", String.valueOf(enviosFallidos)));
+                enviosFallidos = 0;
+            }
         } catch (Exception e) {
             log(I18n.t("log.pub.error", e.getMessage()));
+            enviosFallidos++;
+            if (enviosFallidos == FALLOS_PARA_REABRIR || enviosFallidos % REINTENTAR_CADA == 0) {
+                reabrirInterfaz();
+            }
         }
         sqNum++;
         if (sqNum > 65535) sqNum = 0;
+    }
+
+    // ─── Recuperación del envío L2 ────────────────────────────────────────────────
+    //
+    // 2026-10-19: tras una suspensión la Wi-Fi reconectó con otra MAC (Windows usa una
+    // aleatoria por red y la renovó). El publicador seguía armando las tramas con la MAC de
+    // antes y el driver las rechazaba todas: "PacketSendPacket failed" una vez por segundo
+    // durante una hora, sin que saliera nada. Detener y volver a publicar no lo arreglaba,
+    // porque la interfaz venía de una enumeración vieja con la MAC vieja.
+
+    /** Envíos fallidos seguidos antes de releer la interfaz y reabrir el handle. */
+    private static final int FALLOS_PARA_REABRIR = 3;
+    /** Si sigue fallando, se vuelve a intentar cada tantos envíos (no en cada uno). */
+    private static final int REINTENTAR_CADA = 30;
+
+    /** Envíos fallidos seguidos. Solo se toca con counterLock tomado (o desde init). */
+    private int enviosFallidos = 0;
+
+    /**
+     * La misma interfaz, enumerada de nuevo. pcap4j guarda la MAC en el objeto al enumerar,
+     * así que uno viejo puede tener una que el adaptador ya no usa. El nombre del dispositivo
+     * (\Device\NPF_{GUID}) no cambia. Si no se puede releer, se sigue con la que había.
+     */
+    private static PcapNetworkInterface releer(PcapNetworkInterface nif) {
+        try {
+            PcapNetworkInterface actual = Pcaps.getDevByName(nif.getName());
+            if (actual != null && !actual.getLinkLayerAddresses().isEmpty()) return actual;
+        } catch (Exception ignore) {
+            // se sigue con la que había: peor que releerla, pero no peor que antes
+        }
+        return nif;
+    }
+
+    private static MacAddress macDe(PcapNetworkInterface nif) {
+        return MacAddress.getByAddress(nif.getLinkLayerAddresses().get(0).getAddress());
+    }
+
+    private static PcapHandle abrir(PcapNetworkInterface nif) throws PcapNativeException {
+        return nif.openLive(65536, PcapNetworkInterface.PromiscuousMode.PROMISCUOUS, 10);
+    }
+
+    /**
+     * Relee la interfaz y reabre el handle de envío, con la MAC que tenga ahora. Se llama
+     * desde publishAndBump(), con counterLock tomado, así que ningún otro envío usa el handle
+     * mientras se cambia. Solo en modo L2: en UDP o loopback no hay handle que reabrir.
+     */
+    private void reabrirInterfaz() {
+        if (selectedInterface == null || sendHandle == null) return;
+        try {
+            PcapNetworkInterface actual = releer(selectedInterface);
+            MacAddress nueva = macDe(actual);
+            PcapHandle nuevo = abrir(actual);
+            PcapHandle viejo = sendHandle;
+            MacAddress anterior = srcMac;
+            sendHandle = nuevo;
+            selectedInterface = actual;
+            srcMac = nueva;
+            if (viejo.isOpen()) viejo.close();
+            log(I18n.t("log.pub.reopened", String.valueOf(enviosFallidos), anterior, nueva));
+        } catch (Exception e) {
+            log(I18n.t("log.pub.reopenerror", e.getMessage()));
+        }
     }
 
     /**
