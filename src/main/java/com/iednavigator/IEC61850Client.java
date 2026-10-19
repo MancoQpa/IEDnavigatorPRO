@@ -1457,10 +1457,16 @@ public class IEC61850Client implements ClientEventListener {
         public final java.util.Set<String> leidos;
         public final int pedidos, fallidos;
         public final java.util.List<String> motivos;
+        /** Se cortó a pedido antes de leer todo: lo leído es parcial. */
+        public final boolean cancelada;
         LecturaValores(java.util.Set<String> leidos, int pedidos, int fallidos,
                        java.util.List<String> motivos) {
+            this(leidos, pedidos, fallidos, motivos, false);
+        }
+        LecturaValores(java.util.Set<String> leidos, int pedidos, int fallidos,
+                       java.util.List<String> motivos, boolean cancelada) {
             this.leidos = leidos; this.pedidos = pedidos;
-            this.fallidos = fallidos; this.motivos = motivos;
+            this.fallidos = fallidos; this.motivos = motivos; this.cancelada = cancelada;
         }
     }
 
@@ -1525,6 +1531,16 @@ public class IEC61850Client implements ClientEventListener {
     }
 
     public LecturaValores leerTodosLosValores(AvanceLectura avance) {
+        return leerTodosLosValores(avance, null);
+    }
+
+    /**
+     * Igual, pero se puede cortar: {@code cancelar} se consulta antes de cada lectura MMS y,
+     * si da true, se devuelve lo leído hasta ahí con {@code cancelada = true}. La lectura en
+     * curso no se interrumpe; dura lo que un viaje de ida y vuelta.
+     */
+    public LecturaValores leerTodosLosValores(AvanceLectura avance,
+                                              java.util.function.BooleanSupplier cancelar) {
         java.util.Set<String> leidos = new java.util.HashSet<>();
         java.util.List<String> motivos = new java.util.ArrayList<>();
         int pedidos = 0, fallidos = 0;
@@ -1547,7 +1563,9 @@ public class IEC61850Client implements ClientEventListener {
         }
 
         int total = objetivos.size();
+        boolean cancelada = false;
         for (FcModelNode n : objetivos) {
+            if (cancelar != null && cancelar.getAsBoolean()) { cancelada = true; break; }
             pedidos++;
             try {
                 leer(n);
@@ -1564,8 +1582,9 @@ public class IEC61850Client implements ClientEventListener {
         }
 
         logDiag("[CID] Valores leidos del equipo: " + leidos.size() + " objetos de "
-                + total + (fallidos > 0 ? ", " + fallidos + " rechazados" : ""));
-        return new LecturaValores(leidos, pedidos, fallidos, motivos);
+                + total + (fallidos > 0 ? ", " + fallidos + " rechazados" : "")
+                + (cancelada ? " (cancelada)" : ""));
+        return new LecturaValores(leidos, pedidos, fallidos, motivos, cancelada);
     }
 
     public LecturaDataSets recuperarDataSetsTolerante() {
@@ -1676,8 +1695,14 @@ public class IEC61850Client implements ClientEventListener {
     /** Cuántos objetos se pudieron leer del IED y cuántos no. */
     public static final class LecturaModelo {
         public final int leidos, fallidos, total;
+        /** Se cortó a pedido antes de leer todo. */
+        public final boolean cancelada;
         public LecturaModelo(int leidos, int fallidos, int total) {
+            this(leidos, fallidos, total, false);
+        }
+        public LecturaModelo(int leidos, int fallidos, int total, boolean cancelada) {
             this.leidos = leidos; this.fallidos = fallidos; this.total = total;
+            this.cancelada = cancelada;
         }
     }
 
@@ -1707,6 +1732,12 @@ public class IEC61850Client implements ClientEventListener {
      * desde el hilo de la interfaz.
      */
     public LecturaModelo leerValoresParaExportar(ProgresoLectura progreso) {
+        return leerValoresParaExportar(progreso, null);
+    }
+
+    /** Igual, pero se puede cortar entre lecturas (ver leerTodosLosValores). */
+    public LecturaModelo leerValoresParaExportar(ProgresoLectura progreso,
+                                                 java.util.function.BooleanSupplier cancelar) {
         ServerModel m = serverModel;
         if (m == null || association == null) return new LecturaModelo(0, 0, 0);
 
@@ -1725,6 +1756,9 @@ public class IEC61850Client implements ClientEventListener {
 
         int leidos = 0, fallidos = 0, i = 0;
         for (FcModelNode fcdo : objetivos) {
+            if (cancelar != null && cancelar.getAsBoolean()) {
+                return new LecturaModelo(leidos, fallidos, objetivos.size(), true);
+            }
             try {
                 leer(fcdo);
                 leidos++;

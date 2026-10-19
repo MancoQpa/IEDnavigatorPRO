@@ -446,21 +446,108 @@ class ConnectionManager {
 
         // La lectura de valores y la exportacion van a un hilo de fondo: son miles de
         // viajes MMS y esto corre en el hilo de la interfaz, que se congelaria.
-        ctx.backgroundExecutor().submit(() -> generarYGuardarCid(modelo, iedName, file));
+        ProgresoExportacion progreso = new ProgresoExportacion(ctx.parentWindow());
+        progreso.setVisible(true);
+        ctx.backgroundExecutor().submit(() -> {
+            try {
+                generarYGuardarCid(modelo, iedName, file, progreso);
+            } finally {
+                progreso.cerrar();
+            }
+        });
+    }
+
+    /**
+     * Ventana de avance de la exportación, con Cancelar. No es modal: el resto de la
+     * aplicación sigue usable. Cerrarla también cancela.
+     *
+     * Existe porque contra un modelo grande la exportación son ~17.000 lecturas MMS, del
+     * orden de minutos, y hasta 2026-10-19 no había forma de pararla: solo se veía avanzar
+     * en el log.
+     */
+    static final class ProgresoExportacion extends JDialog {
+        private final java.util.concurrent.atomic.AtomicBoolean cancelada =
+                new java.util.concurrent.atomic.AtomicBoolean();
+        private final JLabel fase = new JLabel(" ");
+        private final JProgressBar barra = new JProgressBar();
+        private final JButton btnCancelar = new JButton(I18n.t("cid.prog.cancel"));
+
+        ProgresoExportacion(Component padre) {
+            super(ventanaDe(padre), I18n.t("cid.prog.title"), ModalityType.MODELESS);
+            barra.setIndeterminate(true);
+            barra.setStringPainted(true);
+            barra.setString("");
+            btnCancelar.addActionListener(e -> cancelar());
+            setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+            addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosing(java.awt.event.WindowEvent e) { cancelar(); }
+            });
+            JPanel p = new JPanel(new BorderLayout(8, 8));
+            p.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+            p.add(fase, BorderLayout.NORTH);
+            p.add(barra, BorderLayout.CENTER);
+            JPanel botones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+            botones.add(btnCancelar);
+            p.add(botones, BorderLayout.SOUTH);
+            setContentPane(p);
+            setSize(440, 150);
+            setLocationRelativeTo(padre);
+        }
+
+        private static Window ventanaDe(Component c) {
+            if (c == null) return null;
+            return (c instanceof Window) ? (Window) c : SwingUtilities.getWindowAncestor(c);
+        }
+
+        boolean cancelada() { return cancelada.get(); }
+
+        private void cancelar() {
+            if (cancelada.getAndSet(true)) return;
+            btnCancelar.setEnabled(false);
+            btnCancelar.setText(I18n.t("cid.prog.cancelling"));
+        }
+
+        /** Fase sin cantidades (barra indeterminada). Desde cualquier hilo. */
+        void fase(String texto) {
+            SwingUtilities.invokeLater(() -> {
+                fase.setText(texto);
+                barra.setIndeterminate(true);
+                barra.setString("");
+            });
+        }
+
+        /** Fase con avance. Desde cualquier hilo. */
+        void avance(String texto, int hechos, int total) {
+            SwingUtilities.invokeLater(() -> {
+                fase.setText(texto);
+                barra.setIndeterminate(false);
+                barra.setMaximum(Math.max(total, 1));
+                barra.setValue(hechos);
+                barra.setString(hechos + " / " + total);
+            });
+        }
+
+        void cerrar() { SwingUtilities.invokeLater(this::dispose); }
     }
 
     /** Lee los valores del IED, reconstruye el SCL y lo escribe. Fuera del hilo de UI. */
-    private void generarYGuardarCid(ServerModel modelo, String iedName, File file) {
+    private void generarYGuardarCid(ServerModel modelo, String iedName, File file,
+                                    ProgresoExportacion progreso) {
         ctx.log(I18n.t("log.cid.generating"));
+        java.util.function.BooleanSupplier cancelar = progreso::cancelada;
         try {
             // Sin esto el archivo sale con la estructura correcta y TODOS los valores en
             // cero: retrieveModel() trae la estructura, no los valores. Ver
             // IEC61850Client.leerValoresParaExportar().
             IEC61850Client.LecturaModelo lectura = null;
             if (ctx.getClient() != null) {
-                lectura = ctx.getClient().leerValoresParaExportar(
-                        (hechos, total) -> ctx.log(I18n.t("log.cid.readprogress", hechos, total)));
+                lectura = ctx.getClient().leerValoresParaExportar((hechos, total) -> {
+                    ctx.log(I18n.t("log.cid.readprogress", hechos, total));
+                    progreso.avance(I18n.t("cid.prog.paso1"), hechos, total);
+                }, cancelar);
+                if (lectura.cancelada) { exportacionCancelada(); return; }
                 ctx.log(I18n.t("log.cid.readdone", lectura.leidos, lectura.fallidos));
+                progreso.fase(I18n.t("cid.prog.datasets"));
                 // Los DataSets no vienen con el modelo cuando retrieveModel() falla y se
                 // cae a la construccion manual. Se recuperan aparte, tolerando el fallo
                 // individual, o el CID sale con los ReportControl apuntando a la nada.
@@ -499,14 +586,19 @@ class ConnectionManager {
             // modelo grande-- y no al conectar, que es donde molestaria.
             IEC61850Client.LecturaValores lv = null;
             if (ctx.getClient() != null) {
+                if (cancelar.getAsBoolean()) { exportacionCancelada(); return; }
                 ctx.log(I18n.t("log.cid.leyendovalores"));
                 lv = ctx.getClient().leerTodosLosValores((hechos, total) -> {
                     if (hechos % 200 == 0 || hechos == total) {
                         ctx.log(I18n.t("log.cid.avance", hechos, total));
                     }
-                });
+                    progreso.avance(I18n.t("cid.prog.paso2"), hechos, total);
+                }, cancelar);
+                if (lv.cancelada) { exportacionCancelada(); return; }
                 ctx.log(I18n.t("log.cid.valoresleidos", lv.leidos.size(), lv.pedidos, lv.fallidos));
             }
+            if (cancelar.getAsBoolean()) { exportacionCancelada(); return; }
+            progreso.fase(I18n.t("cid.prog.escribiendo"));
 
             SclExporter.Result r = SclExporter.export(modelo, host, iedName, mfr, tipo, cfg,
                     lv == null ? null : lv.leidos);
@@ -559,6 +651,11 @@ class ConnectionManager {
                 ctx.parentWindow(), I18n.t("cid.save.error", detalleError),
                 "Error", JOptionPane.ERROR_MESSAGE));
         }
+    }
+
+    /** El archivo se escribe recién al final, así que al cancelar no queda nada a medias. */
+    private void exportacionCancelada() {
+        ctx.log(I18n.t("log.cid.cancelled"));
     }
 
     /** Diálogo de guardado con el filtro SCL, la extensión asegurada y aviso de sobrescritura. */
