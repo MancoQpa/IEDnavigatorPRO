@@ -710,6 +710,7 @@ class ConnectionManager {
             ctx.setBtnStartStopText("Iniciar Simulacion");
             ctx.updateStatus(false, I18n.t("status.simstopped"));
             ctx.updateConnectionInfo("", 0);
+            dejarDeVigilarIpLocal();
             ctx.log(I18n.t("log.cm.simstopped"));
         } else {
             try {
@@ -733,6 +734,7 @@ class ConnectionManager {
                             ctx.log(I18n.t("log.cm.simactive"));
                             ctx.log(I18n.t("log.cm.ipport", localIp, String.valueOf(finalPort)));
                             ctx.log(I18n.t("log.cm.connectclientto", localIp, String.valueOf(finalPort)));
+                            vigilarIpLocal();
 
                             // Reconstruir el arbol del modelo. displayServerModel() solo se
                             // llamaba al cargar el SCL, asi que si el archivo ya estaba
@@ -1112,6 +1114,67 @@ class ConnectionManager {
         } catch (Exception e) {
             ctx.log(I18n.t("log.cm.localifaceerror", e.getMessage()));
             return "";
+        }
+    }
+
+    // ─── IP local mientras simula ──────────────────────────────────────────────────────
+    //
+    // La IP de la cabecera ("192.168.x.y (servidor)") se calculaba una sola vez, al iniciar la
+    // simulación. El 2026-10-19 la PC volvió de una suspensión, el DHCP le dio otra IP a la
+    // Wi-Fi y la cabecera siguió mostrando la vieja durante horas: un cliente que la copió dio
+    // timeout. El servidor escucha en todas las interfaces, así que seguía alcanzable por la
+    // nueva; lo que mentía era el cartel.
+
+    /** Cada cuánto se revisa que la IP de la cabecera siga siendo de esta PC. */
+    private static final int REVISAR_IP_MS = 15_000;
+    private javax.swing.Timer revisionIp;
+
+    private void vigilarIpLocal() {
+        dejarDeVigilarIpLocal();
+        revisionIp = new javax.swing.Timer(REVISAR_IP_MS, e -> revisarIpLocal());
+        revisionIp.start();
+    }
+
+    private void dejarDeVigilarIpLocal() {
+        if (revisionIp != null) {
+            revisionIp.stop();
+            revisionIp = null;
+        }
+    }
+
+    /**
+     * Si la IP mostrada ya no está en ninguna interfaz, toma la actual, actualiza la cabecera
+     * y lo deja en el log. Mientras la mostrada siga siendo de esta PC no se toca, aunque haya
+     * otras: así el cartel no salta entre adaptadores. Se llama en el EDT; la consulta de
+     * interfaces va en segundo plano.
+     */
+    void revisarIpLocal() {
+        if (!ctx.isServerRunning()) {
+            dejarDeVigilarIpLocal();
+            return;
+        }
+        final String mostrada = currentHost;
+        final int puerto = currentPort;
+        ctx.backgroundExecutor().submit(() -> {
+            if (mostrada == null || mostrada.isEmpty() || esIpDeEstaPc(mostrada)) return;
+            String nueva = getLocalIpAddress();
+            if (nueva.equals(mostrada)) return;
+            SwingUtilities.invokeLater(() -> {
+                // Si entretanto se detuvo o reinició la simulación, ese camino ya lo resolvió
+                if (!ctx.isServerRunning() || !mostrada.equals(currentHost)) return;
+                currentHost = nueva;
+                ctx.updateConnectionInfo(nueva + " (servidor)", puerto);
+                ctx.log(I18n.t("log.cm.ipchanged", mostrada, nueva, String.valueOf(puerto)));
+            });
+        });
+    }
+
+    /** Si la dirección está asignada a alguna interfaz de esta PC. Ante la duda, sí. */
+    static boolean esIpDeEstaPc(String ip) {
+        try {
+            return java.net.NetworkInterface.getByInetAddress(java.net.InetAddress.getByName(ip)) != null;
+        } catch (Exception e) {
+            return true;  // no cambiar el cartel por un error de consulta
         }
     }
 
