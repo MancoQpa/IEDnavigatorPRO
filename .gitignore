@@ -2,6 +2,7 @@
 target/
 dist/
 classes/
+classes.nuevo/
 *.class
 *.log
 temp_installer*/

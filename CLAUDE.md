@@ -67,6 +67,10 @@ run.bat / dev.bat                          # runs from classes\
 .\build_installer.ps1 -Version X.Y.Z       # builds the package the user runs (see below)
 ```
 
+`compile.ps1` rebuilds `classes\` from scratch: it compiles into `classes.nuevo\` and swaps it in only
+if javac succeeds (exit code 1 otherwise, and `classes\` is left untouched). Never compile tests or
+anything else into `classes\`: whatever is there goes into the package.
+
 Maven artifact: `com.iednavigator:ied-navigator:1.0.0`
 Main class: `com.iednavigator.IEDNavigatorApp`
 
