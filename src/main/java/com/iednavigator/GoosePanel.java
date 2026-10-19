@@ -1544,6 +1544,7 @@ class GoosePanel {
         try {
             // Un mismo nodo aparece una vez por FC en el modelo; sin esto se listaba repetido.
             java.util.Set<String> vistos = new java.util.HashSet<>();
+            int lln0Revisados = 0;
             for (ModelNode ld : model.getChildren()) {
                 String ldName = ld.getName();
 
@@ -1556,8 +1557,7 @@ class GoosePanel {
                     // *suscripción* de un nodo LGOS: contra un Ingeteam eF se listaban 64
                     // "GoCBs" —32 LGOS, cada uno dos veces— en un equipo que no publica.
                     if (!lnName.equals("LLN0")) continue;
-                    ctx.log(I18n.t("log.goose.searchinggocbs", ldName, lnName,
-                        ln.getChildren().size()));
+                    lln0Revisados++;
 
                     for (ModelNode node : ln.getChildren()) {
                         String nodeName = node.getName();
@@ -1620,19 +1620,27 @@ class GoosePanel {
             }
 
             if (gooseTableModel.getRowCount() == 0) {
-                ctx.log(I18n.t("log.goose.nogocbslistingln0"));
+                // Una sola línea. Antes se escribía una "Buscando GoCBs en LD/LLN0" por LD y,
+                // sin GoCB, una línea por cada nodo del LLN0 (repetidos, uno por FC): en una
+                // sesión del 2026-10-11 eso sumó ~1.100 líneas de log. Los nombres quedan, en
+                // una línea, porque sirven para ver qué expone el equipo en vez de GoCBs.
+                // Los RCB van solo contados: en el LLN0 de un SIPROTEC 5 son 55 de 63 nombres.
+                String primerLd = "";
+                java.util.Set<String> nombres = new java.util.LinkedHashSet<>();
+                java.util.Set<String> rcbs = new java.util.HashSet<>();
                 for (ModelNode ld : model.getChildren()) {
-                    for (ModelNode ln : ld.getChildren()) {
-                        if (ln.getName().equals("LLN0") && ln.getChildren() != null) {
-                            for (ModelNode node : ln.getChildren()) {
-                                String type = node.getClass().getSimpleName();
-                                ctx.log(I18n.t("log.goose.lln0node", node.getName(), type));
-                            }
-                            break;
-                        }
+                    ModelNode lln0 = ld.getChild("LLN0");
+                    if (lln0 == null || lln0.getChildren() == null) continue;
+                    primerLd = ld.getName();
+                    for (ModelNode node : lln0.getChildren()) {
+                        if (node instanceof Urcb || node instanceof Brcb) rcbs.add(node.getName());
+                        else nombres.add(node.getName());
                     }
                     break;
                 }
+                String lista = resumirNombres(nombres, 40);
+                if (!rcbs.isEmpty()) lista += (lista.isEmpty() ? "" : ", ") + rcbs.size() + " RCB";
+                ctx.log(I18n.t("log.goose.nogocbs", String.valueOf(lln0Revisados), primerLd, lista));
             } else {
                 ctx.log(I18n.t("log.goose.gocbsfoundmms", gooseTableModel.getRowCount()));
             }
@@ -1640,6 +1648,21 @@ class GoosePanel {
             ctx.log(I18n.t("log.goose.gocbsgeterror", e.getMessage()));
             e.printStackTrace();
         }
+    }
+
+    /** "a, b, c" con hasta {@code max} nombres; si hay más, termina en "… (+n)". */
+    static String resumirNombres(java.util.Collection<String> nombres, int max) {
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for (String n : nombres) {
+            if (i == max) {
+                sb.append(", … (+").append(nombres.size() - max).append(")");
+                break;
+            }
+            if (i++ > 0) sb.append(", ");
+            sb.append(n);
+        }
+        return sb.toString();
     }
 
     // ─── SCL loading ───────────────────────────────────────────────────────────
