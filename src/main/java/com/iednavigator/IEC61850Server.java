@@ -55,11 +55,17 @@ public class IEC61850Server implements ServerEventListener {
     private int loadedIedIndex = 0;
 
     /**
-     * Obtiene la lista de IEDs disponibles en un archivo SCL.
+     * Obtiene la lista de IEDs disponibles en un archivo SCL: los nombres de sus {@code <IED>},
+     * en orden. No construye ningún modelo.
      *
-     * SclParser.parse() devuelve un ServerModel por cada AccessPoint, no por IED.
-     * Este método agrupa los modelos por IED y fusiona sus LDs en un único ServerModel
-     * por IED, de modo que el resultado es equivalente a lo que muestra CET850.
+     * Hasta 2026-10-21 parseaba aquí el archivo entero con SclParser y fusionaba los modelos de
+     * todos los IED, para después usar uno: con un SCD de subestación (24 MB, 52 IEDs) eran
+     * 5 min 26 s antes de que apareciera la lista, y luego 3 s para el elegido. Ahora se leen
+     * los nombres del XML y el modelo de cada IED se arma recién cuando se lo pide
+     * (modeloDelIed), recortando el archivo a ese IED. Es lo que ya hacía el simulador Android.
+     *
+     * El índice que devuelve es la posición del {@code <IED>} en el archivo: es el que reciben
+     * loadSclFileWithIED() y getMergedModel().
      */
     public List<String> getAvailableIEDs(String sclPath) {
         List<String> iedNames = new ArrayList<>();
@@ -67,93 +73,104 @@ public class IEC61850Server implements ServerEventListener {
             File sclFile = new File(sclPath);
             if (!sclFile.exists()) return iedNames;
 
-            // Pre-procesar: expandir arrays (SDO/DA/BDA con count > 1) ANTES de parsear
-            String expandedPath = expandSclArrays(sclPath);
-            File expandedFile = new File(expandedPath);
-
-            // Paso 1: Parsear con SclParser (devuelve 1 modelo por AccessPoint).
-            // Tolerante: un valor inicial que la librería no sabe convertir se descarta en vez
-            // de perder el archivo entero.
-            parsedModels = parseSclTolerante(expandedFile);
-            currentSclPath = sclPath;  // guardar ruta original como clave de cache
-
-            if (parsedModels == null || parsedModels.isEmpty()) return iedNames;
-
-            // Paso 2: Parsear XML para obtener IED names y conteo de AccessPoints por IED
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(false);
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            Document doc = builder.parse(expandedFile);  // usar archivo expandido también aquí
-
-            NodeList ieds = doc.getElementsByTagName("IED");
-            mergedModels = new ArrayList<>();
-            int modelIndex = 0;
-
+            long t0 = System.currentTimeMillis();
+            NodeList ieds = parsearDom(sclFile).getElementsByTagNameNS("*", "IED");
             for (int i = 0; i < ieds.getLength(); i++) {
-                Element ied = (Element) ieds.item(i);
-                String name = ied.getAttribute("name");
-                if (name == null || name.isEmpty()) name = "IED_" + i;
-                iedNames.add(name);
-
-                // Contar SÓLO los AccessPoint que tengan sección <Server>.
-                //
-                // SclParser devuelve un ServerModel por cada AccessPoint CON servidor, no por
-                // cada AccessPoint. Un equipo puede declarar uno sólo para publicar GOOSE o SV,
-                // o uno de ingeniería, sin servidor MMS. Contarlos de más desincroniza el
-                // recorrido de modelIndex: a ese IED se le asignan además los modelos del
-                // siguiente, y el último queda sin ninguno — menos dispositivos en la lista y
-                // Logical Devices atribuidos al equipo equivocado, sin que nada falle.
-                //
-                // Portado del simulador; ver HALLAZGOS_DESDE_EL_SIMULADOR.md, hallazgo 5.
-                int apCount = Math.max(1, contarAccessPointsConServidor(ied));
-
-                // Fusionar todos los AccessPoints de este IED en un único ServerModel
-                ServerModel merged = mergeModels(parsedModels, modelIndex, modelIndex + apCount);
-                mergedModels.add(merged);
-
-                System.out.println("[SERVER] IED '" + name + "': " + apCount
-                        + " AccessPoint(s), " + merged.getChildren().size() + " LDs total");
-
-                modelIndex += apCount;
+                String name = ((Element) ieds.item(i)).getAttribute("name");
+                iedNames.add((name == null || name.isEmpty()) ? "IED_" + i : name);
             }
-
-            // Fallback: si el XML no tenía IEDs pero SclParser sí devolvió modelos
-            if (iedNames.isEmpty() && !parsedModels.isEmpty()) {
-                iedNames.add("IED_0");
-                mergedModels.add(parsedModels.get(0));
-            }
-
+            currentSclPath = sclPath;
+            parsedModels = null;
+            mergedModels = new ArrayList<>(Collections.nCopies(iedNames.size(), (ServerModel) null));
+            System.out.println("[SERVER] " + iedNames.size() + " IED(s) listados en "
+                    + (System.currentTimeMillis() - t0) + " ms");
         } catch (Exception e) {
             System.err.println("[SERVER] Error getting IED list: " + e.getMessage());
         }
         return iedNames;
     }
 
+    /** DOM del archivo, con espacios de nombres: listar y recortar tienen que ver lo mismo. */
+    private static Document parsearDom(File scl) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        return factory.newDocumentBuilder().parse(scl);
+    }
+
     /**
-     * Cuántos {@code <AccessPoint>} de este IED contienen una sección {@code <Server>}.
+     * Modelo del IED iedIndex (posición en getAvailableIEDs), con todos sus AccessPoints
+     * fusionados. Se arma la primera vez que se pide y queda en caché.
      *
-     * Es el número de modelos que SclParser va a devolver para ese IED. Se cuentan sólo los
-     * hijos directos del IED —no {@code getElementsByTagName}, que baja por todo el subárbol—
-     * y se busca el {@code <Server>} dentro de cada uno, también como descendiente directo,
-     * para no confundirse con estructuras anidadas.
+     * Si el archivo tiene más de un IED, se recorta a ese IED antes de parsear: SclParser no
+     * sabe parsear un IED puntual, siempre parsea el archivo entero. Así todos los modelos que
+     * devuelve son de ese IED y se fusionan todos. Un IED sin AccessPoint con servidor no da
+     * modelo: devuelve null.
      */
-    private int contarAccessPointsConServidor(Element ied) {
-        int n = 0;
-        org.w3c.dom.NodeList hijos = ied.getChildNodes();
-        for (int i = 0; i < hijos.getLength(); i++) {
-            org.w3c.dom.Node h = hijos.item(i);
-            if (h.getNodeType() != org.w3c.dom.Node.ELEMENT_NODE) continue;
-            String nom = (h.getLocalName() != null) ? h.getLocalName() : h.getNodeName();
-            if (!"AccessPoint".equals(nom)) continue;
-            org.w3c.dom.NodeList nietos = h.getChildNodes();
-            for (int j = 0; j < nietos.getLength(); j++) {
-                org.w3c.dom.Node g = nietos.item(j);
-                if (g.getNodeType() != org.w3c.dom.Node.ELEMENT_NODE) continue;
-                String gn = (g.getLocalName() != null) ? g.getLocalName() : g.getNodeName();
-                if ("Server".equals(gn)) { n++; break; }
+    private ServerModel modeloDelIed(String sclPath, int iedIndex) throws Exception {
+        if (mergedModels == null || !sclPath.equals(currentSclPath)) getAvailableIEDs(sclPath);
+        if (mergedModels == null || iedIndex < 0 || iedIndex >= mergedModels.size()) return null;
+        ServerModel enCache = mergedModels.get(iedIndex);
+        if (enCache != null) return enCache;
+
+        long t0 = System.currentTimeMillis();
+        File recortado = recortarAlIed(new File(sclPath), iedIndex);
+        String base = (recortado != null) ? recortado.getAbsolutePath() : sclPath;
+        String expandido = null;
+        try {
+            expandido = expandSclArrays(base);
+            List<ServerModel> modelos = parseSclTolerante(new File(expandido));
+            if (modelos == null || modelos.isEmpty()) return null;
+            ServerModel m = mergeModels(modelos, 0, modelos.size());
+            mergedModels.set(iedIndex, m);
+            System.out.println("[SERVER] IED " + iedIndex + ": " + modelos.size() + " AccessPoint(s), "
+                    + m.getChildren().size() + " LDs, en " + (System.currentTimeMillis() - t0) + " ms");
+            return m;
+        } finally {
+            if (recortado != null) recortado.delete();
+            if (expandido != null && !expandido.equals(base) && !expandido.equals(sclPath)) {
+                new File(expandido).delete();
             }
         }
-        return n;
+    }
+
+    /**
+     * Copia del archivo con un solo {@code <IED>}, el de la posición iedIndex. También saca los
+     * {@code <ConnectedAP>} de los IED quitados. NO toca DataTypeTemplates: los tipos son
+     * compartidos. Devuelve null si el archivo tiene un solo IED (no hay nada que recortar).
+     * Portado del simulador Android (SclFileParser.recortarAlIed).
+     */
+    private File recortarAlIed(File scl, int iedIndex) throws Exception {
+        Document doc = parsearDom(scl);
+        NodeList ieds = doc.getElementsByTagNameNS("*", "IED");
+        if (ieds.getLength() <= 1) return null;
+        if (iedIndex < 0 || iedIndex >= ieds.getLength()) {
+            throw new IllegalArgumentException("IED " + iedIndex + " fuera de rango (" + ieds.getLength() + ")");
+        }
+        Element elegido = (Element) ieds.item(iedIndex);
+        String nombre = elegido.getAttribute("name");
+
+        List<Element> aBorrar = new ArrayList<>();
+        for (int i = 0; i < ieds.getLength(); i++) {
+            if (ieds.item(i) != elegido) aBorrar.add((Element) ieds.item(i));
+        }
+        NodeList caps = doc.getElementsByTagNameNS("*", "ConnectedAP");
+        for (int i = 0; i < caps.getLength(); i++) {
+            Element cap = (Element) caps.item(i);
+            if (!nombre.equals(cap.getAttribute("iedName"))) aBorrar.add(cap);
+        }
+        for (Element e : aBorrar) {
+            if (e.getParentNode() != null) e.getParentNode().removeChild(e);
+        }
+
+        File salida = File.createTempFile("ied_recortado_", ".scd");
+        salida.deleteOnExit();
+        Transformer t = TransformerFactory.newInstance().newTransformer();
+        t.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+        t.setOutputProperty(OutputKeys.INDENT, "no");
+        t.transform(new DOMSource(doc), new StreamResult(salida));
+        if (listener != null) listener.onLog("[SCL] Recortado al IED " + nombre + ": "
+                + (scl.length() / 1024) + " KB -> " + (salida.length() / 1024) + " KB");
+        return salida;
     }
 
     /**
@@ -322,22 +339,33 @@ public class IEC61850Server implements ServerEventListener {
      */
     public boolean loadSclFileWithIED(String sclPath, int iedIndex) {
         try {
-            // Usar el cache si el archivo ya fue parseado
+            // Tras getAvailableIEDs(): se arma (o se toma de la caché) solo el IED elegido
             if (mergedModels != null && sclPath.equals(currentSclPath)) {
-                if (iedIndex >= 0 && iedIndex < mergedModels.size()) {
-                    serverModel = mergedModels.get(iedIndex);
-                    indexAttributes(serverModel);
-                    System.out.println("[SERVER] Loaded merged IED index " + iedIndex + " from cache");
-                    System.out.println("[SERVER] LDs found: " + serverModel.getChildren().size());
-                    debugPrintModelInfo(serverModel);
-                    return true;
+                ServerModel m = modeloDelIed(sclPath, iedIndex);
+                if (m == null) {
+                    System.err.println("[ERROR] El IED " + iedIndex + " no tiene servidor MMS o no se pudo cargar");
+                    if (listener != null) listener.onError("El IED elegido no tiene servidor MMS (AccessPoint con <Server>)");
+                    return false;
                 }
+                serverModel = m;
+                loadedIedIndex = iedIndex;
+                indexAttributes(serverModel);
+                System.out.println("[SERVER] Loaded IED index " + iedIndex);
+                System.out.println("[SERVER] LDs found: " + serverModel.getChildren().size());
+                debugPrintModelInfo(serverModel);
+                return true;
             }
 
             // Si no hay cache, parsear de nuevo (llamada directa sin selección previa)
             return loadSclFile(sclPath, iedIndex);
         } catch (Exception e) {
-            System.err.println("[ERROR] " + e.getMessage());
+            // Como en loadSclFile(): la librería lanza también excepciones no declaradas
+            // (NumberFormatException con un count no numérico), y el usuario tiene que verlas.
+            System.err.println("[ERROR] SCL processing error: " + e);
+            if (listener != null) {
+                listener.onError("SCL processing error: " + e.getClass().getSimpleName()
+                        + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+            }
             return false;
         }
     }
@@ -949,10 +977,13 @@ public class IEC61850Server implements ServerEventListener {
      * Debe llamarse después de getAvailableIEDs() para que mergedModels esté poblado.
      */
     public ServerModel getMergedModel(int index) {
-        if (mergedModels != null && index >= 0 && index < mergedModels.size()) {
-            return mergedModels.get(index);
+        if (currentSclPath == null) return null;
+        try {
+            return modeloDelIed(currentSclPath, index);
+        } catch (Exception e) {
+            System.err.println("[SERVER] Error cargando el IED " + index + ": " + e);
+            return null;
         }
-        return null;
     }
 
     /**
