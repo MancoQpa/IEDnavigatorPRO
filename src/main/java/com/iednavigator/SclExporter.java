@@ -416,6 +416,45 @@ public final class SclExporter {
                     sb.append(nested);
                     sb.append(ind).append("  </SDI>\n");
                 }
+            } else if (child instanceof com.beanit.iec61850bean.Array) {
+                appendArrayValues(sb, (com.beanit.iec61850bean.Array) child, path, indent, sGroup);
+            }
+        }
+    }
+
+    /**
+     * Valores de un arreglo de atributos: un DAI por elemento si el elemento es básico, un SDI
+     * si es estructurado, cada uno con su índice en {@code ix} (IEC 61850-6, tDAI/tSDI).
+     *
+     * Hasta 2026-10-21 los arreglos se declaraban con su {@code count} en las plantillas pero
+     * sus valores no se emitían: collectDais() solo reconocía BDA y atributos construidos, y
+     * un Array no es ninguno de los dos. En los equipos del corpus el caso real son los puntos
+     * de curva de protección: {@code crvPts}, estructuras xVal/yVal con FC SP; el CID de un
+     * Ingeteam eF trae 256.
+     *
+     * Ojo al releer el archivo con iec61850bean 1.9.0: su SclParser ignora {@code ix} y le da
+     * a todos los elementos el valor del primero. Lo emitido acá es lo que dice la norma.
+     */
+    private void appendArrayValues(StringBuilder sb, com.beanit.iec61850bean.Array arr,
+                                   String path, int indent, String sGroup) {
+        String ind = " ".repeat(indent);
+        String nombre = esc(arr.getName());
+        for (int i = 0; i < arr.size(); i++) {
+            ModelNode el = arr.getChild(i);
+            if (el instanceof BasicDataAttribute) {
+                String v = safeValue((BasicDataAttribute) el);
+                if (v == null) continue;
+                sb.append(ind).append("  <DAI name=\"").append(nombre).append("\" ix=\"").append(i).append("\">")
+                  .append(sGroup != null ? "<Val sGroup=\"" + sGroup + "\">" : "<Val>")
+                  .append(esc(v)).append("</Val></DAI>\n");
+            } else if (el instanceof ConstructedDataAttribute) {
+                StringBuilder nested = new StringBuilder();
+                collectDais(nested, el, path + arr.getName() + "(" + i + ").", indent + 2, sGroup);
+                if (nested.length() > 0) {
+                    sb.append(ind).append("  <SDI name=\"").append(nombre).append("\" ix=\"").append(i).append("\">\n");
+                    sb.append(nested);
+                    sb.append(ind).append("  </SDI>\n");
+                }
             }
         }
     }
