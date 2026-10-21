@@ -476,7 +476,12 @@ public class IEC61850Server implements ServerEventListener {
                 System.out.println("[SERVER] RptEnabled max fixed: " + rptFixed);
             }
 
-            if (totalExpanded == 0 && patchedEnums == 0 && emptyVals == 0 && rptFixed == 0) return sclPath;
+            // Un count no numérico que se dedujo o se quitó también cambia el documento: si no
+            // se escribe, a SclParser le llega el count="maxPts" original y el archivo entero
+            // falla. Antes lo tapaba la expansión (un DA deducido se expandía); desde que los DA
+            // quedan como arreglo (2026-10-21) hace falta contarlo aparte.
+            if (totalExpanded == 0 && countsDeducidos == 0 && countsQuitados == 0
+                    && patchedEnums == 0 && emptyVals == 0 && rptFixed == 0) return sclPath;
 
             // Escribir a archivo temporal preservando namespace
             File tempFile = File.createTempFile("ied_expanded_", ".cid");
