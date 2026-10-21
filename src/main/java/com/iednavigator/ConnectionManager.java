@@ -698,6 +698,33 @@ class ConnectionManager {
 
         if (fc.showOpenDialog(ctx.parentWindow()) == JFileChooser.APPROVE_OPTION) {
             File file = fc.getSelectedFile();
+
+            // Con la simulación activa, cargar otro SCL reemplazaba el árbol, la placa y la
+            // cabecera, pero el servidor seguía sirviendo el modelo anterior: el 2026-10-19 se
+            // cargó un ABB sobre la simulación de un 7SL87 y durante dos días la pantalla
+            // mostró uno y la red el otro, sin ningún aviso. Ahora se pregunta: o se detiene la
+            // simulación y se reinicia con el archivo nuevo, o no se carga nada. Reiniciar
+            // desconecta a los clientes, por eso no se hace sin preguntar.
+            final boolean reiniciar = ctx.isServerRunning();
+            if (reiniciar) {
+                String actual = ctx.getLoadedIedName();
+                if (actual == null || actual.isBlank()) {
+                    File f = ctx.getLoadedSclFile();
+                    actual = (f != null) ? f.getName() : "?";
+                }
+                int r = JOptionPane.showConfirmDialog(ctx.parentWindow(),
+                        I18n.t("dlg.reloadwhilesim", actual, file.getName()),
+                        I18n.t("dlg.reloadwhilesim.title"),
+                        JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                if (r != JOptionPane.YES_OPTION) {
+                    ctx.log(I18n.t("log.cm.reloadwhilesim.no", file.getName()));
+                    return;
+                }
+                toggleServer();   // detiene la simulación (está activa)
+                ctx.log(I18n.t("log.cm.reloadwhilesim.yes", file.getName()));
+            }
+
+            final File anterior = ctx.getLoadedSclFile();
             ctx.setLoadedSclFile(file);
             ctx.setLblFileName(file.getName());
             ctx.updateStatus(false, I18n.t("status.analyzingscl"));
@@ -726,6 +753,14 @@ class ConnectionManager {
                             SwingUtilities.invokeLater(() -> {
                                 ctx.updateStatus(false, I18n.t("status.loadcancelled"));
                                 ctx.setLblFileName("");
+                                // Se había detenido la simulación para este archivo y no se
+                                // cargó nada: el modelo anterior sigue, se la reanuda.
+                                if (reiniciar && !ctx.isServerRunning()) {
+                                    ctx.setLoadedSclFile(anterior);
+                                    if (anterior != null) ctx.setLblFileName(anterior.getName());
+                                    ctx.log(I18n.t("log.cm.reloadwhilesim.resumed"));
+                                    toggleServer();
+                                }
                             });
                             return;
                         }
@@ -775,6 +810,9 @@ class ConnectionManager {
                                 ctx.log(I18n.t("log.cm.sclloadedok"));
                                 // Actualizar GoCBs automaticamente
                                 ctx.refreshGooseControlBlocks();
+                                // Se detuvo la simulación para cargar este archivo: volver a
+                                // iniciarla, ahora con el modelo nuevo.
+                                if (reiniciar && !ctx.isServerRunning()) toggleServer();
                             } else {
                                 ctx.updateStatus(false, I18n.t("status.sclerror"));
                                 ctx.log(I18n.t("log.cm.sclloadfailed"));
