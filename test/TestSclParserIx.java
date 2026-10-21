@@ -61,7 +61,24 @@ public class TestSclParserIx {
         chk("exportar y releer: mismos puntos", puntos(m).equals(puntos(m5)), puntos(m5));
         chk("exportar y releer: mismos enteros", enteros(m).equals(enteros(m5)), enteros(m5));
 
-        // 6) Opcional: un CID real, cargado como lo hace el modo servidor
+        // 6) count no numérico (count="maxPts", SCL 2007B), cargado como el modo servidor. El
+        //    tamaño se deduce del nombre del tipo y el DA queda como arreglo. Sin más parches
+        //    en el archivo: así se ve si el documento modificado llega a SclParser.
+        String dinamico = scl("<DAI name=\"vals\" ix=\"0\"><Val>1</Val></DAI>")
+            .replace("<DA name=\"crvPts\" fc=\"SP\" bType=\"Struct\" type=\"PT_T\" count=\"3\"/>",
+                     "<DA name=\"crvPts\" fc=\"SP\" bType=\"Struct\" type=\"PT_ARRAY_of_3_Points\" count=\"maxPts\"/>"
+                     + "<DA name=\"maxPts\" fc=\"CF\" bType=\"INT16U\"/>")
+            .replace("<DAType id=\"PT_T\">", "<DAType id=\"PT_ARRAY_of_3_Points\">");
+        Path dyn = Files.createTempFile("maxpts", ".cid");
+        Files.write(dyn, dinamico.getBytes("UTF-8"));
+        IEC61850Server srvDyn = new IEC61850Server();
+        boolean okDyn = srvDyn.loadSclFileWithIED(dyn.toString(), 0);
+        Files.deleteIfExists(dyn);
+        ModelNode crvDyn = okDyn ? srvDyn.getServerModel().findModelNode("IEDLD0/PDIS1.Crv.crvPts", Fc.SP) : null;
+        chk("count=\"maxPts\": carga y queda como arreglo de 3", okDyn && crvDyn instanceof Array
+            && ((Array) crvDyn).size() == 3, okDyn ? String.valueOf(crvDyn == null ? null : crvDyn.getClass().getSimpleName()) : "no carga");
+
+        // 7) Opcional: un CID real, cargado como lo hace el modo servidor
         if (args.length > 0) {
             IEC61850Server srv = new IEC61850Server();
             boolean ok = srv.loadSclFileWithIED(args[0], 0);
