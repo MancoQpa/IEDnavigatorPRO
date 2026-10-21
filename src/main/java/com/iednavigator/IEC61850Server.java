@@ -344,8 +344,10 @@ public class IEC61850Server implements ServerEventListener {
 
     /**
      * Pre-procesa el SCL expandiendo elementos con atributo count > 1.
-     * Elementos SDO/DA/BDA con count="N" se reemplazan por N elementos individuales
-     * con nombres indexados (p.ej. phsAHar01..phsAHar50 para count=50).
+     * Elementos SDO/BDA con count="N" se reemplazan por N elementos individuales
+     * con nombres indexados (p.ej. phsAHar01..phsAHar50 para count=50). Los DA no: quedan
+     * como arreglo (ver el comentario en el bucle). A los count no numéricos se les deduce
+     * el tamaño en los tres.
      * Retorna la ruta del archivo expandido (temp) o la original si no hay arrays.
      */
     private String expandSclArrays(String sclPath) {
@@ -398,6 +400,13 @@ public class IEC61850Server implements ServerEventListener {
                 }
 
                 for (Element el : toExpand) {
+                    // Los DA se dejan como arreglo: iec61850bean los arma como Array, que es lo
+                    // que expone un IED real por MMS (crvPts(0), crvPts(1)...). Expandirlos los
+                    // convertía en atributos sueltos con otros nombres (crvPts00, crvPts01...) y
+                    // sus valores se perdían, porque los DAI/SDI del archivo los nombran
+                    // "crvPts" con ix. Desde 2026-10-21 el SclParser sombreado lee ix. SDO y
+                    // BDA sí se expanden: la librería no arma arreglos de ninguno de los dos.
+                    if (tag.equals("DA")) continue;
                     int count = Integer.parseInt(el.getAttribute("count").trim());
                     String name = el.getAttribute("name");
                     org.w3c.dom.Node parent = el.getParentNode();
