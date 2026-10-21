@@ -730,6 +730,13 @@ class ConnectionManager {
             ctx.updateStatus(false, I18n.t("status.analyzingscl"));
             ctx.setStatusIndicatorConnecting();
 
+            // Ventana de espera si tarda más de medio segundo. Un SCD de subestación entera
+            // son minutos (el banco del simulador: 2,5 y 5,5 min para dos de 52 IEDs) y hasta
+            // 2026-10-21 lo único visible era "Analizando SCL..." en la cabecera.
+            final EsperaCarga espera = new EsperaCarga(ctx.parentWindow(), file.getName(),
+                    () -> ctx.log(I18n.t("log.cm.sclbackground", file.getName())));
+            espera.empezar();
+
             ctx.backgroundExecutor().submit(() -> {
                 try {
                     ctx.log(I18n.t("log.cm.analyzing", file.getName(), (file.length()/1024)));
@@ -745,12 +752,15 @@ class ConnectionManager {
                     if (iedCount > 1) {
                         final int[] selection = {-1};
                         SwingUtilities.invokeAndWait(() -> {
+                            espera.pausar();
                             selection[0] = ctx.showIEDSelectionDialog(availableIEDs, file.getName());
+                            if (selection[0] >= 0) espera.reanudar();
                         });
 
                         if (selection[0] < 0) {
                             // Usuario canceló
                             SwingUtilities.invokeLater(() -> {
+                                espera.terminar();
                                 ctx.updateStatus(false, I18n.t("status.loadcancelled"));
                                 ctx.setLblFileName("");
                                 // Se había detenido la simulación para este archivo y no se
@@ -784,6 +794,7 @@ class ConnectionManager {
 
                     final int finalSelectedIED = selectedIED;
                     SwingUtilities.invokeLater(() -> {
+                        espera.terminar();
                         try {
                             if (success) {
                                 ctx.setBtnStartStopEnabled(true);
@@ -826,6 +837,7 @@ class ConnectionManager {
                     ctx.log(I18n.t("log.cm.bgerror", e.getMessage()));
                     e.printStackTrace();
                     SwingUtilities.invokeLater(() -> {
+                        espera.terminar();
                         ctx.updateStatus(false, I18n.t("err.title") + ": " + e.getMessage());
                     });
                 }
