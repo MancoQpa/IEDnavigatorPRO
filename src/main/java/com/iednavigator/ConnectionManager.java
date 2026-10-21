@@ -1239,6 +1239,11 @@ class ConnectionManager {
      * y lo deja en el log. Mientras la mostrada siga siendo de esta PC no se toca, aunque haya
      * otras: así el cartel no salta entre adaptadores. Se llama en el EDT; la consulta de
      * interfaces va en segundo plano.
+     *
+     * Excepción: si la mostrada no es de red privada (127.0.0.1, el último recurso de
+     * getLocalIpAddress() cuando no hay red) y ya hay una, se cambia. El 2026-10-20 la Wi-Fi
+     * se quedó sin IP antes de una suspensión, la cabecera pasó a 127.0.0.1 y ahí quedó: la
+     * loopback siempre "es de esta PC", y la IP de red volvió sin que nadie la mostrara.
      */
     void revisarIpLocal() {
         if (!ctx.isServerRunning()) {
@@ -1248,17 +1253,38 @@ class ConnectionManager {
         final String mostrada = currentHost;
         final int puerto = currentPort;
         ctx.backgroundExecutor().submit(() -> {
-            if (mostrada == null || mostrada.isEmpty() || esIpDeEstaPc(mostrada)) return;
+            if (mostrada == null || mostrada.isEmpty()) return;
+            boolean yaNoEsDeEstaPc = !esIpDeEstaPc(mostrada);
+            boolean provisoria = !esIpPrivada(mostrada);
+            if (!yaNoEsDeEstaPc && !provisoria) return;
             String nueva = getLocalIpAddress();
             if (nueva.equals(mostrada)) return;
+            // Una provisoria vigente solo se cambia por una de red, no por otra provisoria
+            if (!yaNoEsDeEstaPc && !esIpPrivada(nueva)) return;
             SwingUtilities.invokeLater(() -> {
                 // Si entretanto se detuvo o reinició la simulación, ese camino ya lo resolvió
                 if (!ctx.isServerRunning() || !mostrada.equals(currentHost)) return;
                 currentHost = nueva;
                 ctx.updateConnectionInfo(nueva + " (servidor)", puerto);
-                ctx.log(I18n.t("log.cm.ipchanged", mostrada, nueva, String.valueOf(puerto)));
+                ctx.log(I18n.t(yaNoEsDeEstaPc ? "log.cm.ipchanged" : "log.cm.ipavailable",
+                        mostrada, nueva, String.valueOf(puerto)));
             });
         });
+    }
+
+    /** IPv4 de red privada (RFC 1918): la que le sirve a un cliente de la red. */
+    static boolean esIpPrivada(String ip) {
+        if (ip == null) return false;
+        if (ip.startsWith("10.") || ip.startsWith("192.168.")) return true;
+        if (ip.startsWith("172.")) {
+            try {
+                int segundo = Integer.parseInt(ip.split("\\.")[1]);
+                return segundo >= 16 && segundo <= 31;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
     }
 
     /** Si la dirección está asignada a alguna interfaz de esta PC. Ante la duda, sí. */

@@ -82,6 +82,26 @@ public class TestCabeceraIp {
         correr(revisar, manager);
         chk("con la IP vigente no cambia nada", cabeceras.isEmpty() && log.isEmpty(), cabeceras + " " + log);
 
+        // 2b) Se mostraba 127.0.0.1 (no había red) y la red volvió: se pasa a la IP de red.
+        //     El caso de campo del 2026-10-20: la loopback siempre "es de esta PC" y la
+        //     cabecera quedaba trabada en 127.0.0.1.
+        Method privada = cm.getDeclaredMethod("esIpPrivada", String.class);
+        privada.setAccessible(true);
+        chk("esIpPrivada: 192.168.1.5, 10.0.0.1, 172.16.0.1", (boolean) privada.invoke(null, "192.168.1.5")
+            && (boolean) privada.invoke(null, "10.0.0.1") && (boolean) privada.invoke(null, "172.16.0.1"), "");
+        chk("esIpPrivada: 127.0.0.1, 172.32.0.1, 169.254.1.1, no", !(boolean) privada.invoke(null, "127.0.0.1")
+            && !(boolean) privada.invoke(null, "172.32.0.1") && !(boolean) privada.invoke(null, "169.254.1.1"), "");
+        if ((boolean) privada.invoke(null, actual)) {
+            host.set(manager, "127.0.0.1");
+            correr(revisar, manager);
+            chk("de 127.0.0.1 a la IP de red cuando vuelve", cabeceras.equals(List.of(actual + " (servidor):10102")), cabeceras.toString());
+            String vuelta = com.iednavigator.I18n.t("log.cm.ipavailable", "127.0.0.1", actual, "10102");
+            chk("  con el aviso de que volvió la red", log.equals(List.of(vuelta)), log.size() + " línea(s)");
+            cabeceras.clear(); log.clear();
+        } else {
+            System.out.println("(sin IP privada en esta PC: se salta el caso 127.0.0.1 -> red)");
+        }
+
         // 3) Simulación detenida: no se toca aunque la IP sea vieja
         host.set(manager, vieja);
         simulando = false;
