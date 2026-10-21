@@ -1692,46 +1692,11 @@ class GoosePanel {
         logGoose(I18n.t("log.goose.loading", file.getName()));
 
         final long inicio = System.currentTimeMillis();
-        final java.util.concurrent.atomic.AtomicBoolean terminado =
-            new java.util.concurrent.atomic.AtomicBoolean(false);
-
-        Window duena = SwingUtilities.getWindowAncestor(ctx.parentWindow());
-        if (duena == null && ctx.parentWindow() instanceof Window) duena = (Window) ctx.parentWindow();
-        JDialog espera = new JDialog(duena, I18n.t("goose.sclwait.title"),
-            Dialog.ModalityType.APPLICATION_MODAL);
-        espera.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        JLabel lblTiempo = new JLabel(I18n.t("goose.sclwait.elapsed", "0"));
-        JProgressBar barra = new JProgressBar();
-        barra.setIndeterminate(true);
-        JButton btnFondo = new JButton(I18n.t("goose.sclwait.background"));
-        JPanel cuerpo = new JPanel(new BorderLayout(8, 8));
-        cuerpo.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
-        JPanel textos = new JPanel(new GridLayout(0, 1, 0, 4));
-        textos.add(new JLabel(I18n.t("goose.sclwait.msg", file.getName())));
-        textos.add(lblTiempo);
-        cuerpo.add(textos, BorderLayout.NORTH);
-        cuerpo.add(barra, BorderLayout.CENTER);
-        JPanel botones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        botones.add(btnFondo);
-        cuerpo.add(botones, BorderLayout.SOUTH);
-        espera.setContentPane(cuerpo);
-        espera.pack();
-        espera.setLocationRelativeTo(ctx.parentWindow());
-
-        javax.swing.Timer reloj = new javax.swing.Timer(1000, e -> lblTiempo.setText(
-            I18n.t("goose.sclwait.elapsed",
-                   String.valueOf((System.currentTimeMillis() - inicio) / 1000))));
-        btnFondo.addActionListener(e -> {
-            ctx.log(I18n.t("log.goose.sclbackground", file.getName()));
-            reloj.stop();
-            espera.dispose();
-        });
-        // Sólo si tarda: un CID chico se carga en milisegundos y el diálogo sería un parpadeo.
-        javax.swing.Timer mostrar = new javax.swing.Timer(500, e -> {
-            if (!terminado.get()) { reloj.start(); espera.setVisible(true); }
-        });
-        mostrar.setRepeats(false);
-        mostrar.start();
+        // Ventana de espera (EsperaCarga): aparece si tarda más de medio segundo.
+        final EsperaCarga espera = new EsperaCarga(ctx.parentWindow(), file.getName(),
+            () -> ctx.log(I18n.t("log.goose.sclbackground", file.getName())));
+        esperaCarga = espera;
+        espera.empezar();
 
         // Hilo propio y no backgroundExecutor(): con un SCD grande serían minutos, y la
         // conexión y la exportación de CID esperarían en esa misma cola.
@@ -1753,10 +1718,8 @@ class GoosePanel {
             final Exception fallo = error;
             final boolean sinElegir = abandonado;
             SwingUtilities.invokeLater(() -> {
-                terminado.set(true);
-                mostrar.stop();
-                reloj.stop();
-                espera.dispose();
+                espera.terminar();
+                if (esperaCarga == espera) esperaCarga = null;
                 if (sinElegir) return;
                 if (fallo != null) {
                     ctx.log(I18n.t("log.goose.sclloaderror", fallo.getMessage()));
@@ -1822,11 +1785,24 @@ class GoosePanel {
     }
 
     /** El diálogo de selección es Swing: si se llega desde la carga en segundo plano, se lo pide a la interfaz. */
+    /** La espera de la carga en curso, para ocultarla mientras se elige el IED. */
+    private EsperaCarga esperaCarga;
+
     private int elegirIedEnLaInterfaz(List<String> iedNames, String fileName) throws Exception {
-        if (SwingUtilities.isEventDispatchThread()) return ctx.showIEDSelectionDialog(iedNames, fileName);
+        if (SwingUtilities.isEventDispatchThread()) return elegirIed(iedNames, fileName);
         final int[] elegido = { -1 };
-        SwingUtilities.invokeAndWait(() -> elegido[0] = ctx.showIEDSelectionDialog(iedNames, fileName));
+        SwingUtilities.invokeAndWait(() -> elegido[0] = elegirIed(iedNames, fileName));
         return elegido[0];
+    }
+
+    private int elegirIed(List<String> iedNames, String fileName) {
+        EsperaCarga e = esperaCarga;
+        if (e != null) e.pausar();
+        try {
+            return ctx.showIEDSelectionDialog(iedNames, fileName);
+        } finally {
+            if (e != null) e.reanudar();
+        }
     }
 
     private int detectAndSelectIED(File sclFile) {
