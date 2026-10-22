@@ -140,6 +140,17 @@ Step "Copiando binarios recien compilados"
 Copy-Item (Join-Path $ROOT "classes") -Destination $DEST -Recurse -Force
 Copy-Item (Join-Path $ROOT "lib")     -Destination $DEST -Recurse -Force
 
+# La version que muestra la app ("Acerca de", titulo, registro de sesion) sale de aca, del
+# mismo -Version con que se arma el paquete. Hasta 2026-10-22 estaba fija en el codigo
+# ("Version 2.0 - Hybrid Edition") y no cambio en ninguna release.
+$commit = (git -C $ROOT rev-parse --short HEAD 2>$null)
+if (-not $commit) { $commit = "" }
+$sucio = (git -C $ROOT status --porcelain --untracked-files=no 2>$null)
+if ($sucio) { $commit = "$commit+cambios" }
+$verProps = "version=v$Version`ncommit=$commit`n"
+[System.IO.File]::WriteAllText((Join-Path $DEST "classes\version.properties"), $verProps, (New-Object System.Text.UTF8Encoding $false))
+Write-Host "  version.properties: v$Version ($commit)"
+
 # El paquete es lo que se descarga: se verifica el bundle que va adentro, no el del repo.
 Step "Verificando i18n del paquete"
 Banco (Join-Path $DEST "classes\i18n") "el paquete"
@@ -204,6 +215,7 @@ $imprescindibles = @(
     "IEDNavigatorPRO.bat",
     "jre\bin\java.exe",
     "classes\com\iednavigator\IEDNavigatorApp.class",
+    "classes\version.properties",
     "lib",
     "instalador.ps1"
 )
