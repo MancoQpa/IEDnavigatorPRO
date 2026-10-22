@@ -2,6 +2,59 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.6
+-----
+- Modo servidor, carga de un SCD de subestacion: la lista de IEDs aparece en un
+  segundo. Antes la aplicacion armaba el modelo de todos los equipos del archivo
+  para despues usar uno: con un SCD de 24 MB y 52 IEDs eran mas de cinco minutos
+  hasta ver la lista. Ahora lee solo los nombres, y arma unicamente el IED elegido
+  (unos segundos). Un IED sin servidor MMS --por ejemplo, un servidor de hora-- se
+  rechaza con un mensaje en lugar de cargar un modelo vacio.
+- Modo servidor: mientras se carga un SCL se abre una ventana con el nombre del
+  archivo, los segundos transcurridos, el aviso de que un SCD grande puede tardar y
+  el boton "Seguir en segundo plano". Antes solo decia "Analizando SCL..." en la
+  cabecera, sin nada que distinguiera "procesando" de "colgado".
+- Modo servidor: cargar otro SCL con la simulacion en marcha cambiaba la pantalla
+  pero el servidor seguia sirviendo el modelo anterior, sin aviso. Ahora pregunta:
+  si se acepta, detiene la simulacion, carga el archivo y la vuelve a iniciar con
+  el modelo nuevo; si no, no carga nada.
+- Modo servidor: la IP de la cabecera ("x.x.x.x (servidor)") se calculaba una sola
+  vez. Tras una suspension, si la red cambiaba de IP, seguia mostrando la vieja, o
+  quedaba en 127.0.0.1 si la red se habia caido. Ahora se revisa cada 15 segundos
+  y se actualiza, con una linea en el registro.
+- Modo servidor: un equipo cuyo nombre de dispositivo logico es el comienzo de otro
+  (por ejemplo, Ln1 y Ln1_PermOverr) anunciaba tambien los DataSets del segundo, y
+  un cliente que leia el modelo completo abortaba la carga con "DataSet with that
+  reference does not exist". Corregido.
+- Modo servidor: los arreglos de atributos (por ejemplo, los puntos de una curva)
+  se servian como atributos sueltos y todos sus elementos quedaban con el valor del
+  primero. Ahora se sirven como arreglo, cada elemento con su valor del archivo.
+  Un arreglo con tamano simbolico (count="maxPts") ya no impide cargar el archivo.
+- Modo servidor: el doble clic sobre un objeto de datos edita su stVal sea del
+  tipo que sea. Antes solo funcionaba con los enumerados; con un entero o una
+  posicion fallaba con "nodo no encontrado".
+- GOOSE: tras una suspension, si la interfaz de red volvia con otra direccion MAC
+  (habitual en Wi-Fi), la publicacion fallaba en cada trama y detenerla y volver a
+  publicar no lo arreglaba. Ahora la interfaz se relee al publicar y, si el envio
+  falla tres veces seguidas, se reabre sola, con aviso en el registro.
+- GOOSE y lectura periodica: al volver de una hibernacion larga, la aplicacion
+  intentaba recuperar de golpe todas las ejecuciones perdidas. Con un GOOSE
+  publicando, tras seis dias hibernada salieron mas de 300 tramas por segundo
+  durante 25 minutos. Ahora sigue al ritmo configurado, y el registro anota el
+  hueco.
+- GOOSE: "Cargar GoCBs" contra un equipo sin bloques GOOSE escribia cientos de
+  lineas en el registro. Ahora escribe una, con el resumen.
+- Generacion del CID:
+  - Se puede cancelar. Contra un modelo grande son miles de lecturas, del orden de
+    minutos, y no habia forma de pararla. Ahora una ventana muestra la fase, el
+    avance y el boton Cancelar; al cancelar no queda ningun archivo a medias y la
+    conexion sigue en pie.
+  - Lee el modelo una sola vez, no dos: tarda la mitad.
+  - Los arreglos de atributos salen con sus valores, elemento por elemento. Antes
+    se declaraban pero sus valores no se escribian.
+- El paquete ya no lleva clases de versiones viejas: pasa de 267 a 161 archivos de
+  clase.
+
 v4.13.5
 -----
 - La conexion ya no se corta sola con los equipos que cierran la asociacion por
