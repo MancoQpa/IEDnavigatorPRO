@@ -209,6 +209,11 @@ Publish a release in this order, and do not reorder steps 3 and 4:
 3. **Publish the GitHub release** with the ZIP as its asset.
 4. **Only then** update the download link in `index.html` and push `main`.
 
+The version the app shows (About, window title, session log header) comes from the
+`-Version` of step 1: `build_installer.ps1` writes `classes\version.properties` (version and
+commit, `+cambios` if the tree had uncommitted changes) and `Version.java` reads it. There is
+nothing to edit in the code per release. Run from the repo it says "en desarrollo".
+
 Doing 4 before 3 leaves the landing page's download button pointing at an asset that
 does not exist yet — a 404 on the main call to action, live, for as long as the release
 stays a draft. This happened with v4.13.2.
