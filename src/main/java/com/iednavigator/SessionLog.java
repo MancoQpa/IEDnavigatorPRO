@@ -93,6 +93,7 @@ final class SessionLog implements java.io.Closeable {
         StringBuilder sb = new StringBuilder();
         sb.append("# IEDNavigator PRO — registro de sesión").append(nl);
         sb.append("# inicio    : ").append(stamp.format(new Date())).append(nl);
+        sb.append("# versión   : ").append(Version.paraRegistro()).append(nl);
         sb.append("# carpeta   : ").append(System.getProperty("user.dir", "?")).append(nl);
         sb.append("# java      : ").append(System.getProperty("java.version", "?"))
           .append(" (").append(System.getProperty("os.name", "?")).append(")").append(nl);

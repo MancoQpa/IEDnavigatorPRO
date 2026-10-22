@@ -289,7 +289,7 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private void initUI() {
-        setTitle(I18n.t("app.title"));
+        setTitle(I18n.t("app.title") + " - " + Version.etiqueta());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 800);
         setLocationRelativeTo(null);
@@ -642,7 +642,7 @@ public class IEDNavigatorApp extends JFrame {
         String message =
             "<html><body style='width: 380px; padding: 10px;'>" +
             "<h2 style='color: #2E86AB; margin-bottom: 5px;'>IED Navigator</h2>" +
-            "<p style='color: #666; font-size: 11px;'>Version 2.0 - Hybrid Edition</p>" +
+            "<p style='color: #666; font-size: 11px;'>" + I18n.t("about.version", Version.etiqueta()) + "</p>" +
             "<hr style='margin: 10px 0;'>" +
             "<p><b>IEC 61850 Explorer Tool</b></p>" +
             "<p>" + I18n.t("about.desc") + "</p>" +
