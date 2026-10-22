@@ -182,11 +182,15 @@ because `classes` comes first in the classpath). Each file says why and what cha
 - `ServerModel.java`: a Logical Device no longer lists the DataSets of another LD whose
   name starts the same (`Ln1` / `Ln1_X`). Original v1.9.0 source, verified instruction by
   instruction against the jar, one change.
-- `SclParser.java`: each element of an array of attributes takes the value of its own
-  DAI/SDI `ix` (the library gave all of them the first one's). Original v1.9.0 source,
-  verified against the jar compiled with `--release 8`, one change. Related: server mode no
-  longer expands DA arrays into `crvPts00..NN` (`IEC61850Server.expandSclArrays`); SDO and
-  BDA arrays are still expanded because the library does not build them.
+- `SclParser.java`: original v1.9.0 source, verified against the jar compiled with
+  `--release 8`, two changes:
+  - each element of an array of attributes takes the value of its own DAI/SDI `ix` (the
+    library gave all of them the first one's). Related: server mode no longer expands DA
+    arrays into `crvPts00..NN` (`IEC61850Server.expandSclArrays`); SDO and BDA arrays are
+    still expanded because the library does not build them;
+  - every DA declared `fc="SG"` is also created as `SE` (the edit buffer of the same
+    setting, IEC 61850-7-2). Without it, a DataSet with an `fc="SE"` FCDA rejected the
+    whole file; the NARI's `dsSetting1` is one (`TestSgComoSe`).
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.
