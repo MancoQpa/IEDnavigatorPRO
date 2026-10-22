@@ -15,14 +15,21 @@
  * MODIFICADO por IEDNavigator PRO (2026-10-21). Esta clase sombrea deliberadamente a
  * com.beanit.iec61850bean.SclParser de iec61850bean-1.9.0 (igual que Fc.java y ServerModel.java).
  * Es el fuente original de la etiqueta v1.9.0 —verificado: compilado con --release 8, coincide
- * instrucción por instrucción con el .class del jar en sus 23 métodos— con un único cambio, en
- * createArrayOfDataAttributes().
+ * instrucción por instrucción con el .class del jar en sus 23 métodos— con dos cambios:
+ * createArrayOfDataAttributes() (ix, abajo) y createFcDataObjects() (SG también como SE, 2026-10-22).
  *
  * El defecto: al armar un arreglo de atributos, a cada elemento se le pasaba el mismo nodo XML
  * —el primer DAI/SDI con ese nombre— e ignoraba el atributo ix (IEC 61850-6, tDAI/tSDI). Todos
  * los elementos quedaban con el valor del primero. La librería lo tenía anotado como TODO. El
  * caso de campo: los puntos de curva crvPts del CID de un Ingeteam eF (256 SDI con ix) cargaban
  * en el simulador con todos los puntos iguales al primero.
+ *
+ * SG/SE (2026-10-22): la librería crea cada atributo solo con el FC que declara su DOType. Un
+ * ajuste declarado fc="SG" no existía como SE, aunque en IEC 61850-7-2 el SE es el búfer de
+ * edición de ese mismo ajuste y un DataSet puede referenciarlo. Un DataSet con FCDA fc="SE"
+ * —el NARI PCS-9611S tiene dsSetting1 así— hacía rechazar el archivo entero con "Specified
+ * FCDA ... not found in Model": tanto el CID exportado por la app como un CID de fabricante.
+ * Ahora cada DA con fc="SG" se crea también con fc="SE", con los mismos valores.
  *
  * La clase se resuelve antes que la del jar porque el classpath de ejecución es
  * "classes;lib\*.jar" y maven-assembly-plugin da precedencia a las clases del proyecto.
@@ -759,6 +766,18 @@ public class SclParser {
                 false,
                 false));
       }
+
+      // IEDNavigator: un ajuste SG también existe como SE (búfer de edición del grupo).
+      if (dattr.getFc() == Fc.SG) {
+        if (dattr.getCount() >= 1) {
+          childNodes.add(
+              createArrayOfDataAttributes(ref + '.' + dattr.getName(), dattr, iNodeFound, Fc.SE));
+        } else {
+          childNodes.add(
+              createDataAttribute(
+                  ref + '.' + dattr.getName(), Fc.SE, dattr, iNodeFound, false, false, false));
+        }
+      }
     }
 
     for (Sdo sdo : doType.sdos) {
@@ -816,8 +835,13 @@ public class SclParser {
 
   private Array createArrayOfDataAttributes(String ref, Da dataAttribute, Node iXmlNode)
       throws SclParseException {
+    return createArrayOfDataAttributes(ref, dataAttribute, iXmlNode, dataAttribute.getFc());
+  }
 
-    Fc fc = dataAttribute.getFc();
+  /** IEDNavigator: con el FC explícito, para crear la copia SE de un arreglo SG. */
+  private Array createArrayOfDataAttributes(String ref, Da dataAttribute, Node iXmlNode, Fc fc)
+      throws SclParseException {
+
     int size = dataAttribute.getCount();
 
     List<FcModelNode> arrayItems = new ArrayList<>();
