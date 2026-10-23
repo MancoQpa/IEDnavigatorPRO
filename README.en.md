@@ -70,12 +70,17 @@ endorsement by any manufacturer.
 | NARI PCS-9611S | Model discovery (via manual construction: it rejects the standard `retrieveModel`), **SBO operations with enhanced security** for open and close, and **Cancel per §20.8** confirmed in the relay's own control log. Rejection with the selector in **local control** verified in both positions: the device rejects without populating `Loc` / `LocKey` / `LocSta`. Full model read and CID export carrying the device's values |
 | ZIV 2IRX | Model discovery and **direct control** (`ctlModel` = 3) |
 | ABB REC670 | Model discovery, report control blocks and pre-command condition checks |
-| Ingeteam Ingepac EF-ZTO | Model discovery |
+| Ingeteam Ingepac EF-ZTO | Model discovery. The device aborts the association after **90 s without requests** (`ABORT`): a configurable inactivity timer of the device itself (`AplicTms`), not a fault. The tool's keep-alive read keeps the connection open |
 | Efacec TPU S420 | Model discovery |
 
 *Model discovery* means the tool retrieved and browsed the device's data model; it does not
 imply anything was operated on it. The ABB REC670 and the Ingeteam are retired from service and
 used as test-bench units: they support functional verification, not performance claims. The 6MD85 was explored on the bench, powered by auxiliary supply only: no position feedback and no measured quantities.
+
+**Not in the table**, because there is no recorded session of the tool against the real device:
+
+- **Schneider ION 7400**: the project's first device (July 2025), with the script that preceded IEDNavigator PRO: MMS reads of measurements at fixed references.
+- **Siemens SIPROTEC 5 7SL87**: data model, DataSets, reports and GOOSE verified with a project SCD containing two 7SL87, simulated with the tool (MMS server and GOOSE publishing).
 
 ### Requirements
 - **64-bit Windows 10 or 11.**

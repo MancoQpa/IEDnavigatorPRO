@@ -70,13 +70,18 @@ compatibilidade declarada, homologação nem endosso de nenhum fabricante.
 | NARI PCS-9611S | Descoberta do modelo (por construção manual: rejeita o `retrieveModel` padrão), **manobras SBO com segurança reforçada** de abertura e fechamento, e **Cancel conforme a §20.8** confirmado no registro de controle do próprio relé. Rejeição com a chave em **comando local** verificada nas duas posições: o equipamento rejeita sem preencher `Loc` / `LocKey` / `LocSta`. Leitura completa do modelo e exportação de CID com os valores do equipamento |
 | ZIV 2IRX | Descoberta do modelo e **comando direto** (`ctlModel` = 3) |
 | ABB REC670 | Descoberta do modelo, blocos de controle de relatório e verificação prévia de condições |
-| Ingeteam Ingepac EF-ZTO | Descoberta do modelo |
+| Ingeteam Ingepac EF-ZTO | Descoberta do modelo. O equipamento encerra a associação após **90 s sem pedidos** (`ABORT`): é um temporizador de inatividade configurável do próprio equipamento (`AplicTms`), não uma falha. A leitura de manutenção da ferramenta mantém a conexão |
 | Efacec TPU S420 | Descoberta do modelo |
 
 *Descoberta do modelo* significa que a ferramenta recuperou e navegou o modelo de dados do
 equipamento; não implica que algo tenha sido operado nele. O ABB REC670 e o Ingeteam estão
 retirados de serviço e são usados como bancada de testes: servem para verificar funcionamento,
 não para afirmações de desempenho. O 6MD85 foi explorado em bancada, alimentado apenas com tensão auxiliar: sem realimentação de posição nem grandezas medidas.
+
+**Fora da tabela**, porque não há sessão registrada da ferramenta com o equipamento real:
+
+- **Schneider ION 7400**: o primeiro equipamento do projeto (julho de 2025), com o script que precedeu o IEDNavigator PRO: leitura por MMS de medições com referências fixas.
+- **Siemens SIPROTEC 5 7SL87**: modelo de dados, DataSets, relatórios e GOOSE verificados com um SCD de projeto com dois 7SL87, simulado com a ferramenta (servidor MMS e publicação GOOSE).
 
 ### Requisitos
 - **Windows 10 ou 11 de 64 bits.**
