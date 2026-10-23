@@ -790,6 +790,7 @@ class GoosePanel {
             }
 
             boolean started = false;
+            boolean fallaPuertoUdp = false;
 
             if (selected.contains("Loopback")) {
                 internalLoopbackEnabled = true;
@@ -829,6 +830,7 @@ class GoosePanel {
                     logGoose(I18n.t("log.goose.udpstartfailed"));
                     logGoose(I18n.t("log.goose.udpcheckport", String.valueOf(GooseUdpBridge.DEFAULT_PORT)));
                     udpBridgeEnabled = false;
+                    fallaPuertoUdp = true;
                 }
             } else {
                 PcapNetworkInterface nif = interfaceMap.get(selected);
@@ -900,6 +902,13 @@ class GoosePanel {
                 btnGooseStartStop.setText(I18n.t("goose.capturestop"));
                 btnGooseStartStop.setBackground(new Color(200, 50, 50));
                 lblGooseStatus.setForeground(new Color(0, 150, 0));
+            } else if (fallaPuertoUdp) {
+                // En modo UDP no interviene Npcap: el mensaje general (Npcap, "para WiFi use
+                // GOOSE sobre UDP") confundía. Lo habitual es otra instancia escuchando el
+                // mismo puerto (2026-10-23, dos instancias en la misma PC).
+                JOptionPane.showMessageDialog(ctx.parentWindow(),
+                    I18n.t("goose.capture.udpporterror", String.valueOf(GooseUdpBridge.DEFAULT_PORT)),
+                    "GOOSE/UDP", JOptionPane.ERROR_MESSAGE);
             } else if (!internalLoopbackEnabled && !udpBridgeEnabled) {
                 JOptionPane.showMessageDialog(ctx.parentWindow(),
                     I18n.t("goose.capture.starterror") + avisoNpcapRestringido(),
