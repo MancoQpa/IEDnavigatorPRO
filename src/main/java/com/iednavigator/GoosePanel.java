@@ -767,7 +767,7 @@ class GoosePanel {
                 if (gooseUdpBridge.startReceiving()) {
                     started = true;
                     lblGooseStatus.setText(I18n.t("goose.status.udp.active"));
-                    logGoose(I18n.t("log.goose.udplistening", GooseUdpBridge.DEFAULT_PORT));
+                    logGoose(I18n.t("log.goose.udplistening", String.valueOf(GooseUdpBridge.DEFAULT_PORT)));
                     logGoose(I18n.t("log.goose.udpother"));
 
                     javax.swing.Timer udpTimer = new javax.swing.Timer(2000, ev -> {
@@ -779,7 +779,7 @@ class GoosePanel {
                     udpTimer.start();
                 } else {
                     logGoose(I18n.t("log.goose.udpstartfailed"));
-                    logGoose(I18n.t("log.goose.udpcheckport", GooseUdpBridge.DEFAULT_PORT));
+                    logGoose(I18n.t("log.goose.udpcheckport", String.valueOf(GooseUdpBridge.DEFAULT_PORT)));
                     udpBridgeEnabled = false;
                 }
             } else {
@@ -1306,7 +1306,7 @@ class GoosePanel {
                 if (gooseUdpBridge.initSender(null)) {
                     publishStarted = true;
                     logGoose(I18n.t("log.goose.pub.udpstarted"));
-                    logGoose(I18n.t("log.goose.pub.udpport", GooseUdpBridge.DEFAULT_PORT));
+                    logGoose(I18n.t("log.goose.pub.udpport", String.valueOf(GooseUdpBridge.DEFAULT_PORT)));
                 } else {
                     logGoose(I18n.t("log.goose.pub.udpsenderfailed"));
                     udpBridgeEnabled = false;
