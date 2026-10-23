@@ -2,6 +2,21 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.7
+-----
+- Modo servidor: un CID o SCD con un DataSet que referencia ajustes del grupo en
+  edicion (FC SE) no cargaba: "Specified FCDA ... not found in Model". Le pasaba,
+  por ejemplo, al CID que la propia aplicacion genera desde un rele NARI, cuyo
+  DataSet de ajustes esta en SE. Segun IEC 61850 el SE es el bufer de edicion del
+  mismo ajuste que esta en SG; ahora cada ajuste SG existe tambien como SE, con el
+  mismo valor, y el archivo carga y se sirve completo.
+- La version de la aplicacion se ve en "Acerca de", en el titulo de la ventana y
+  al comienzo de cada registro de sesion. Antes "Acerca de" decia "Version 2.0 -
+  Hybrid Edition" en todas las versiones.
+- "Acerca de" y el registro de arranque decian que GOOSE y Sampled Values usan
+  libiec61850. No es asi: GOOSE usa pcap4j y Npcap, y Sampled Values no esta en la
+  aplicacion de escritorio. Los textos ahora lo dicen correctamente.
+
 v4.13.6
 -----
 - Modo servidor, carga de un SCD de subestacion: la lista de IEDs aparece en un
