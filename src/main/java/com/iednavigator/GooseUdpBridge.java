@@ -220,7 +220,7 @@ public class GooseUdpBridge {
     /**
      * Create a GOOSE-UDP packet from publisher state
      */
-    private byte[] createGooseUdpPacket(GoosePublisher publisher) {
+    byte[] createGooseUdpPacket(GoosePublisher publisher) {
         // Simple format: header + GOOSE-like data
         // Header: "GOUD" (4) + version (1) + appId (2) + stNum (4) + sqNum (4) + dataLen (2) + reserved (2) = 19 bytes
         // Data: gocbRef + values
@@ -229,8 +229,11 @@ public class GooseUdpBridge {
         data.append(publisher.getGocbRef()).append("|");
         data.append(publisher.getGoId()).append("|");
         data.append(publisher.getDatSet()).append("|");
-        // Add state value (simplified)
-        data.append("stVal=").append(publisher.getStNum() % 4); // Simulated DbPos value
+        // El valor que fijó el botón Cambio (el primer dato del publicador; en el GOOSE de
+        // demostración, Pos.stVal como Dbpos). Hasta 2026-10-23 se mandaba stNum % 4: un número
+        // que dependía de cuántos cambios hubo y no del estado elegido, así que en el receptor
+        // no se veía si había pasado de ON a OFF.
+        data.append("stVal=").append(valorDelEstado(publisher));
 
         byte[] dataBytes = data.toString().getBytes();
         byte[] packet = new byte[20 + dataBytes.length];
@@ -306,7 +309,14 @@ public class GooseUdpBridge {
     /**
      * Process received UDP packet
      */
-    private void processPacket(DatagramPacket packet) {
+    /** El primer dato del publicador como texto ("2" para un Dbpos ON, "true" para un booleano). */
+    static String valorDelEstado(GoosePublisher publisher) {
+        java.util.List<GoosePublisher.DataValue> vals = publisher.getDataValues();
+        if (vals == null || vals.isEmpty() || vals.get(0).value == null) return "";
+        return String.valueOf(vals.get(0).value);
+    }
+
+    void processPacket(DatagramPacket packet) {
         byte[] data = packet.getData();
         int length = packet.getLength();
 
