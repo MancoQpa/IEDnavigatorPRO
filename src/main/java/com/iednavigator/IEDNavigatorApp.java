@@ -1879,6 +1879,10 @@ public class IEDNavigatorApp extends JFrame {
     private void autoSelectGooseInterface(String ip) {
         if (goosePanel != null) goosePanel.autoSelectGooseInterface(ip);
     }
+
+    private void autoSelectGooseInterfaceServidor(String ip) {
+        if (goosePanel != null) goosePanel.autoSelectGooseInterface(ip, true);
+    }
     private void refreshGooseControlBlocks() {
         if (goosePanel != null) goosePanel.refreshGooseControlBlocksPublic();
     }
@@ -3376,6 +3380,7 @@ public class IEDNavigatorApp extends JFrame {
             public void displayClientModel() { IEDNavigatorApp.this.displayClientModel(); }
             public void refreshGooseControlBlocks() { IEDNavigatorApp.this.refreshGooseControlBlocks(); }
             public void autoSelectGooseInterface(String localIp) { IEDNavigatorApp.this.autoSelectGooseInterface(localIp); }
+            public void autoSelectGooseInterfaceServidor(String localIp) { IEDNavigatorApp.this.autoSelectGooseInterfaceServidor(localIp); }
             public void parseGoCBsFromScl(File f) { IEDNavigatorApp.this.parseGoCBsFromScl(f); }
             public void parseGoCBsFromScl(File f, int iedIndex) { IEDNavigatorApp.this.parseGoCBsFromScl(f, iedIndex); }
             public int showIEDSelectionDialog(List<String> iedNames, String fileName) {

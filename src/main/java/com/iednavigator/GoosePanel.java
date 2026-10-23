@@ -606,6 +606,16 @@ class GoosePanel {
     // ─── Network interface loading ─────────────────────────────────────────────
 
     void autoSelectGooseInterface(String localIp) {
+        autoSelectGooseInterface(localIp, false);
+    }
+
+    /**
+     * Elige la placa del combo para GOOSE (ver PlacaGoose). En modo servidor
+     * ({@code preferirCableada}) gana una placa cableada aunque la IP de la cabecera sea la de
+     * la Wi-Fi: el 2026-10-23 una notebook publicaba por la Wi-Fi y el otro extremo, en la
+     * Ethernet del banco, no recibía nada.
+     */
+    void autoSelectGooseInterface(String localIp, boolean preferirCableada) {
         if (localIp == null || localIp.isEmpty() || gooseInterfaceCombo == null) {
             ctx.log(I18n.t("log.goose.autoselect.invalidparams", localIp));
             return;
@@ -614,35 +624,29 @@ class GoosePanel {
         ctx.log(I18n.t("log.goose.autoselect.header"));
         ctx.log(I18n.t("log.goose.autoselect.searchingip", localIp));
         ctx.log(I18n.t("log.goose.autoselect.available", gooseInterfaceCombo.getItemCount()));
+        List<String> items = new ArrayList<>();
         for (int i = 0; i < gooseInterfaceCombo.getItemCount(); i++) {
             String item = gooseInterfaceCombo.getItemAt(i);
-            boolean matches = item != null && item.contains(localIp);
-            ctx.log(I18n.t("log.goose.autoselect.itemrow", i, item, (matches ? " <-- MATCH" : "")));
+            items.add(item);
+            boolean matches = PlacaGoose.tieneIp(item, localIp);
+            ctx.log(I18n.t("log.goose.autoselect.itemrow", String.valueOf(i), item, (matches ? " <-- MATCH" : "")));
         }
 
-        for (int i = 0; i < gooseInterfaceCombo.getItemCount(); i++) {
-            String item = gooseInterfaceCombo.getItemAt(i);
-            if (item != null && item.contains(localIp)) {
-                gooseInterfaceCombo.setSelectedIndex(i);
+        int elegida = PlacaGoose.elegir(items, localIp, preferirCableada);
+        if (elegida >= 0) {
+            String item = items.get(elegida);
+            gooseInterfaceCombo.setSelectedIndex(elegida);
+            if (PlacaGoose.tieneIp(item, localIp)) {
                 logGoose(I18n.t("log.goose.autoselected", item));
-                ctx.log(I18n.t("log.goose.selected", item));
-                return;
+            } else if (preferirCableada && PlacaGoose.esCableadaConRed(item)) {
+                // La IP de la cabecera es de otra placa (típicamente la Wi-Fi): se dice por qué
+                logGoose(I18n.t("log.goose.autoselected.wired", item));
+                ctx.log(I18n.t("log.goose.autoselected.wired", item));
+            } else {
+                logGoose(I18n.t("log.goose.autoselected.subnet", item));
             }
-        }
-
-        String[] parts = localIp.split("\\.");
-        if (parts.length >= 3) {
-            String subnet = parts[0] + "." + parts[1] + "." + parts[2] + ".";
-            ctx.log(I18n.t("log.goose.searchingsubnet", subnet));
-            for (int i = 0; i < gooseInterfaceCombo.getItemCount(); i++) {
-                String item = gooseInterfaceCombo.getItemAt(i);
-                if (item != null && item.contains(subnet)) {
-                    gooseInterfaceCombo.setSelectedIndex(i);
-                    logGoose(I18n.t("log.goose.autoselected.subnet", item));
-                    ctx.log(I18n.t("log.goose.selectedbysubnet", subnet));
-                    return;
-                }
-            }
+            ctx.log(I18n.t("log.goose.selected", item));
+            return;
         }
 
         ctx.log(I18n.t("log.goose.noifacefound", localIp));
