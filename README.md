@@ -70,13 +70,18 @@ declarada, homologación ni respaldo de ningún fabricante.
 | NARI PCS-9611S | Exploración de modelo (por construcción manual: rechaza el `retrieveModel` estándar), **maniobras SBO con seguridad reforzada** de apertura y cierre, y **Cancel conforme a §20.8** confirmado en el registro de control del propio relé. Rechazo con el selector en **mando local** verificado en ambas posiciones: el equipo rechaza sin poblar `Loc` / `LocKey` / `LocSta`. Lectura completa del modelo y exportación de CID con los valores del equipo |
 | ZIV 2IRX | Exploración de modelo y **mando directo** (`ctlModel` = 3) |
 | ABB REC670 | Exploración de modelo, bloques de control de reporte y verificación previa de condiciones |
-| Ingeteam Ingepac EF-ZTO | Exploración de modelo |
+| Ingeteam Ingepac EF-ZTO | Exploración de modelo. El equipo corta la asociación tras **90 s sin pedidos** (`ABORT`): es un temporizador de inactividad configurable del propio equipo (`AplicTms`), no una falla. La lectura de mantenimiento de la herramienta sostiene la conexión |
 | Efacec TPU S420 | Exploración de modelo |
 
 *Exploración de modelo* significa que la herramienta recuperó y navegó el modelo de datos del
 equipo; no implica que se haya operado nada sobre él. El ABB REC670 y el Ingeteam están
 retirados de servicio y se usan como banco de pruebas: sirven para verificar funcionamiento,
 no para afirmaciones de rendimiento. El 6MD85 se exploró sobre mesa, alimentado solo con tensión auxiliar: sin realimentación de posición ni magnitudes de medida.
+
+**Fuera de la tabla**, porque no hay una sesión registrada de la herramienta contra el equipo real:
+
+- **Schneider ION 7400**: el primer equipo del proyecto (julio de 2025), con el script que precedió a IEDNavigator PRO: lectura por MMS de mediciones con referencias fijas.
+- **Siemens SIPROTEC 5 7SL87**: modelo de datos, DataSets, reportes y GOOSE verificados con un SCD de proyecto con dos 7SL87, simulado con la herramienta (servidor MMS y publicación GOOSE).
 
 ### Requisitos
 - **Windows 10 u 11 de 64 bits.**
