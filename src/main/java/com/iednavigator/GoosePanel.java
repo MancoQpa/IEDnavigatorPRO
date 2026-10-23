@@ -1504,6 +1504,27 @@ class GoosePanel {
         return true;
     }
 
+    /**
+     * Texto de un dato en la columna "Datos". Un Dbpos (posición de doble bit) sale con su
+     * nombre: "ON (2)", "OFF (1)", "INTERMEDIATE (0)", "BAD (3)", que es lo que fija el botón
+     * Cambio. Aplica a lo que publica esta PC y a lo que llega por UDP, donde el tipo viaja
+     * explícito; en Capa 2 la trama trae un bit-string y no se sabe si es un Dbpos.
+     */
+    static String textoDato(String tipo, Object valor) {
+        if (tipo != null && tipo.equalsIgnoreCase("dbpos")) {
+            Integer v = null;
+            if (valor instanceof Number) v = ((Number) valor).intValue();
+            else if (valor != null) {
+                try { v = Integer.parseInt(valor.toString().trim()); } catch (NumberFormatException ignore) { }
+            }
+            if (v != null && v >= 0 && v <= 3) {
+                String[] nombres = {"INTERMEDIATE", "OFF", "ON", "BAD"};
+                return nombres[v] + " (" + v + ")";
+            }
+        }
+        return String.valueOf(valor);
+    }
+
     private void handleGooseMessage(GooseSubscriber.GooseMessage msg) {
         String key = msg.appId + "|" + (msg.gocbRef != null ? msg.gocbRef : "");
         if (!shouldShowGoose(key, msg.stNum)) return;
@@ -1512,7 +1533,7 @@ class GoosePanel {
             StringBuilder dataStr = new StringBuilder();
             for (GooseSubscriber.DataEntry entry : msg.dataEntries) {
                 if (dataStr.length() > 0) dataStr.append(", ");
-                dataStr.append(entry.value);
+                dataStr.append(textoDato(entry.type, entry.value));
             }
 
             if (gooseDataTableModel.getRowCount() > 1000) {
