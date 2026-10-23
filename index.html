@@ -239,6 +239,21 @@
   footer a{text-decoration:none; color:var(--text-mid);}
   footer a:hover{color:var(--teal);}
 
+  /* Video: miniatura local; el reproductor de YouTube se carga recién al hacer clic */
+  .video-main{margin-bottom:28px;}
+  .video-main .shot-caption{flex-wrap:wrap;}
+  .video-main .shot-caption a{white-space:nowrap;}
+  .video-frame{position:relative; aspect-ratio:16/9; background:#000;}
+  .video-frame img, .video-frame iframe{position:absolute; inset:0; width:100%; height:100%; border:0; display:block;}
+  .video-frame img{object-fit:cover;}
+  .video-play{position:absolute; inset:0; width:100%; height:100%; border:0; padding:0; cursor:pointer; background:transparent;}
+  .video-play::after{
+    content:""; position:absolute; left:50%; top:50%; width:76px; height:76px; margin:-38px 0 0 -38px;
+    border-radius:50%; background:rgba(10,18,32,.78) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FF8A3D' d='M8 5v14l11-7z'/%3E%3C/svg%3E") 56% 50%/38px no-repeat;
+    border:2px solid var(--amber); transition:transform .15s ease;
+  }
+  .video-play:hover::after, .video-play:focus-visible::after{transform:scale(1.08);}
+
   [data-i18n]{}
   html[data-lang="es"] [lang="en"]{display:none;}
   html[data-lang="en"] [lang="es"]{display:none;}
@@ -357,7 +372,22 @@
     <div class="section-head">
       <div class="section-tag">00 <span lang="es">— EN PANTALLA</span><span lang="en">— ON SCREEN</span></div>
       <h2><span lang="es">Aprendé el modelo de datos viéndolo en acción</span><span lang="en">Learn the data model by seeing it in action</span></h2>
-      <p><span lang="es">Capturas reales de la aplicación: así se practican la navegación del árbol IEC 61850, el control de maniobra y la lectura de valores en vivo.</span><span lang="en">Real screenshots of the application: this is what practicing IEC 61850 tree navigation, switching control, and live value reads looks like.</span></p>
+      <p><span lang="es">Un video y capturas reales de la aplicación: así se practican la navegación del árbol IEC 61850, el control de maniobra y la lectura de valores en vivo.</span><span lang="en">A video and real screenshots of the application: this is what practicing IEC 61850 tree navigation, switching control, and live value reads looks like.</span></p>
+    </div>
+
+    <div class="shot-main video-main">
+      <div class="shot-titlebar">
+        <span class="dot2" style="background:#FF8A3D"></span><span class="dot2" style="background:#4FD1C5"></span><span class="dot2"></span>
+        <span class="name">IEDNavigatorPRO — <span lang="es">video: maniobra SBOw sobre un relé real</span><span lang="en">video: SBOw switching on a real relay</span></span>
+      </div>
+      <div class="video-frame" id="videoNari" data-video="9x2_lUoNdX8">
+        <img src="video-sbow-nari.jpg" alt="Operación SBOw de un relé NARI desde IEDNavigator PRO" loading="lazy">
+        <button class="video-play" type="button" aria-label="Reproducir el video / Play video"></button>
+      </div>
+      <div class="shot-caption">
+        <span><span lang="es">Operación de un relé NARI con SBOw (seleccionar y ejecutar) desde IEDNavigator PRO, en banco de pruebas.</span><span lang="en">Operating a NARI relay with SBOw (select-before-operate) from IEDNavigator PRO, on a test bench.</span></span>
+        <a href="https://youtu.be/9x2_lUoNdX8" target="_blank" rel="noopener" style="color:var(--teal); text-decoration:none;"><span lang="es">Ver en YouTube</span><span lang="en">Watch on YouTube</span> &#8599;</a>
+      </div>
     </div>
 
     <div class="shot-main" id="shotCarousel">
@@ -656,6 +686,23 @@
     updateCounters();
     requestAnimationFrame(tick);
   })();
+
+// Video: al hacer clic se reemplaza la miniatura por el reproductor (youtube-nocookie,
+// sin videos relacionados). Hasta ese clic la página no contacta a YouTube.
+(function(){
+  var box = document.getElementById('videoNari');
+  if (!box) return;
+  box.querySelector('.video-play').addEventListener('click', function(){
+    var f = document.createElement('iframe');
+    f.src = 'https://www.youtube-nocookie.com/embed/' + box.getAttribute('data-video') + '?autoplay=1&rel=0&modestbranding=1';
+    f.title = 'IEDNavigator PRO — SBOw';
+    f.allow = 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen';
+    f.allowFullscreen = true;
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    box.innerHTML = '';
+    box.appendChild(f);
+  });
+})();
 </script>
 </body>
 </html>
