@@ -244,7 +244,7 @@ class GoosePanel {
         btnGooseStartStop.setForeground(Color.WHITE);
         btnGooseStartStop.setFocusPainted(false);
         btnGooseStartStop.setFont(btnGooseStartStop.getFont().deriveFont(Font.BOLD));
-        btnGooseStartStop.setPreferredSize(new Dimension(160, 28));
+        btnGooseStartStop.setPreferredSize(new Dimension(190, 28));
         btnGooseStartStop.addActionListener(e -> toggleGooseCapture());
         row1.add(btnGooseStartStop);
 
@@ -306,7 +306,7 @@ class GoosePanel {
         cbGooseState.setPreferredSize(new Dimension(110, 24));
         row2.add(cbGooseState);
 
-        btnGooseStateChange = new JButton("⚡ Cambio");
+        btnGooseStateChange = new JButton(I18n.t("goose.change.btn"));
         btnGooseStateChange.setToolTipText(I18n.t("goose.change.tip"));
         btnGooseStateChange.setBackground(new Color(230, 81, 0));
         btnGooseStateChange.setForeground(Color.WHITE);
@@ -316,6 +316,9 @@ class GoosePanel {
         row2.add(btnGooseStateChange);
 
         topPanel.add(row2, BorderLayout.SOUTH);
+
+        gooseInterfaceCombo.addActionListener(e -> actualizarTextosSegunModo());
+        actualizarTextosSegunModo();
 
         panel.add(topPanel, BorderLayout.NORTH);
 
@@ -603,6 +606,47 @@ class GoosePanel {
         return panel;
     }
 
+    // ─── Textos de los botones según el modo ───────────────────────────────────
+    //
+    // Con "GOOSE sobre UDP" los botones dicen "GOOSE/UDP" (pedido del usuario, 2026-10-23):
+    // ese modo no publica ni captura GOOSE de Capa 2, y con los nombres genéricos no se
+    // notaba en qué modo se estaba. Los demás modos conservan los nombres de siempre.
+    // Antes, además, los textos de reposo cambiaban al detener ("▶ Capturar", "Iniciar
+    // Publicacion"): ahora son siempre los mismos.
+
+    private boolean modoUdp() {
+        Object sel = gooseInterfaceCombo != null ? gooseInterfaceCombo.getSelectedItem() : null;
+        return sel != null && sel.equals(I18n.t("goose.iface.udp"));
+    }
+
+    private String textoCapturar() {
+        return I18n.t(modoUdp() ? "goose.capture.udp" : "goose.capture");
+    }
+
+    private String textoPublicar() {
+        return I18n.t(modoUdp() ? "goose.publish.udp" : "goose.publishbtn");
+    }
+
+    private String textoCambio() {
+        return I18n.t(modoUdp() ? "goose.change.udp" : "goose.change.btn");
+    }
+
+    /** Solo toca los botones que están en reposo: los que dicen "Detener" no se cambian. */
+    private void actualizarTextosSegunModo() {
+        if (btnGooseStartStop == null || btnGoosePublish == null || btnGooseStateChange == null) return;
+        String cap = btnGooseStartStop.getText();
+        if (cap.equals(I18n.t("goose.capture")) || cap.equals(I18n.t("goose.capture.udp"))
+                || cap.equals(I18n.t("goose.capture2"))) {
+            btnGooseStartStop.setText(textoCapturar());
+        }
+        String pub = btnGoosePublish.getText();
+        if (pub.equals(I18n.t("goose.publishbtn")) || pub.equals(I18n.t("goose.publish.udp"))
+                || pub.equals(I18n.t("goose.startpub"))) {
+            btnGoosePublish.setText(textoPublicar());
+        }
+        btnGooseStateChange.setText(textoCambio());
+    }
+
     // ─── Network interface loading ─────────────────────────────────────────────
 
     void autoSelectGooseInterface(String localIp) {
@@ -732,7 +776,7 @@ class GoosePanel {
             if (udpRunning) gooseUdpBridge.stopReceiving();
             internalLoopbackEnabled = false;
             udpBridgeEnabled = false;
-            btnGooseStartStop.setText(I18n.t("goose.capture2"));
+            btnGooseStartStop.setText(textoCapturar());
             btnGooseStartStop.setBackground(new Color(46, 125, 50));
             lblGooseStatus.setText(I18n.t("status.stopped"));
             lblGooseStatus.setForeground(Color.GRAY);
@@ -1209,8 +1253,8 @@ class GoosePanel {
         }
 
         if (count > 0) {
-            btnGoosePublish.setText(I18n.t("goose.startpub"));
-            btnGoosePublish.setBackground(new Color(0, 100, 180));
+            btnGoosePublish.setText(textoPublicar());
+            btnGoosePublish.setBackground(new Color(21, 101, 192));
             btnGooseStateChange.setEnabled(false);
             btnPublicarTodos.setText(I18n.t("goose.publishall"));
             btnPublicarTodos.setBackground(new Color(0, 130, 60));
