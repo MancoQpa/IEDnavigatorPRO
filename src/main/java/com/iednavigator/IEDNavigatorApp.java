@@ -635,10 +635,6 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private void showAboutDialog() {
-        String nativeStatus = nativeLibAvailable ?
-            "<span style='color: green;'>✓ " + I18n.t("about.native.ok") + "</span>" :
-            "<span style='color: red;'>✗ " + I18n.t("about.native.missing") + "</span>";
-
         String message =
             "<html><body style='width: 380px; padding: 10px;'>" +
             "<h2 style='color: #2E86AB; margin-bottom: 5px;'>IED Navigator</h2>" +
@@ -655,7 +651,6 @@ public class IEDNavigatorApp extends JFrame {
             "<li>GOOSE Subscriber/Publisher</li>" +
             "<li>" + I18n.t("about.feat.scl") + "</li>" +
             "</ul>" +
-            "<p style='font-size: 10px;'>" + nativeStatus + "</p>" +
             "<hr style='margin: 10px 0;'>" +
             "<p><b>" + I18n.t("about.devby") + "</b></p>" +
             "<p style='color: #2E86AB; font-size: 13px;'><b>Emilio Medina</b></p>" +
@@ -665,8 +660,10 @@ public class IEDNavigatorApp extends JFrame {
             "<p style='color: #B71C1C; font-size: 10px;'>" +
             "<b>" + I18n.t("about.edu.title") + "</b> " + I18n.t("about.edu.body") + "</p>" +
             "<p style='color: #888; font-size: 10px;'>" +
-            I18n.t("about.libs") + " iec61850bean (MMS), libiec61850 (GOOSE/SV), pcap4j, JNA<br>" +
-            "&copy; 2024 - " + I18n.t("about.rights") + "</p>" +
+            // GOOSE es código propio sobre pcap4j/Npcap y Sampled Values no está en la app de
+            // escritorio: libiec61850 solo la usa el bridge REST (ver CLAUDE.md, "Who does what").
+            I18n.t("about.libs") + " iec61850bean (MMS), pcap4j + Npcap (GOOSE), JNA<br>" +
+            "&copy; 2024-" + java.time.Year.now().getValue() + " - " + I18n.t("about.rights") + "</p>" +
             "</body></html>";
 
         JOptionPane.showMessageDialog(this, message, I18n.t("about.title"),
