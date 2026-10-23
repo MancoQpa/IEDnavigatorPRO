@@ -61,6 +61,8 @@ class ConnectionManager {
         void displayClientModel();
         void refreshGooseControlBlocks();
         void autoSelectGooseInterface(String localIp);
+        /** Modo servidor: como autoSelectGooseInterface, pero prefiere una placa cableada. */
+        void autoSelectGooseInterfaceServidor(String localIp);
 
         // SCL parsing (delegates to IEDNavigatorApp.parseGoCBsFromScl)
         void parseGoCBsFromScl(File f);
@@ -888,8 +890,9 @@ class ConnectionManager {
                             // carga el arbol del modelo de datos".
                             ctx.displayServerModel();
 
-                            // Auto-seleccionar interfaz de red para GOOSE (igual que en modo cliente)
-                            ctx.autoSelectGooseInterface(localIp);
+                            // Auto-seleccionar interfaz de red para GOOSE. A diferencia del modo
+                            // cliente no hay un IED que indique la placa: se prefiere la cableada.
+                            ctx.autoSelectGooseInterfaceServidor(localIp);
                         } else {
                             ctx.updateStatus(false, I18n.t("status.simerror"));
                             ctx.updateConnectionInfo("", 0);
