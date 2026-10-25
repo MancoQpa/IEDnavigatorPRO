@@ -201,7 +201,10 @@ public class ModelReportGenerator {
                             + " mostrar el valor inicial del modelo, que no es un dato del equipo.</p>");
                     }
                 }
-                pw.println("<table><tr><th>Referencia</th><th>FC</th><th>Tipo</th><th>Valor</th></tr>");
+                pw.println("<p class='meta'><b>Tipo</b>: el que llega por MMS (iec61850bean). <b>Tipo IEC 61850</b>:"
+                    + " el que asigna la norma; MMS no distingue un ENUMERATED de un entero ni un Check de una posición"
+                    + " Dbpos. Los enumerados estándar se muestran con su nombre.</p>");
+                pw.println("<table><tr><th>Referencia</th><th>FC</th><th>Tipo</th><th>Tipo IEC 61850</th><th>Valor</th></tr>");
                 for (ModelNode ld : lds) {
                     for (ModelNode ln : ld.getChildren()) {
                         writeLeafValues(pw, ln, leidos);
@@ -242,6 +245,26 @@ public class ModelReportGenerator {
         if (node.getChildren() != null) for (ModelNode c : node.getChildren()) contarLeidos(c, leidos, cuenta);
     }
 
+    /** "on (1)" en lugar de "1" para un enumerado estándar; el texto tal cual si no lo es. */
+    static String conNombreDeEnumerado(BasicDataAttribute bda, String texto) {
+        if (texto == null) return null;
+        // Un Check son dos bits independientes (IEC 61850-7-2): synchrocheck e interlock-check.
+        // Si iec61850bean lo creó como Dbpos (fuera de CO), su texto sería OFF/ON, que no dice nada.
+        if (bda instanceof BdaBitString && "Check".equals(CatalogoIec61850.tipoNorma(bda))) {
+            byte[] v = ((BdaBitString) bda).getValue();
+            if (v != null && v.length > 0) {
+                return "synchrocheck=" + ((v[0] >> 7) & 1) + ", interlock-check=" + ((v[0] >> 6) & 1);
+            }
+        }
+        try {
+            long v = Long.parseLong(texto.trim());
+            String n = CatalogoIec61850.nombreEnumerado(bda.getReference().toString(), bda.getFc(), v);
+            return n != null ? n : texto;
+        } catch (NumberFormatException e) {
+            return texto;
+        }
+    }
+
     private static String celda(String v) {
         return NO_LEIDO.equals(v) ? "<span class='nl'>" + NO_LEIDO + "</span>" : esc(v);
     }
@@ -256,9 +279,11 @@ public class ModelReportGenerator {
                 val = NO_LEIDO;
             } else {
                 try { val = ValorBda.texto(bda); } catch (Exception e) { val = ""; }
+                val = conNombreDeEnumerado(bda, val);
             }
             pw.println("<tr><td class='mono'>" + esc(bda.getReference().toString())
                 + "</td><td>" + esc(fc) + "</td><td>" + esc(type)
+                + "</td><td>" + esc(CatalogoIec61850.tipoNorma(bda))
                 + "</td><td class='mono'>" + celda(val) + "</td></tr>");
             return;
         }

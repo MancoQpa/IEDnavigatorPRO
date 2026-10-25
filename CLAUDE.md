@@ -121,6 +121,17 @@ INT16, INT16U and INT64, and the raw bytes (`"[11, 0, 0, ...]"`) for FLOAT64. Us
 `ValorBda.texto(bda)`, which reads each type with its own getter. Before it existed, those
 values were blank in the tree and the monitor, and were dropped from exported CIDs.
 
+### Types according to the standard: `CatalogoIec61850`
+
+MMS carries encoding types, not IEC 61850 types: an ENUMERATED arrives as an 8-bit integer,
+and Check and Dbpos are both a 2-bit bit-string (iec61850bean makes every 2-bit bit-string
+outside FC CO a `BdaDoubleBitPos`, so an Ed2 tracking `Check` in FC SR becomes Dbpos). Do not
+"fix" the object: `BdaCheck` hard-codes FC CO and the attribute would stop being readable.
+`CatalogoIec61850` gives the standard type (`tipoNorma`) and the names of the standard
+enumerations (`nombreEnumerado`, `valorPermitido`); the HTML report uses it. A 0 in
+`Beh`/`Mod`/`Health`/`SIUnit` coming from an SCL file means "not configured", not a violation;
+it only matters when it was read from the device.
+
 ### Texts and i18n
 
 All user-facing text goes through `I18n.t(key, args...)`, with the key present in the four
