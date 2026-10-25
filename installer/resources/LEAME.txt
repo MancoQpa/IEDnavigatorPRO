@@ -2,6 +2,24 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.9
+-----
+- Reporte HTML del modelo, conformidad con IEC 61850:
+  - Columna "Conformidad" en cada atributo y, arriba de la tabla, un resumen con la
+    cantidad de atributos en cada nivel y los motivos agrupados, con un ejemplo de
+    cada uno. Se marca como fuera de norma un FC o un tipo que no corresponde al
+    atributo, un enumerado leido del equipo con un valor que no existe (por ejemplo,
+    una unidad SI en 0 o un Health en 0) y una calidad con validez reservada. Son
+    avisos una calidad buena con bits de falla marcados, una hora 1970 o un reloj
+    sin sincronizar. Un enumerado en 0 que viene de un archivo SCL se indica como
+    "sin configurar", no como error.
+  - Columna "Tipo IEC 61850" junto al tipo que llega por MMS: MMS no distingue un
+    enumerado de un entero ni un Check de una posicion. Los enumerados estandar se
+    muestran con su nombre, por ejemplo "on (1)" o "sbo-with-enhanced-security (4)",
+    y un Check como sus dos bits (synchrocheck, interlock-check).
+  - Las reglas se verificaron contra 163 archivos SCL de distintos fabricantes (mas
+    de seis millones de atributos) sin marcar ningun falso error de FC o tipo.
+
 v4.13.8
 -----
 - Reporte HTML del modelo: la seccion de valores ya no muestra los valores iniciales
