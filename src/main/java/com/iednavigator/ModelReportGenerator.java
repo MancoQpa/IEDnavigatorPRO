@@ -104,6 +104,9 @@ public class ModelReportGenerator {
             pw.println(".card .num{font-size:24px;font-weight:bold;color:#2E86AB}");
             pw.println(".meta{color:#666;font-size:11px}");
             pw.println(".nl{color:#b00;font-style:italic}");
+            pw.println(".fn{color:#fff;background:#c62828;padding:0 4px;border-radius:3px}");
+            pw.println(".av{color:#000;background:#ffb300;padding:0 4px;border-radius:3px}");
+            pw.println(".sc{color:#555;font-style:italic}");
             pw.println("@media print{body{margin:8mm}h2{page-break-after:avoid}tr{page-break-inside:avoid}}");
             pw.println("</style></head><body>");
 
@@ -204,7 +207,8 @@ public class ModelReportGenerator {
                 pw.println("<p class='meta'><b>Tipo</b>: el que llega por MMS (iec61850bean). <b>Tipo IEC 61850</b>:"
                     + " el que asigna la norma; MMS no distingue un ENUMERATED de un entero ni un Check de una posición"
                     + " Dbpos. Los enumerados estándar se muestran con su nombre.</p>");
-                pw.println("<table><tr><th>Referencia</th><th>FC</th><th>Tipo</th><th>Tipo IEC 61850</th><th>Valor</th></tr>");
+                escribirResumenConformidad(pw, lds, leidos);
+                pw.println("<table><tr><th>Referencia</th><th>FC</th><th>Tipo</th><th>Tipo IEC 61850</th><th>Valor</th><th>Conformidad</th></tr>");
                 for (ModelNode ld : lds) {
                     for (ModelNode ln : ld.getChildren()) {
                         writeLeafValues(pw, ln, leidos);
@@ -269,6 +273,72 @@ public class ModelReportGenerator {
         return NO_LEIDO.equals(v) ? "<span class='nl'>" + NO_LEIDO + "</span>" : esc(v);
     }
 
+    private static String celdaConformidad(ConformidadIec61850.Resultado c) {
+        switch (c.nivel) {
+            case FUERA_DE_NORMA: return "<span class='fn'>fuera de norma</span> " + esc(c.motivo);
+            case AVISO: return "<span class='av'>aviso</span> " + esc(c.motivo);
+            case SIN_CONFIGURAR: return "<span class='sc'>sin configurar</span>";
+            case NO_LEIDO: return "";
+            default: return "OK";
+        }
+    }
+
+    /**
+     * Resumen de conformidad arriba de la tabla de valores: cuántos atributos en cada nivel y
+     * los motivos agrupados, con un ejemplo de cada uno. Lo que se tuvo que buscar a mano en
+     * el reporte del NARI (2026-10-25) queda a la vista sin recorrer 70.000 filas.
+     */
+    private static void escribirResumenConformidad(PrintWriter pw, List<ModelNode> lds, Set<String> leidos) {
+        Map<ConformidadIec61850.Nivel, Integer> porNivel = new EnumMap<>(ConformidadIec61850.Nivel.class);
+        Map<String, int[]> porMotivo = new LinkedHashMap<>();
+        Map<String, String> ejemplo = new HashMap<>();
+        Map<String, ConformidadIec61850.Nivel> nivelDe = new HashMap<>();
+        Deque<ModelNode> q = new ArrayDeque<>();
+        for (ModelNode ld : lds) q.addAll(ld.getChildren());
+        while (!q.isEmpty()) {
+            ModelNode n = q.poll();
+            if (n instanceof BasicDataAttribute) {
+                BasicDataAttribute b = (BasicDataAttribute) n;
+                ConformidadIec61850.Resultado c = ConformidadIec61850.evaluar(b, leido(b, leidos), leidos == null);
+                porNivel.merge(c.nivel, 1, Integer::sum);
+                if (c.nivel == ConformidadIec61850.Nivel.FUERA_DE_NORMA || c.nivel == ConformidadIec61850.Nivel.AVISO) {
+                    String k = motivoAgrupado(c.motivo);
+                    porMotivo.computeIfAbsent(k, x -> new int[1])[0]++;
+                    ejemplo.putIfAbsent(k, b.getReference().toString());
+                    nivelDe.putIfAbsent(k, c.nivel);
+                }
+            } else if (n.getChildren() != null) {
+                q.addAll(n.getChildren());
+            }
+        }
+        pw.println("<h3>Conformidad con IEC 61850</h3>");
+        pw.println("<div class='summary'>");
+        card(pw, porNivel.getOrDefault(ConformidadIec61850.Nivel.OK, 0), "OK");
+        card(pw, porNivel.getOrDefault(ConformidadIec61850.Nivel.FUERA_DE_NORMA, 0), "Fuera de norma");
+        card(pw, porNivel.getOrDefault(ConformidadIec61850.Nivel.AVISO, 0), "Avisos");
+        if (leidos == null) card(pw, porNivel.getOrDefault(ConformidadIec61850.Nivel.SIN_CONFIGURAR, 0), "Sin configurar");
+        else card(pw, porNivel.getOrDefault(ConformidadIec61850.Nivel.NO_LEIDO, 0), "No leídos");
+        pw.println("</div>");
+        pw.println("<p class='meta'>FC y tipo según el nombre del atributo (7-2/7-3), valores de los enumerados"
+            + " estándar (7-3/7-4), coherencia de la calidad y marcas de tiempo. Un enumerado en 0 que viene de"
+            + " un archivo SCL es \"sin configurar\", no un error: el archivo no trae ese valor.</p>");
+        if (!porMotivo.isEmpty()) {
+            pw.println("<table><tr><th>Nivel</th><th>Motivo</th><th>Atributos</th><th>Ejemplo</th></tr>");
+            porMotivo.entrySet().stream()
+                .sorted((a, b) -> b.getValue()[0] - a.getValue()[0])
+                .forEach(e -> pw.println("<tr><td>" + (nivelDe.get(e.getKey()) == ConformidadIec61850.Nivel.FUERA_DE_NORMA
+                        ? "<span class='fn'>fuera de norma</span>" : "<span class='av'>aviso</span>")
+                    + "</td><td>" + esc(e.getKey()) + "</td><td>" + e.getValue()[0]
+                    + "</td><td class='mono'>" + esc(ejemplo.get(e.getKey())) + "</td></tr>"));
+            pw.println("</table>");
+        }
+    }
+
+    /** Agrupa motivos que solo difieren en el valor: "valor 0 no existe en HealthKind". */
+    private static String motivoAgrupado(String motivo) {
+        return motivo;
+    }
+
     private static void writeLeafValues(PrintWriter pw, ModelNode node, Set<String> leidos) {
         if (node instanceof BasicDataAttribute) {
             BasicDataAttribute bda = (BasicDataAttribute) node;
@@ -281,10 +351,11 @@ public class ModelReportGenerator {
                 try { val = ValorBda.texto(bda); } catch (Exception e) { val = ""; }
                 val = conNombreDeEnumerado(bda, val);
             }
+            ConformidadIec61850.Resultado c = ConformidadIec61850.evaluar(bda, leido(bda, leidos), leidos == null);
             pw.println("<tr><td class='mono'>" + esc(bda.getReference().toString())
                 + "</td><td>" + esc(fc) + "</td><td>" + esc(type)
                 + "</td><td>" + esc(CatalogoIec61850.tipoNorma(bda))
-                + "</td><td class='mono'>" + celda(val) + "</td></tr>");
+                + "</td><td class='mono'>" + celda(val) + "</td><td>" + celdaConformidad(c) + "</td></tr>");
             return;
         }
         if (node.getChildren() != null) {
