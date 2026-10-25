@@ -132,6 +132,11 @@ enumerations (`nombreEnumerado`, `valorPermitido`); the HTML report uses it. A 0
 `Beh`/`Mod`/`Health`/`SIUnit` coming from an SCL file means "not configured", not a violation;
 it only matters when it was read from the device.
 
+`ConformidadIec61850` builds on it for the report's conformity column and summary: FC/type by
+attribute name (checked against 6.2 million attributes of 163 vendor SCL files with no false
+positives), standard enum values (not in FC CO, which are command parameters; substitution
+values in FC SV are a warning), Quality validity, and 1970 / unsynchronized timestamps.
+
 ### Texts and i18n
 
 All user-facing text goes through `I18n.t(key, args...)`, with the key present in the four
