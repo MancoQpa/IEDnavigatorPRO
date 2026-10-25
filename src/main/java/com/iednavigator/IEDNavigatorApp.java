@@ -612,9 +612,32 @@ public class IEDNavigatorApp extends JFrame {
         final ServerModel fModel = model;
         final String fSource = sourceDesc;
         final java.io.File fOut = out;
+        // En modo cliente, los valores se leen del equipo antes de escribir el reporte (la
+        // misma lectura que la exportación del CID, con avance y Cancelar). Sin esto el
+        // reporte mostraba los valores iniciales del modelo como si fueran del equipo.
+        final boolean leerAntes = includeValues && currentMode == AppMode.CLIENT && client != null;
+        final ConnectionManager.ProgresoExportacion progreso =
+            leerAntes ? new ConnectionManager.ProgresoExportacion(this) : null;
+        if (progreso != null) {
+            progreso.setTitle(I18n.t("report.prog.title"));
+            progreso.setVisible(true);
+        }
         backgroundExecutor.submit(() -> {
             try {
-                ModelReportGenerator.generate(fOut, fModel, fSource, loadedIedNameplate, includeValues);
+                java.util.Set<String> leidos = null;
+                if (leerAntes) {
+                    IEC61850Client.LecturaValores lv = client.leerTodosLosValores(
+                        (hechos, total) -> progreso.avance(I18n.t("report.prog.reading"), hechos, total),
+                        progreso::cancelada);
+                    if (lv.cancelada) {
+                        log(I18n.t("log.report.cancelled"));
+                        return;
+                    }
+                    log(I18n.t("log.report.read", String.valueOf(lv.leidos.size()),
+                        String.valueOf(lv.pedidos), String.valueOf(lv.fallidos)));
+                    leidos = lv.leidos;
+                }
+                ModelReportGenerator.generate(fOut, fModel, fSource, loadedIedNameplate, includeValues, leidos);
                 log(I18n.t("log.app.reportgen", fOut.getAbsolutePath()));
                 SwingUtilities.invokeLater(() -> {
                     try {
@@ -630,6 +653,8 @@ public class IEDNavigatorApp extends JFrame {
                 SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this,
                     I18n.t("report.error") + "\n" + ex.getMessage(), I18n.t("report.title"),
                     JOptionPane.ERROR_MESSAGE));
+            } finally {
+                if (progreso != null) progreso.cerrar();
             }
         });
     }

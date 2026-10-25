@@ -27,6 +27,23 @@ public class ModelReportGenerator {
      */
     public static void generate(File outFile, ServerModel model, String sourceDesc,
                          String[] nameplate, boolean includeValues) throws Exception {
+        generate(outFile, model, sourceDesc, nameplate, includeValues, null);
+    }
+
+    /**
+     * @param leidos objetos que se leyeron del equipo, como "LD/LN.DO$FC" (lo que devuelve
+     *               IEC61850Client.leerTodosLosValores). Los atributos de un objeto que no
+     *               está ahí salen como "no leído". null = no marcar: modo servidor, donde
+     *               los valores son los del archivo SCL.
+     *
+     * Hasta 2026-10-25 el reporte escribía el modelo local sin saber qué se había leído. Con
+     * un equipo cuyo modelo se arma a mano (el NARI) casi nada se leía, y la sección "Valores
+     * actuales" mostraba los valores iniciales como si fueran del equipo: ctlModel 0 en un
+     * aparato que se maniobra por SBOw, ajustes en 0.0, Beh/Mod/Health en 0 (fuera del
+     * enumerado), calidades GOOD y horas de 1970.
+     */
+    public static void generate(File outFile, ServerModel model, String sourceDesc,
+                         String[] nameplate, boolean includeValues, Set<String> leidos) throws Exception {
 
         // ─── Recolección de datos ───
         int lnCount = 0, doCount = 0, leafCount = 0;
@@ -55,12 +72,13 @@ public class ModelReportGenerator {
                 for (Rcb rcb : all) {
                     String ref = ld.getName() + "/" + ln.getName() + "." + rcb.getName();
                     if (!seenRcbs.add(ref)) continue;
+                    boolean rcbLeido = leidos == null || leidos.contains(ref + "$" + rcb.getFc());
                     rcbs.add(new String[]{
                         ref,
                         rcb instanceof Brcb ? "BRCB" : "URCB",
-                        rcb.getDatSet() != null ? rcb.getDatSet().getStringValue() : "",
-                        trgOpsString(rcb.getTrgOps()),
-                        rcb.getIntgPd() != null ? String.valueOf(rcb.getIntgPd().getValue()) : ""
+                        rcbLeido ? (rcb.getDatSet() != null ? rcb.getDatSet().getStringValue() : "") : NO_LEIDO,
+                        rcbLeido ? trgOpsString(rcb.getTrgOps()) : NO_LEIDO,
+                        rcbLeido ? (rcb.getIntgPd() != null ? String.valueOf(rcb.getIntgPd().getValue()) : "") : NO_LEIDO
                     });
                 }
             }
@@ -85,6 +103,7 @@ public class ModelReportGenerator {
             pw.println(".card{border:1px solid #ccc;border-radius:6px;padding:8px 16px;text-align:center}");
             pw.println(".card .num{font-size:24px;font-weight:bold;color:#2E86AB}");
             pw.println(".meta{color:#666;font-size:11px}");
+            pw.println(".nl{color:#b00;font-style:italic}");
             pw.println("@media print{body{margin:8mm}h2{page-break-after:avoid}tr{page-break-inside:avoid}}");
             pw.println("</style></head><body>");
 
@@ -160,19 +179,32 @@ public class ModelReportGenerator {
                     + "<th>TrgOps</th><th>IntgPd</th></tr>");
                 for (String[] r : rcbs) {
                     pw.println("<tr><td class='mono'>" + esc(r[0]) + "</td><td>" + r[1]
-                        + "</td><td class='mono'>" + esc(r[2]) + "</td><td>" + esc(r[3])
-                        + "</td><td>" + esc(r[4]) + "</td></tr>");
+                        + "</td><td class='mono'>" + celda(r[2]) + "</td><td>" + celda(r[3])
+                        + "</td><td>" + celda(r[4]) + "</td></tr>");
                 }
                 pw.println("</table>");
             }
 
             // Valores actuales (opcional)
             if (includeValues) {
-                pw.println("<h2>Valores actuales (" + countLeaves(model) + " atributos)</h2>");
+                int total = countLeaves(model);
+                if (leidos == null) {
+                    pw.println("<h2>Valores del modelo (" + total + " atributos)</h2>");
+                    pw.println("<p class='meta'>Valores del modelo cargado (en modo servidor, los del archivo SCL).</p>");
+                } else {
+                    int[] cuenta = new int[2];   // {leídos, no leídos}
+                    for (ModelNode ld : lds) for (ModelNode ln : ld.getChildren()) contarLeidos(ln, leidos, cuenta);
+                    pw.println("<h2>Valores leídos del equipo (" + cuenta[0] + " de " + total + " atributos)</h2>");
+                    if (cuenta[1] > 0) {
+                        pw.println("<p class='meta'><span class='nl'>" + NO_LEIDO + "</span>: " + cuenta[1]
+                            + " atributos de objetos que el equipo no respondió. Se dejan sin valor en lugar de"
+                            + " mostrar el valor inicial del modelo, que no es un dato del equipo.</p>");
+                    }
+                }
                 pw.println("<table><tr><th>Referencia</th><th>FC</th><th>Tipo</th><th>Valor</th></tr>");
                 for (ModelNode ld : lds) {
                     for (ModelNode ln : ld.getChildren()) {
-                        writeLeafValues(pw, ln);
+                        writeLeafValues(pw, ln, leidos);
                     }
                 }
                 pw.println("</table>");
@@ -183,20 +215,55 @@ public class ModelReportGenerator {
         }
     }
 
-    private static void writeLeafValues(PrintWriter pw, ModelNode node) {
+    static final String NO_LEIDO = "no leído";
+
+    /**
+     * Clave del objeto (Data Object o RCB) al que pertenece un atributo, como la arma
+     * leerTodosLosValores: "LD/LN.DO$FC". La referencia del atributo es "LD/LN.DO.sub.da".
+     */
+    static String claveDelObjeto(String referencia, Fc fc) {
+        int barra = referencia.indexOf('/');
+        int p1 = referencia.indexOf('.', barra < 0 ? 0 : barra);
+        if (p1 < 0) return referencia + "$" + fc;
+        int p2 = referencia.indexOf('.', p1 + 1);
+        String obj = p2 < 0 ? referencia : referencia.substring(0, p2);
+        return obj + "$" + fc;
+    }
+
+    static boolean leido(BasicDataAttribute bda, Set<String> leidos) {
+        return leidos == null || leidos.contains(claveDelObjeto(bda.getReference().toString(), bda.getFc()));
+    }
+
+    private static void contarLeidos(ModelNode node, Set<String> leidos, int[] cuenta) {
+        if (node instanceof BasicDataAttribute) {
+            cuenta[leido((BasicDataAttribute) node, leidos) ? 0 : 1]++;
+            return;
+        }
+        if (node.getChildren() != null) for (ModelNode c : node.getChildren()) contarLeidos(c, leidos, cuenta);
+    }
+
+    private static String celda(String v) {
+        return NO_LEIDO.equals(v) ? "<span class='nl'>" + NO_LEIDO + "</span>" : esc(v);
+    }
+
+    private static void writeLeafValues(PrintWriter pw, ModelNode node, Set<String> leidos) {
         if (node instanceof BasicDataAttribute) {
             BasicDataAttribute bda = (BasicDataAttribute) node;
             String fc = bda.getFc() != null ? bda.getFc().toString() : "";
             String type = bda.getBasicType() != null ? bda.getBasicType().toString() : "";
             String val;
-            try { val = ValorBda.texto(bda); } catch (Exception e) { val = ""; }
+            if (!leido(bda, leidos)) {
+                val = NO_LEIDO;
+            } else {
+                try { val = ValorBda.texto(bda); } catch (Exception e) { val = ""; }
+            }
             pw.println("<tr><td class='mono'>" + esc(bda.getReference().toString())
                 + "</td><td>" + esc(fc) + "</td><td>" + esc(type)
-                + "</td><td class='mono'>" + esc(val) + "</td></tr>");
+                + "</td><td class='mono'>" + celda(val) + "</td></tr>");
             return;
         }
         if (node.getChildren() != null) {
-            for (ModelNode child : node.getChildren()) writeLeafValues(pw, child);
+            for (ModelNode child : node.getChildren()) writeLeafValues(pw, child, leidos);
         }
     }
 
