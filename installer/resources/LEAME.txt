@@ -2,6 +2,31 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.8
+-----
+- Reporte HTML del modelo: la seccion de valores ya no muestra los valores iniciales
+  del modelo como si fueran del equipo. En modo cliente, los valores se leen del IED
+  antes de escribir el reporte (con avance y Cancelar; al cancelar no se genera el
+  archivo), y lo que el equipo no responde sale como "no leido". Antes, con un equipo
+  cuyo modelo se arma a mano, casi nada se leia y el reporte mostraba, por ejemplo,
+  ctlModel 0 en un aparato que se maniobra por SBO, ajustes en 0.0 y Beh/Mod/Health
+  en 0, que ni siquiera es un valor permitido por la norma.
+- GOOSE en modo servidor: la interfaz se elige sola entre las placas cableadas. Antes
+  se elegia la placa que tuviera la IP de la cabecera, y con la Ethernet en una red
+  100.100.x y la Wi-Fi en 192.168.x quedaba la Wi-Fi: el otro extremo, en la Ethernet,
+  no recibia nada. El registro dice por que se eligio cada placa, y se puede cambiar
+  a mano en Interface:.
+- GOOSE sobre UDP:
+  - El estado que fija el boton Cambio viaja en el mensaje y la columna Datos lo
+    muestra con su nombre: ON (2), OFF (1), INTERMEDIATE (0), BAD (3). Antes se
+    enviaba un numero que no tenia relacion con el estado elegido. Hace falta esta
+    version en las dos puntas.
+  - Con ese modo elegido, los botones dicen "Capturar GOOSE/UDP", "Publicar
+    GOOSE/UDP" y "Cambio GOOSE/UDP". Los nombres ya no cambian al detener.
+  - Si el puerto 62746 esta ocupado (por ejemplo, por otra instancia), el aviso lo
+    dice asi, en lugar de hablar de Npcap.
+  - El registro escribia el puerto como 62,746. Ahora sale sin separador.
+
 v4.13.7
 -----
 - Modo servidor: un CID o SCD con un DataSet que referencia ajustes del grupo en
