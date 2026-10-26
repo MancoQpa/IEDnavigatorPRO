@@ -2680,8 +2680,8 @@ public class IEDNavigatorApp extends JFrame {
                                                java.util.List<IEC61850Client.PreflightCheck> checks,
                                                IEC61850Client.ControlResult cr) {
         // Con AddCause 2 (blocked-by-switching-hierarchy) la causa sí es legible: el mando está
-        // en otro nivel. Desde que llega el LastApplError (2026-10-26) el NARI la informa en
-        // local, pero sigue sin poblar Loc/LocKey/LocSta: se dice eso, no "sin causa".
+        // en otro nivel. Hay equipos que la informan por LastApplError sin poblar
+        // Loc/LocKey/LocSta: se dice eso, no "sin causa".
         final boolean jerarquia = cr != null && cr.addCause == 2;
         StringBuilder html = new StringBuilder("<html><body style='width:430px'>");
         html.append("<b>").append(escapeHtml(ref)).append("</b><br><br>");
@@ -2859,7 +2859,7 @@ public class IEDNavigatorApp extends JFrame {
         if (cr.success && !testFlag && !termNeg) {
             log(I18n.t("log.app.feedbackchecking", ref));
             // Hasta 10 s desde el OPERATE, con o sin terminación: una positiva no dice que el
-            // aparato llegó (el NARI la manda a los 0,1 s) y un seccionador tarda segundos.
+            // aparato llegó (hay equipos que la mandan al instante) y un seccionador tarda segundos.
             int espera = (int) Math.max(1000, 10000 - (System.currentTimeMillis() - t0));
             fb = client.verifyControlFeedback(operNode, ctlVal, espera);
         }
@@ -2913,8 +2913,8 @@ public class IEDNavigatorApp extends JFrame {
                 }
 
                 // La terminación va antes que la posición: es lo primero que informa el IED. Una
-                // positiva no garantiza la posición: el NARI la manda a los 0,2 s aunque el
-                // seccionador no esté cableado y stVal siga en intermediate (2026-10-26).
+                // positiva no garantiza la posición: hay equipos que la mandan apenas dan la
+                // orden de salida, aunque el aparato no se mueva.
                 if (esperaTerm && !termNeg) {
                     String linea;
                     if (termf != null) {
