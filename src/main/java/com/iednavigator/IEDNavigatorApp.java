@@ -2679,10 +2679,14 @@ public class IEDNavigatorApp extends JFrame {
     private void mostrarRechazoSinCausaLegible(String ref,
                                                java.util.List<IEC61850Client.PreflightCheck> checks,
                                                IEC61850Client.ControlResult cr) {
+        // Con AddCause 2 (blocked-by-switching-hierarchy) la causa sí es legible: el mando está
+        // en otro nivel. Desde que llega el LastApplError (2026-10-26) el NARI la informa en
+        // local, pero sigue sin poblar Loc/LocKey/LocSta: se dice eso, no "sin causa".
+        final boolean jerarquia = cr != null && cr.addCause == 2;
         StringBuilder html = new StringBuilder("<html><body style='width:430px'>");
         html.append("<b>").append(escapeHtml(ref)).append("</b><br><br>");
-        html.append(escapeHtml(I18n.t("ctl.rej.nocause"))).append("<br><br>");
-        html.append(escapeHtml(I18n.t("ctl.rej.localhint"))).append("<br>");
+        html.append(escapeHtml(I18n.t(jerarquia ? "ctl.rej.local.msg" : "ctl.rej.nocause"))).append("<br><br>");
+        html.append(escapeHtml(I18n.t(jerarquia ? "ctl.rej.local.loc" : "ctl.rej.localhint"))).append("<br>");
 
         // Los atributos de autoridad, tal como los devolvio el equipo.
         if (checks != null) {
@@ -2700,9 +2704,10 @@ public class IEDNavigatorApp extends JFrame {
         appendApplError(html, cr);
         html.append("</body></html>");
 
+        String titulo = I18n.t(jerarquia ? "ctl.rej.local.title" : "ctl.rej.title");
         JOptionPane.showMessageDialog(this, panelDesplazable(html.toString()),
-            I18n.t("ctl.rej.title"), JOptionPane.WARNING_MESSAGE);
-        log(I18n.t("ctl.rej.title") + " — " + ref + ": " + I18n.t("ctl.rej.nocause"));
+            titulo, JOptionPane.WARNING_MESSAGE);
+        log(titulo + " — " + ref + ": " + I18n.t(jerarquia ? "ctl.rej.local.msg" : "ctl.rej.nocause"));
     }
 
     /**
