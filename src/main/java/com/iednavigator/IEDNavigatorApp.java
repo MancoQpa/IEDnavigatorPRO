@@ -2906,14 +2906,21 @@ public class IEDNavigatorApp extends JFrame {
                     dlgType = JOptionPane.INFORMATION_MESSAGE;
                 }
 
+                // La terminación va antes que la posición: es lo primero que informa el IED. Una
+                // positiva no garantiza la posición: el NARI la manda a los 0,2 s aunque el
+                // seccionador no esté cableado y stVal siga en intermediate (2026-10-26).
                 if (esperaTerm && !termNeg) {
+                    String linea;
                     if (termf != null) {
-                        fbInfo += "\n" + I18n.t("ctl.term.pos", termSecs);
+                        linea = I18n.t("ctl.term.pos", termSecs);
+                        if (fbf != null && fbf.verifiable && !fbf.confirmed)
+                            linea += "\n" + I18n.t("ctl.term.pos.nopos");
                         fbLog += " " + I18n.t("log.app.term.pos", termSecs);
                     } else {
-                        fbInfo += "\n" + I18n.t("ctl.term.none", "10");
+                        linea = I18n.t("ctl.term.none", "10");
                         fbLog += " " + I18n.t("log.app.term.none", "10");
                     }
+                    fbInfo = "\n\n" + linea + "\n\n" + fbInfo.replaceFirst("^\\n\\n", "");
                 }
 
                 String msg = I18n.t("ctl.msg.accepted") + "\n"
