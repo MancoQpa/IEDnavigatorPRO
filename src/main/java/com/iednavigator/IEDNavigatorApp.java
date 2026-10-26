@@ -2858,8 +2858,9 @@ public class IEDNavigatorApp extends JFrame {
         IEC61850Client.FeedbackResult fb = null;
         if (cr.success && !testFlag && !termNeg) {
             log(I18n.t("log.app.feedbackchecking", ref));
-            int espera = term != null ? 3000
-                : (int) Math.max(1000, 10000 - (System.currentTimeMillis() - t0));
+            // Hasta 10 s desde el OPERATE, con o sin terminación: una positiva no dice que el
+            // aparato llegó (el NARI la manda a los 0,1 s) y un seccionador tarda segundos.
+            int espera = (int) Math.max(1000, 10000 - (System.currentTimeMillis() - t0));
             fb = client.verifyControlFeedback(operNode, ctlVal, espera);
         }
         final IEC61850Client.FeedbackResult fbf = fb;
