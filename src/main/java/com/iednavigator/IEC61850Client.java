@@ -42,6 +42,12 @@ public class IEC61850Client implements ClientEventListener {
     // Contador de ctlNum — se incrementa en cada operación de control (IEC 61850-7-3 §20.2)
     private int ctlNumCounter = 0;
 
+    // LastApplError y CommandTermination que manda el IED durante un control (los entrega el
+    // ClientAssociation sombreado; la librería original los descartaba). ultimoEnvioMs marca el
+    // comienzo del último servicio de control, para no tomar mensajes de uno anterior.
+    private final TerminacionComando.Buzon buzonControl = new TerminacionComando.Buzon();
+    private volatile long ultimoEnvioMs = 0;
+
     // Selección SBO pendiente (flujo manual de dos pasos: SELECT → EXECUTE desde el diálogo).
     // Guarda el ctlNum reservado y el valor comandado para que el OPERATE coincida con el SBOw.
     private PendingSelect pendingSelect;
@@ -787,6 +793,31 @@ public class IEC61850Client implements ClientEventListener {
     private ClientAssociation mms() {
         marcarTrafico();
         return association;
+    }
+
+    /**
+     * Comienzo de un servicio de control (SBOw, Oper, Cancel): registra el buzón en la
+     * asociación vigente —que puede haber cambiado desde el último control, por una
+     * reconexión— y marca la hora desde la que valen los mensajes del IED.
+     */
+    private void comenzarControl() {
+        ClientAssociation a = association;
+        if (a != null) a.setInformationReportListener(buzonControl::recibir);
+        ultimoEnvioMs = System.currentTimeMillis();
+    }
+
+    /**
+     * Espera el CommandTermination del último Oper enviado a {@code operNode} (ctlModel 3 y 4).
+     * Devuelve null si el IED no lo mandó en {@code timeoutMs}.
+     */
+    public TerminacionComando.Mensaje esperarTerminacion(FcModelNode operNode, long timeoutMs) {
+        try {
+            return buzonControl.esperarTerminacion(operNode.getReference().toString(),
+                ultimoEnvioMs, timeoutMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
     }
 
     /** getDataValues marcando el tráfico al salir y al volver: una lectura lenta también cuenta. */
@@ -2298,6 +2329,16 @@ public class IEC61850Client implements ClientEventListener {
         SERVICE_ERROR_MAP.put(23, "unknown");
     }
 
+    /** Nombre estándar de un AddCause (IEC 61850-7-3 Tabla 9), o null si no se conoce. */
+    public static String addCauseNombre(int addCause) {
+        return addCause >= 0 ? ADD_CAUSE_MAP.get(addCause) : null;
+    }
+
+    /** Explicación traducida de un AddCause, o null si no hay texto para ese código. */
+    public static String addCauseDiagnostico(int addCause) {
+        return ControlResult.lookup("ctl.addcause.", addCause);
+    }
+
     /** Contenido del nodo LastApplError: texto crudo + AddCause numérico (-1 si no se pudo leer). */
     static class ApplError {
         final String raw;
@@ -2521,6 +2562,11 @@ public class IEC61850Client implements ClientEventListener {
      * (IEC 61850-7-3 Tabla 9), que es lo que permite dar un diagnóstico concreto del rechazo.
      */
     private ApplError readApplError(FcModelNode operNode) {
+        // Primero el LastApplError que el IED mandó con el rechazo (IEC 61850-8-1): es el que
+        // trae el AddCause de esta orden. La lectura del nodo queda para los equipos que lo
+        // exponen como dato del modelo.
+        TerminacionComando.Mensaje m = buzonControl.rechazoDesde(ultimoEnvioMs);
+        if (m != null) return new ApplError(m.lastApplErrorTexto(), m.addCause);
         if (serverModel == null || association == null) return null;
         try {
             String operRef = operNode.getReference().toString(); // "LD/LN.DO.Oper"
@@ -3229,6 +3275,7 @@ public class IEC61850Client implements ClientEventListener {
      */
     public ControlResult cancelControl(FcModelNode operNode, String orIdent) throws IOException {
         if (!isConnected()) throw new IOException("Not connected");
+        comenzarControl();
 
         int ctlModel = getCtlModelValue(operNode);
         String ctlModelName = CTL_MODEL_MAP.getOrDefault(ctlModel, "unknown(" + ctlModel + ")");
@@ -3303,6 +3350,7 @@ public class IEC61850Client implements ClientEventListener {
                                          boolean testFlag, String orIdent,
                                          boolean synchroCheck, boolean interlockCheck) throws IOException {
         if (!isConnected()) throw new IOException("Not connected");
+        comenzarControl();
 
         int ctlModel = getCtlModelValue(operNode);
         String ctlModelName = CTL_MODEL_MAP.getOrDefault(ctlModel, "unknown(" + ctlModel + ")");
@@ -3493,6 +3541,7 @@ public class IEC61850Client implements ClientEventListener {
                                         String orIdent, boolean synchroCheck, boolean interlockCheck,
                                         int sboTimeoutMs) throws IOException {
         if (!isConnected()) throw new IOException("Not connected");
+        comenzarControl();
         int ctlModel = getCtlModelValue(operNode);
         String ctlModelName = CTL_MODEL_MAP.getOrDefault(ctlModel, "unknown(" + ctlModel + ")");
 
@@ -3555,6 +3604,7 @@ public class IEC61850Client implements ClientEventListener {
      */
     public ControlResult executeControl(FcModelNode operNode) throws IOException {
         if (!isConnected()) throw new IOException("Not connected");
+        comenzarControl();
         int ctlModel = getCtlModelValue(operNode);
         String ctlModelName = CTL_MODEL_MAP.getOrDefault(ctlModel, "unknown(" + ctlModel + ")");
 

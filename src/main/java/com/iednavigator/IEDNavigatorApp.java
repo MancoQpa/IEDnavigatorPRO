@@ -2835,10 +2835,27 @@ public class IEDNavigatorApp extends JFrame {
     private void reportControlResult(FcModelNode operNode, String ref, String ctlVal,
                                      boolean testFlag, boolean synchroCheck, boolean interlockCheck,
                                      boolean isSbo, IEC61850Client.ControlResult cr) {
+        // Seguridad reforzada (ctlModel 3 y 4): el IED informa cómo terminó la maniobra con el
+        // CommandTermination. Se espera primero; si es negativo no tiene sentido esperar stVal,
+        // y si no llega (equipos que no lo mandan) queda la lectura de stVal como antes.
+        TerminacionComando.Mensaje term = null;
+        final boolean esperaTerm = cr.success && (cr.ctlModel == 3 || cr.ctlModel == 4);
+        long t0 = System.currentTimeMillis();
+        if (esperaTerm) {
+            log(I18n.t("log.app.term.waiting", ref));
+            term = client.esperarTerminacion(operNode, 10000);
+        }
+        final TerminacionComando.Mensaje termf = term;
+        final boolean termNeg = term != null && !term.esPositiva();
+        final String termSecs = String.format("%.1f",
+            (term != null ? term.recibidoMs - t0 : System.currentTimeMillis() - t0) / 1000.0);
+
         IEC61850Client.FeedbackResult fb = null;
-        if (cr.success && !testFlag) {
+        if (cr.success && !testFlag && !termNeg) {
             log(I18n.t("log.app.feedbackchecking", ref));
-            fb = client.verifyControlFeedback(operNode, ctlVal, 10000);
+            int espera = term != null ? 3000
+                : (int) Math.max(1000, 10000 - (System.currentTimeMillis() - t0));
+            fb = client.verifyControlFeedback(operNode, ctlVal, espera);
         }
         final IEC61850Client.FeedbackResult fbf = fb;
 
@@ -2854,7 +2871,17 @@ public class IEDNavigatorApp extends JFrame {
                 // aceptó sin que el equipo se moviera: son resultados distintos y "[CONTROL OK]"
                 // dejaba esa diferencia al final de la línea.
                 String logKey = "log.app.controlok";
-                if (testFlag) {
+                if (termNeg) {
+                    String nombre = IEC61850Client.addCauseNombre(termf.addCause);
+                    String diag = IEC61850Client.addCauseDiagnostico(termf.addCause);
+                    String causa = termf.addCause + (nombre != null ? " (" + nombre + ")" : "");
+                    fbInfo = "\n\n" + I18n.t("ctl.term.neg", termSecs, causa)
+                        + (diag != null ? "\n" + diag : "");
+                    fbLog = " " + I18n.t("log.app.term.neg", causa, termSecs);
+                    dlgTitle = I18n.t("ctl.res.term.neg");
+                    dlgType = JOptionPane.ERROR_MESSAGE;
+                    logKey = "log.app.controltermneg";
+                } else if (testFlag) {
                     fbInfo = "\n\n" + I18n.t("ctl.fb.test");
                     fbLog = " " + I18n.t("log.app.fb.test");
                     dlgTitle = I18n.t("ctl.res.accepted.test");
@@ -2877,6 +2904,16 @@ public class IEDNavigatorApp extends JFrame {
                     fbLog = " " + I18n.t("log.app.fb.noverif");
                     dlgTitle = I18n.t("ctl.res.accepted");
                     dlgType = JOptionPane.INFORMATION_MESSAGE;
+                }
+
+                if (esperaTerm && !termNeg) {
+                    if (termf != null) {
+                        fbInfo += "\n" + I18n.t("ctl.term.pos", termSecs);
+                        fbLog += " " + I18n.t("log.app.term.pos", termSecs);
+                    } else {
+                        fbInfo += "\n" + I18n.t("ctl.term.none", "10");
+                        fbLog += " " + I18n.t("log.app.term.none", "10");
+                    }
                 }
 
                 String msg = I18n.t("ctl.msg.accepted") + "\n"
