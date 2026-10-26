@@ -23,7 +23,7 @@ import java.util.List;
  * respuesta negativa del Write.
  *
  * Hasta 2026-10-26 iec61850bean descartaba los tres (ClientAssociation sombreado). La app
- * deducía el resultado leyendo stVal; un IED que "acepta y después falla" (el NARI) quedaba
+ * deducía el resultado leyendo stVal; un IED que "acepta y después falla" quedaba
  * como "sin confirmación" y sin motivo.
  */
 public final class TerminacionComando {
