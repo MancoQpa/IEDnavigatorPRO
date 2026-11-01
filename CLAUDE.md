@@ -177,8 +177,8 @@ foreign source MAC (pass its IP and its permanent MAC while Windows uses a rando
 Some IEDs abort the MMS association after a period with no requests (measured: 90 s).
 `IEC61850Client` sends a minimal read after 60 s of silence. Every request to the IED
 must go through `mms()`, `leer()` or `escribir()` in that class: they record the time of
-the last traffic, and the keep-alive only fires in silence because `ClientAssociation`
-does not support concurrent requests.
+the last traffic, and the keep-alive only fires in silence. Concurrent requests from
+different threads are safe since the shadow `ClientAssociation` serializes them.
 
 ### Periodic tasks: `scheduleWithFixedDelay`, never `scheduleAtFixedRate`
 
@@ -215,6 +215,10 @@ because `classes` comes first in the classpath). Each file says why and what cha
   `InformationReportListener`; `IEC61850Client` registers `TerminacionComando.Buzon` when a
   control starts, and the control dialog waits for the termination before reading `stVal`
   (`test/TestTerminacionComando`).
+  Second change: `encodeWriteReadDecode()` is `synchronized`. The original allowed one
+  request in flight but did not enforce it (shared output buffer, response queue and expected
+  invoke id), so the polling thread, the control dialog and the keep-alive could cross
+  responses and break the association (`test/TestPedidosConcurrentes`).
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.
