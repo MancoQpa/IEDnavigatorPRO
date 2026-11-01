@@ -208,7 +208,7 @@ because `classes` comes first in the classpath). Each file says why and what cha
     setting, IEC 61850-7-2). Without it, a DataSet with an `fc="SE"` FCDA rejected the
     whole file; the NARI's `dsSetting1` is one (`TestSgComoSe`).
 - `ClientAssociation.java`: original v1.9.0 source, verified against the jar compiled with
-  `--release 8` (only the `ldc`/`ldc_w` offsets differ), one change: the receiver no longer
+  `--release 8` (only the `ldc`/`ldc_w` offsets differ), two changes. First: the receiver no longer
   discards the information reports that carry a list of variables. They are `LastApplError`
   (why a control was rejected, with its AddCause) and `CommandTermination` (how an operation
   with enhanced security, ctlModel 3 and 4, ended). They go to an
