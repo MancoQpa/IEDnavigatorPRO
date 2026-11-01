@@ -16,8 +16,8 @@
  * com.beanit.iec61850bean.ClientAssociation de iec61850bean-1.9.0 (igual que Fc.java). Es el
  * fuente original de la etiqueta v1.9.0 (iec61850bean-1.9.0-sources.jar de Maven Central)
  * —verificado: compilado con --release 8, coincide instrucción por instrucción con el .class
- * del jar en las cinco clases; solo difieren los offsets por ldc/ldc_w— con un único cambio,
- * en ClientReceiver.run().
+ * del jar en las cinco clases; solo difieren los offsets por ldc/ldc_w— con dos cambios:
+ * ClientReceiver.run() y encodeWriteReadDecode() (ver abajo).
  *
  * El defecto: el receptor descartaba todo InformationReport cuya especificación de acceso es
  * una lista de variables ("Discarding LastApplError Report"). Por esa vía viajan, según
@@ -30,6 +30,10 @@
  * listener se siguen descartando, como antes. El listener se llama en el hilo receptor, antes de
  * procesar la PDU siguiente: así un LastApplError queda registrado antes de que llegue la
  * respuesta negativa del Write que lo provocó. No debe bloquear.
+ *
+ * Segundo cambio (2026-10-31): encodeWriteReadDecode() es synchronized. La original admitía un
+ * solo pedido en vuelo pero no lo garantizaba; con varios hilos de la app pidiendo a la vez las
+ * respuestas se cruzaban y la asociación se rompía.
  */
 package com.beanit.iec61850bean;
 
@@ -414,7 +418,12 @@ public final class ClientAssociation {
     return invokeId;
   }
 
-  private ConfirmedServiceResponse encodeWriteReadDecode(ConfirmedServiceRequest serviceRequest)
+  // IEDNavigator PRO (2026-10-31): synchronized. La versión original no serializaba los pedidos:
+  // todos comparten reverseOStream, la cola incomingResponses y un único expectedResponseId, así
+  // que dos hilos pidiendo a la vez (polling, diálogo de mando, latido) se pisaban el buffer o se
+  // llevaban la respuesta del otro. En campo dio TYPE_CONFLICT al leer un ctlModel, ServiceError
+  // en un setBlocking y un TIMEOUT que cerró la asociación (test/TestPedidosConcurrentes).
+  private synchronized ConfirmedServiceResponse encodeWriteReadDecode(ConfirmedServiceRequest serviceRequest)
       throws ServiceError, IOException {
 
     int currentInvokeId = getInvokeId();
