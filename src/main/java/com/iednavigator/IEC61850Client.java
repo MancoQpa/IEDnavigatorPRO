@@ -806,6 +806,79 @@ public class IEC61850Client implements ClientEventListener {
         ultimoEnvioMs = System.currentTimeMillis();
     }
 
+    /** Lo que se sabe de una maniobra aceptada: su terminación y la posición leída. */
+    public static final class ResultadoMando {
+        /** CommandTermination recibido, o null (no se esperaba o no llegó). */
+        public final TerminacionComando.Mensaje terminacion;
+        /** Verificación de stVal, o null (no se pidió o se descartó por terminación negativa). */
+        public final FeedbackResult posicion;
+        ResultadoMando(TerminacionComando.Mensaje t, FeedbackResult p) { terminacion = t; posicion = p; }
+    }
+
+    /**
+     * Espera el resultado de una maniobra aceptada: la terminación del comando (si
+     * {@code esperaTerm}, ctlModel 3 y 4) y la posición (si {@code verificarPos}), las dos A LA VEZ.
+     *
+     * Hasta 2026-11-03 se esperaba primero la terminación (10 s) y recién después se leía stVal.
+     * Contra un IED que no manda terminación cada maniobra tardaba 10 s en mostrar el resultado,
+     * aunque la posición había cambiado al instante. Ahora la posición se sondea en paralelo y:
+     *   - terminación negativa: se corta la lectura de posición (la maniobra falló);
+     *   - terminación positiva: se espera la posición hasta {@code timeoutMs} desde el OPERATE;
+     *   - posición confirmada sin terminación: se espera la terminación {@code graciaMs} más y se
+     *     informa lo que haya (un IED que la manda suele hacerlo junto con el cambio de stVal, o
+     *     antes).
+     */
+    public ResultadoMando esperarResultadoMando(FcModelNode operNode, String ctlVal, boolean esperaTerm,
+                                                boolean verificarPos, int timeoutMs, int graciaMs) {
+        long t0 = System.currentTimeMillis();
+        java.util.concurrent.FutureTask<FeedbackResult> pos = null;
+        if (verificarPos) {
+            pos = new java.util.concurrent.FutureTask<>(() -> verifyControlFeedback(operNode, ctlVal, timeoutMs));
+            Thread h = new Thread(pos, "verificacion-posicion");
+            h.setDaemon(true);
+            h.start();
+        }
+        TerminacionComando.Mensaje term = null;
+        if (esperaTerm) {
+            while (true) {
+                long falta = t0 + timeoutMs - System.currentTimeMillis();
+                if (falta <= 0) break;
+                term = esperarTerminacion(operNode, Math.min(100, falta));
+                if (term != null) break;
+                if (pos != null && pos.isDone()) {
+                    FeedbackResult fb = obtener(pos, 0);
+                    if (fb != null && fb.confirmed) term = esperarTerminacion(operNode, graciaMs);
+                    break;
+                }
+            }
+        }
+        FeedbackResult fb = null;
+        if (pos != null) {
+            if (term != null && !term.esPositiva()) {
+                pos.cancel(true);
+            } else if (term != null && !pos.isDone()) {
+                // Terminación positiva: el sondeo de fondo lee cada 500 ms y la posición suele
+                // cambiar junto con la terminación. Se relee en el acto en vez de esperar la
+                // vuelta siguiente (la mitad del tiempo hasta el resultado).
+                pos.cancel(true);
+                long falta = Math.max(500, t0 + timeoutMs - System.currentTimeMillis());
+                fb = verifyControlFeedback(operNode, ctlVal, (int) falta);
+            } else {
+                long falta = Math.max(0, t0 + timeoutMs - System.currentTimeMillis());
+                fb = obtener(pos, falta + 2000);
+            }
+        }
+        return new ResultadoMando(term, fb);
+    }
+
+    private static FeedbackResult obtener(java.util.concurrent.FutureTask<FeedbackResult> f, long ms) {
+        try {
+            return ms <= 0 ? (f.isDone() ? f.get() : null) : f.get(ms, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /**
      * Espera el CommandTermination del último Oper enviado a {@code operNode} (ctlModel 3 y 4).
      * Devuelve null si el IED no lo mandó en {@code timeoutMs}.
