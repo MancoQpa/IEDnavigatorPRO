@@ -2841,29 +2841,22 @@ public class IEDNavigatorApp extends JFrame {
                                      boolean testFlag, boolean synchroCheck, boolean interlockCheck,
                                      boolean isSbo, IEC61850Client.ControlResult cr) {
         // Seguridad reforzada (ctlModel 3 y 4): el IED informa cómo terminó la maniobra con el
-        // CommandTermination. Se espera primero; si es negativo no tiene sentido esperar stVal,
-        // y si no llega (equipos que no lo mandan) queda la lectura de stVal como antes.
-        TerminacionComando.Mensaje term = null;
+        // CommandTermination. Terminación y posición se esperan a la vez (hasta 10 s desde el
+        // OPERATE): negativa corta la espera de stVal; si stVal se confirma y la terminación no
+        // llega en 0,5 s más, se informa sin ella. Antes se esperaba la terminación primero y,
+        // contra un IED que no la manda, cada maniobra tardaba 10 s en dar el resultado.
         final boolean esperaTerm = cr.success && (cr.ctlModel == 3 || cr.ctlModel == 4);
+        final boolean verificarPos = cr.success && !testFlag;
         long t0 = System.currentTimeMillis();
-        if (esperaTerm) {
-            log(I18n.t("log.app.term.waiting", ref));
-            term = client.esperarTerminacion(operNode, 10000);
-        }
-        final TerminacionComando.Mensaje termf = term;
-        final boolean termNeg = term != null && !term.esPositiva();
+        if (esperaTerm) log(I18n.t("log.app.term.waiting", ref));
+        if (verificarPos) log(I18n.t("log.app.feedbackchecking", ref));
+        IEC61850Client.ResultadoMando rm = client.esperarResultadoMando(
+            operNode, ctlVal, esperaTerm, verificarPos, 10000, 500);
+        final TerminacionComando.Mensaje termf = rm.terminacion;
+        final boolean termNeg = termf != null && !termf.esPositiva();
         final String termSecs = String.format("%.1f",
-            (term != null ? term.recibidoMs - t0 : System.currentTimeMillis() - t0) / 1000.0);
-
-        IEC61850Client.FeedbackResult fb = null;
-        if (cr.success && !testFlag && !termNeg) {
-            log(I18n.t("log.app.feedbackchecking", ref));
-            // Hasta 10 s desde el OPERATE, con o sin terminación: una positiva no dice que el
-            // aparato llegó (hay equipos que la mandan al instante) y un seccionador tarda segundos.
-            int espera = (int) Math.max(1000, 10000 - (System.currentTimeMillis() - t0));
-            fb = client.verifyControlFeedback(operNode, ctlVal, espera);
-        }
-        final IEC61850Client.FeedbackResult fbf = fb;
+            (termf != null ? termf.recibidoMs - t0 : System.currentTimeMillis() - t0) / 1000.0);
+        final IEC61850Client.FeedbackResult fbf = rm.posicion;
 
         SwingUtilities.invokeLater(() -> {
             if (cr.success) {
