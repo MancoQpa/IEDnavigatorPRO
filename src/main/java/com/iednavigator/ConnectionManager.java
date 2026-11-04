@@ -810,8 +810,10 @@ class ConnectionManager {
                                     String mfr  = np[0].isEmpty() ? "?" : np[0];
                                     String type = np[1].isEmpty() ? "?" : np[1];
                                     String cfgV = np[3].isEmpty() ? "" : "  cfg:" + np[3];
-                                    String plate = String.format("  IED: %s  |  Fabricante: %s  |  Tipo: %s%s",
-                                        iedName, mfr, type, cfgV);
+                                    String modelo = ctx.getServer().modeloFisico();
+                                    String mod = modelo.isEmpty() ? "" : "  |  Modelo: " + modelo;
+                                    String plate = String.format("  IED: %s  |  Fabricante: %s  |  Tipo: %s%s%s",
+                                        iedName, mfr, type, mod, cfgV);
                                     ctx.setLblIedInfo(plate);
                                     ctx.log(I18n.t("log.cm.nameplate", mfr, type, cfgV.trim()));
                                     // Inyectar nameplate en los nodos FC=DC del modelo servido
@@ -1027,12 +1029,15 @@ class ConnectionManager {
                             // Tipo: campo d (descripción) o swRev como fallback
                             String tipo = plate.getOrDefault("d", "");
                             if (tipo.isEmpty()) tipo = plate.getOrDefault("swRev", "");
+                            // Modelo: el del equipo físico, LPHD.PhyNam.model
+                            String modelo = plate.getOrDefault("phy.model", "");
                             // Config: configRev
                             String cfgV = plate.getOrDefault("configRev", "");
                             // Formato idéntico al modo Servidor para que updateIedDisplay parsee igual
                             StringBuilder sb = new StringBuilder("  IED: ").append(iedName);
                             if (!mfr.isEmpty())  sb.append("  |  Fabricante: ").append(mfr);
                             if (!tipo.isEmpty()) sb.append("  |  Tipo: ").append(tipo);
+                            if (!modelo.isEmpty()) sb.append("  |  Modelo: ").append(modelo);
                             if (!cfgV.isEmpty()) sb.append("  cfg:").append(cfgV);
                             final String finalInfo = sb.toString();
                             SwingUtilities.invokeLater(() -> {
