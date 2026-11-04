@@ -2,6 +2,24 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.10
+-----
+- Mandos con seguridad reforzada (ctlModel 3 y 4): la aplicacion espera la
+  terminacion del comando (CommandTermination) que manda el equipo despues del
+  OPERATE, y la muestra:
+  - positiva: se informa antes que la posicion, aclarando que no garantiza que el
+    aparato se haya movido; la posicion se sigue esperando hasta 10 s;
+  - negativa: se muestra el motivo (AddCause) con su nombre, por ejemplo
+    blocked-by-synchrocheck (11).
+- Rechazos con motivo: se usa el LastApplError que manda el equipo junto con la
+  respuesta negativa. Un AddCause 2 (blocked-by-switching-hierarchy) se explica
+  como mando en otro nivel (local o estacion), con lo que hay que revisar.
+- La terminacion y la posicion se esperan a la vez: el resultado aparece apenas
+  llega lo primero que lo define. Con un equipo que no manda terminacion, la
+  maniobra ya no tarda 10 s en informar el resultado.
+- Los pedidos MMS de distintas partes de la aplicacion salen de a uno: antes
+  podian cruzarse las respuestas y aparecia un TYPE_CONFLICT al operar.
+
 v4.13.9
 -----
 - Reporte HTML del modelo, conformidad con IEC 61850:
