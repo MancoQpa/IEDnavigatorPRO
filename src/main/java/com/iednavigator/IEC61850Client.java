@@ -718,6 +718,14 @@ public class IEC61850Client implements ClientEventListener {
             String fullRef = ldPrefix + ref[0];
             try {
                 ModelNode node = serverModel.findModelNode(fullRef, Fc.DC);
+                // LPHD no siempre está en el primer LD (hay equipos que lo ponen en el LD de
+                // sistema): se busca en los demás antes de darlo por ausente.
+                if (node == null) {
+                    for (ModelNode ld : serverModel.getChildren()) {
+                        ModelNode n = serverModel.findModelNode(ld.getName() + "/" + ref[0], Fc.DC);
+                        if (n != null) { node = n; fullRef = ld.getName() + "/" + ref[0]; break; }
+                    }
+                }
                 if (node instanceof FcModelNode) {
                     leer((FcModelNode) node);
                     String val = formatValue(node);

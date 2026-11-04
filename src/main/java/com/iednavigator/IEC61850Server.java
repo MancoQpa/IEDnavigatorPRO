@@ -1045,6 +1045,28 @@ public class IEC61850Server implements ServerEventListener {
     }
 
     /**
+     * Modelo del equipo físico, el valor de LPHD.PhyNam.model del modelo cargado (primer LD que
+     * lo tenga con valor). "" si el SCL no lo trae.
+     */
+    public String modeloFisico() {
+        if (serverModel == null || serverModel.getChildren() == null) return "";
+        for (ModelNode ld : serverModel.getChildren()) {
+            if (ld.getChildren() == null) continue;
+            for (ModelNode ln : ld.getChildren()) {
+                if (!ln.getName().contains("LPHD")) continue;
+                ModelNode phyNam = ln.getChild("PhyNam");
+                if (phyNam == null) continue;
+                ModelNode model = phyNam.getChild("model");
+                if (model instanceof BasicDataAttribute) {
+                    String v = ValorBda.texto((BasicDataAttribute) model);
+                    if (v != null && !v.isBlank()) return v.trim();
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
      * Inyecta los atributos de la placa del IED (del XML del SCL) en los nodos FC=DC del modelo
      * servido, para que clientes que lean LLN0.NamPlt via MMS obtengan los datos reales.
      * Se llama tras cargar el SCL y antes de iniciar el servidor.
