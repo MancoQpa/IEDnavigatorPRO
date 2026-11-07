@@ -2048,6 +2048,71 @@ public class Iec61850Dictionary {
      */
     private static final Map<String, String[]> VENDOR_LN_PREFIXES = new LinkedHashMap<>();
 
+    /** Lo que se muestra como "Referencia normativa" de un DO que la norma no define. */
+    static final String EXTENSION_FABRICANTE =
+        "No definido en IEC 61850-7-4/7-410/7-420: extensión de fabricante";
+
+    // ── Tablas en recursos (diccionario/*.tsv) ───────────────────────────────
+    // Van después de las entradas escritas arriba y con putIfAbsent, en este orden: lo escrito
+    // a mano gana, después lo que define la norma (norma.tsv) y al final lo de fabricante, así
+    // un nombre que la norma define nunca queda tapado por la explicación de un fabricante.
+    static {
+        cargarNorma("/diccionario/norma.tsv");
+        cargarDoFabricante("/diccionario/do_fabricante.tsv");
+    }
+
+    private static void cargarNorma(String recurso) {
+        try (java.io.InputStream in = Iec61850Dictionary.class.getResourceAsStream(recurso)) {
+            if (in == null) {
+                System.out.println("[Diccionario] falta el recurso " + recurso);
+                return;
+            }
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+            String l;
+            while ((l = r.readLine()) != null) {
+                if (l.isBlank() || l.startsWith("#")) continue;
+                String[] c = l.split("\t");
+                if (c.length < 6) continue;
+                EntryType t;
+                String clave = c[1];
+                switch (c[0]) {
+                    case "LN":  t = EntryType.LOGICAL_NODE;   clave = clave.toUpperCase(); break;
+                    case "CDC": t = EntryType.CDC;            clave = clave.toUpperCase(); break;
+                    case "DO":  t = EntryType.DATA_OBJECT;    break;
+                    case "DA":  t = EntryType.DATA_ATTRIBUTE; break;
+                    default: continue;
+                }
+                DICT.putIfAbsent(clave, new Entry(t, c[2], c[3], c[4], c[5]));
+            }
+        } catch (java.io.IOException e) {
+            System.out.println("[Diccionario] no se pudo leer " + recurso + ": " + e.getMessage());
+        }
+    }
+
+    private static void cargarDoFabricante(String recurso) {
+        try (java.io.InputStream in = Iec61850Dictionary.class.getResourceAsStream(recurso)) {
+            if (in == null) {
+                System.out.println("[Diccionario] falta el recurso " + recurso);
+                return;
+            }
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+            String l;
+            while ((l = r.readLine()) != null) {
+                if (l.isBlank() || l.startsWith("#")) continue;
+                String[] c = l.split("\t");
+                if (c.length < 6) continue;
+                String desc = c[5] + "\n\nSe encontró en los nodos " + c[1].replace(",", ", ")
+                    + " (CDC " + c[2] + ").";
+                DICT.putIfAbsent(c[0], new Entry(EntryType.DATA_OBJECT, c[3], c[4], desc,
+                                                 EXTENSION_FABRICANTE));
+            }
+        } catch (java.io.IOException e) {
+            System.out.println("[Diccionario] no se pudo leer " + recurso + ": " + e.getMessage());
+        }
+    }
+
     /**
      * Etiqueta que encabeza el aviso de prefijo de fabricante. Deliberadamente genérica: la
      * ayuda no nombra marcas. El fabricante y el modelo reales sí se muestran en la barra de
@@ -2138,6 +2203,38 @@ public class Iec61850Dictionary {
            "Designación de aparato o vano (IEC 81346), igual que en las demás familias que "
            + "usan esta convención. Sobre la clase CBAY corresponde al vano completo, no a "
            + "un aparato en particular.");
+
+        // ── Familia de relés de alimentador y línea con LD PROT/CTRL/MEAS/RCD ────────
+        // Expansiones confirmadas por el propio modelo: el desc de cada instancia y lo que
+        // contiene el LD. Los cuatro CSWI del mismo interruptor (desc "CB") son una orden de
+        // cierre por cada modo de verificación que definen los ajustes de su RSYN
+        // (NoChkEna, SynChkEna, verificación de línea/barra muerta, OptRSYNMod).
+        vp("CBNOCHK", "Interruptor, cierre sin verificación",
+           "Control del interruptor que cierra sin verificar sincronismo ni ausencia de "
+           + "tensión. El mismo interruptor tiene otros CSWI con prefijo CBSYNC, CBDEAD y "
+           + "CBAUTO: se elige el modo de cierre eligiendo el nodo que se opera.");
+        vp("CBSYNC", "Interruptor, cierre con verificación de sincronismo",
+           "Control del interruptor que cierra sólo si la verificación de sincronismo (RSYN) "
+           + "da resultado favorable. Si no se cumple, la orden termina negativa.");
+        vp("CBDEAD", "Interruptor, cierre con verificación de ausencia de tensión",
+           "Control del interruptor que cierra verificando barra o línea sin tensión, según "
+           + "las combinaciones habilitadas en el RSYN.");
+        vp("CBAUTO", "Interruptor, modo de verificación automático",
+           "Control del interruptor que cierra con el modo de verificación que eligen los "
+           + "ajustes del RSYN (OptRSYNMod).");
+        vp("CB", "Interruptor (circuit breaker)",
+           "Designación del interruptor del vano: la comparten su XCBR, su CSWI y su CILO.");
+        vp("DS", "Seccionador (disconnector switch)",
+           "Designación de un seccionador del vano. Acompaña a XSWI, CSWI y CILO; cada "
+           + "instancia es un seccionador distinto (el SCL los describe como DS01, DS02…).");
+        vp("BI", "Entradas binarias",
+           "Bloque de entradas binarias del equipo sobre la clase genérica GGIO.");
+        vp("CTS", "Supervisión de TC",
+           "Supervisión del circuito de corriente (CT supervision) sobre la clase genérica "
+           + "GGIO: sus ajustes habilitan la supervisión y fijan umbrales y tiempos.");
+        vp("DEVP", null,
+           "Agrupa señales del equipo sobre la clase genérica GGIO: elementos de disparo, "
+           + "alarmas, señales de falta y señales remotas, según el desc de cada instancia.");
     }
 
     /**
@@ -2161,10 +2258,28 @@ public class Iec61850Dictionary {
         // sufijo funcional, así que la parte de código ANSI de arriba no aplica acá.
         VENDOR_LD_GROUPS.put("CTRL", "Mando del vano: CSWI, CILO y XCBR del aparato, más las señales "
             + "de control. Es el LD donde vive el nodo que se opera.");
-        VENDOR_LD_GROUPS.put("PROT", "Funciones de protección del equipo y el XCBR que ellas manejan.");
-        VENDOR_LD_GROUPS.put("MEAS", "Medidas operativas: intensidad, tensión, potencia y energía.");
+        VENDOR_LD_GROUPS.put("PROT", "Funciones de protección del equipo (en algunas familias, también "
+            + "el XCBR que manejan y los transformadores de medida TCTR/TVTR).");
+        VENDOR_LD_GROUPS.put("MEAS", "Medidas operativas: intensidad, tensión, potencia y energía "
+            + "(en algunas familias, también la verificación de sincronismo RSYN).");
         VENDOR_LD_GROUPS.put("DR",   "Registrador de perturbaciones (RDRE).");
         VENDOR_LD_GROUPS.put("EXT",  "Señales externas y de libre configuración del proyecto.");
+
+        // Familia de relés de alimentador y línea con LD0/PROT/CTRL/MEAS/RCD/PIGO/PISV.
+        // Confirmado por lo que contiene cada LD y por su punto de acceso en el SCL.
+        // "LD" es LD0: la clave queda sin el dígito, como el resto de los grupos.
+        VENDOR_LD_GROUPS.put("LD",   "LD de sistema del equipo: LLN0 y LPHD, supervisión de los enlaces "
+            + "GOOSE (LGOS), sincronización horaria (LTMS), seguimiento de servicios (LTRK) y "
+            + "señales genéricas (GGIO).");
+        VENDOR_LD_GROUPS.put("RCD",  "Registro: registrador de perturbaciones (RDRE) y localizador de "
+            + "faltas (RFLO).");
+        VENDOR_LD_GROUPS.put("MONT", "Supervisión (monitoring). En los modelos revisados sólo trae LLN0 "
+            + "y LPHD: el fabricante lo reserva pero no le asigna funciones.");
+        VENDOR_LD_GROUPS.put("PIGO", "LD del punto de acceso de GOOSE del bus de proceso, separado del de "
+            + "MMS. Por MMS sólo muestra LLN0 y LPHD: las señales GOOSE que recibe y publica se "
+            + "configuran en el archivo SCL.");
+        VENDOR_LD_GROUPS.put("PISV", "LD del punto de acceso de valores muestreados (SV) del bus de "
+            + "proceso, separado del de MMS. Por MMS sólo muestra LLN0 y LPHD.");
     }
 
     /**
@@ -2195,6 +2310,16 @@ public class Iec61850Dictionary {
         int us = base.indexOf('_');
         String group = (us > 0 ? base.substring(0, us) : base).replaceAll("\\d+$", "");
         String desc = VENDOR_LD_GROUPS.get(group);
+        if (desc == null && us < 0) {
+            // En el modelo el LD llega con el nombre del IED delante (IED1PROT, IED1LD0):
+            // se busca el grupo más largo con el que termina.
+            String mejor = null;
+            for (String k : VENDOR_LD_GROUPS.keySet()) {
+                if (group.endsWith(k) && group.length() > k.length()
+                        && (mejor == null || k.length() > mejor.length())) mejor = k;
+            }
+            if (mejor != null) desc = VENDOR_LD_GROUPS.get(mejor);
+        }
         if (desc == null) return null;
         if (us > 0) {
             String fn = ldName.trim().substring(us + 1);
@@ -2351,6 +2476,22 @@ public class Iec61850Dictionary {
         return vendorLogicalDevice(ldName);
     }
 
+    /**
+     * Entrada para la ayuda de un Logical Device. La norma no fija sus nombres (los elige el
+     * fabricante o el integrador en el SCL); si el nombre corresponde a un esquema conocido se
+     * explica, y si no, queda la explicación general.
+     */
+    static Entry entradaLogicalDevice(String ldName) {
+        String general = "Agrupa los nodos lógicos de una misma función del equipo (protección, "
+            + "mando, medida…). La norma define qué es un LD pero no cómo se llama: el nombre lo "
+            + "elige el fabricante o el integrador en el archivo SCL, y en el modelo MMS llega "
+            + "con el nombre del IED delante.";
+        String propio = vendorLogicalDevice(ldName);
+        String desc = propio != null ? propio + "\n\n" + general : general;
+        return new Entry(EntryType.LOGICAL_DEVICE, "Dispositivo Lógico", "Logical Device",
+                         desc, "IEC 61850-7-1 §6, IEC 61850-6 (LDevice)");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     //  Diálogo de ayuda
     // ─────────────────────────────────────────────────────────────────────────
@@ -2367,14 +2508,34 @@ public class Iec61850Dictionary {
     }
 
     static void showInfoDialog(Component parent, String nodeName, LegendAction legendAction) {
-        Entry entry = lookup(nodeName);
+        showInfoDialog(parent, nodeName, legendAction, null);
+    }
+
+    /**
+     * @param descScl el {@code desc} que el archivo SCL cargado da para este nodo
+     *                ({@link DescripcionesScl}), o null. Se muestra tal cual: si el nombre no
+     *                está en el diccionario es la única explicación disponible, y si está,
+     *                agrega lo que el fabricante o el integrador quisieron decir con esa
+     *                instancia (p. ej. PTOC1 = "50/51P1").
+     */
+    static void showInfoDialog(Component parent, String nodeName, LegendAction legendAction,
+                               String descScl) {
+        showInfoDialog(parent, nodeName, legendAction, descScl, false);
+    }
+
+    /** @param esLogicalDevice el nodo es un LD: su nombre no se busca entre LN/DO/DA. */
+    static void showInfoDialog(Component parent, String nodeName, LegendAction legendAction,
+                               String descScl, boolean esLogicalDevice) {
+        Entry entry = esLogicalDevice ? entradaLogicalDevice(nodeName) : lookup(nodeName);
+        if (descScl != null && descScl.isBlank()) descScl = null;
 
         // Detectar si el match fue por inferencia parcial
         // (el nombre sin dígitos no coincide directamente con la clase inferida)
-        String inferredClass = inferLnClass(nodeName);
+        // Un LD no es un LN: ni inferencia de clase ni prefijo de fabricante.
+        String inferredClass = esLogicalDevice ? null : inferLnClass(nodeName);
         String stripped = nodeName.replaceAll("\\d+$", "").toUpperCase();
         // Prefijo de fabricante conocido: el nombre está identificado, no inferido.
-        final String[] vendor = vendorPrefix(nodeName);
+        final String[] vendor = esLogicalDevice ? null : vendorPrefix(nodeName);
         boolean isInferred = entry != null
                 && inferredClass != null
                 && !stripped.equals(inferredClass)
@@ -2437,7 +2598,12 @@ public class Iec61850Dictionary {
         body.setBackground(Color.WHITE);
         body.setBorder(new EmptyBorder(12, 18, 8, 18));
 
-        if (entry == null) {
+        if (entry == null && descScl != null) {
+            body.add(makeSection(I18n.t("dict.scl.title"), descScl, new Color(0x00695C)));
+            body.add(Box.createVerticalStrut(8));
+            body.add(makeSection(I18n.t("dict.notfound.title"), I18n.t("dict.scl.note"),
+                new Color(0x546E7A)));
+        } else if (entry == null) {
             body.add(makeSection(I18n.t("dict.notfound.title"),
                 I18n.t("dict.notfound.body", nodeName), new Color(0x546E7A)));
         } else {
@@ -2487,6 +2653,12 @@ public class Iec61850Dictionary {
             namesPanel.add(makeField("Name (EN)",   entry.fullNameEN, headerColor));
             body.add(namesPanel);
             body.add(Box.createVerticalStrut(10));
+
+            // Lo que dice el archivo de esta instancia, antes de la explicación general
+            if (descScl != null) {
+                body.add(makeSection(I18n.t("dict.scl.title"), descScl, new Color(0x00695C)));
+                body.add(Box.createVerticalStrut(8));
+            }
 
             // Descripción
             body.add(makeSection(I18n.t("dict.description"), entry.localizedDescription(), headerColor));

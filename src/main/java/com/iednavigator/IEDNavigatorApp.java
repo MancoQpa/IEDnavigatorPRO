@@ -1814,15 +1814,30 @@ public class IEDNavigatorApp extends JFrame {
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
         Object userObj = node.getUserObject();
         String name = (userObj instanceof NodeInfo) ? ((NodeInfo) userObj).name : node.toString();
+        // Referencia del nodo en el modelo, para buscar su desc en el SCL cargado
+        String ref = null;
+        if (userObj instanceof NodeInfo && ((NodeInfo) userObj).node != null) {
+            ref = ((NodeInfo) userObj).node.getReference().toString();
+        }
         // Para nodos FCDA el name tiene formato "[1] LD/LN.DO [FC]" — extraer token DO/DA
         if (name != null && name.contains("]")) {
             String after = name.substring(name.lastIndexOf(']') + 1).trim();
+            if (ref == null) ref = after.replaceAll("\\[.*?\\]", "").trim();
             // Tomar el último segmento después del punto o la barra
             String[] parts = after.replaceAll("\\[.*?\\]", "").trim().split("[./]");
             if (parts.length > 0) name = parts[parts.length - 1].trim();
         }
+        boolean esLd = userObj instanceof NodeInfo
+            && ((NodeInfo) userObj).node instanceof com.beanit.iec61850bean.LogicalDevice;
         Iec61850Dictionary.showInfoDialog(this, name != null ? name : "",
-            this::showLegendDialogBeside);
+            this::showLegendDialogBeside, descripcionScl(ref), esLd);
+    }
+
+    /** El desc que el SCL cargado (archivo del modo servidor o CID bajado del IED) da para ref. */
+    private String descripcionScl(String ref) {
+        if (ref == null) return null;
+        DescripcionesScl d = DescripcionesScl.de(loadedSclFile);
+        return d == null ? null : d.descripcion(ref);
     }
 
     private DefaultMutableTreeNode findNodeInModel(String fcdaName) {

@@ -296,6 +296,15 @@ git restore --source=<commit-before> --worktree -- <path>
 
 ## Common Tasks
 
+- **Dictionary (help dialog)**: hand-written entries live in `Iec61850Dictionary.java`; names
+  the standard defines and were missing are in `src/main/resources/diccionario/norma.tsv`
+  (LN, CDC, DO, DA, written from 7-4/7-3/7-2), and vendor DOs in `do_fabricante.tsv`
+  (explained from the vendor's own SCL `desc` and manual, never invented). Load order is
+  hand-written > norma > vendor, all with `putIfAbsent`. Vendor LN prefixes and LD names are
+  the `vp(...)` and `VENDOR_LD_GROUPS` tables in the Java file. On top of that, the dialog
+  shows the `desc` of the loaded SCL for the selected node (`DescripcionesScl`): in client
+  mode that is the CID downloaded from the IED, if it serves one. The help never names
+  brands. `test/TestDiccionarioTablas`, `test/TestDescripcionesScl`.
 - **Add new data type formatting**: `ValorBda.texto()` for the raw text, `formatValue()` in
   `IEC61850Client.java` for enum decoding, `GoosePanel.formatEnumValue()` for SCL enums.
 - **Modify GUI layout/tabs**: the tab content lives in its own `*Panel.java`; the frame and
