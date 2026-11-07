@@ -1,0 +1,310 @@
+# Nombres que define la norma y que el diccionario no tenía (clases de LN, CDC, DO y DA).
+#
+# Redactado a partir de las tablas de IEC 61850-7-4 Ed.2 (y 7-410/7-420) para los DO y las
+# clases de LN, de IEC 61850-7-3 Ed.2 para los CDC y los DA, y de IEC 61850-7-2 Ed.2 para los
+# atributos de los bloques de control. Con putIfAbsent: lo que ya estaba escrito a mano en
+# Iec61850Dictionary.java tiene prioridad.
+#
+# Columnas (tabulador): tipo  clave  nombre ES  nombre EN  descripción  referencia
+# tipo = LN | CDC | DO | DA. Las claves de LN y CDC van en mayúsculas, como el resto del diccionario.
+#
+# --- Clases de LN -------------------------------------------------------------------------------------
+LN	LGOS	Supervisión de suscripción GOOSE	GOOSE subscription supervision	Supervisa una suscripción GOOSE: si el mensaje esperado llega (St), con qué revisión de configuración (ConfRevNum frente a la esperada) y cuál fue el último stNum recibido. Suele haber una instancia por cada GOOSE que el equipo recibe; su GoCBRef dice cuál.	IEC 61850-7-4 §5.3 (LGOS)
+LN	RDIR	Elemento direccional	Directional element	Elemento direccional que comparten varias protecciones: decide si la falta está hacia adelante o hacia atrás (Dir) a partir de la magnitud de polarización elegida (PolQty) y del ángulo característico (ChrAng) y los límites angulares de cada zona.	IEC 61850-7-4 §5.6 (RDIR)
+# --- CDC (clases de dato comunes) ------------------------------------------------------------------------
+CDC	SPG	Ajuste binario	Single point setting	Ajuste de un solo bit: habilitado o deshabilitado (setVal). En nodos genéricos algunos fabricantes numeran ajustes con el nombre del CDC (SPG01, SPG02…): qué habilita cada uno lo dice el desc del SCL.	IEC 61850-7-3 §7.8.2
+CDC	ING	Ajuste entero	Integer status setting	Ajuste de valor entero (setVal), con mínimo, máximo y paso opcionales; los tiempos en ms usan esta clase. En nodos genéricos algunos fabricantes numeran ajustes con el nombre del CDC (ING01, ING02…): qué ajusta cada uno lo dice el desc del SCL.	IEC 61850-7-3 §7.8.3
+CDC	ENG	Ajuste enumerado	Enumerated status setting	Ajuste que toma un valor de una lista cerrada (setVal), por ejemplo un modo de operación.	IEC 61850-7-3 §7.8.4
+CDC	ASG	Ajuste analógico	Analogue setting	Ajuste de valor analógico (setMag), con unidades y escala: umbrales de corriente, tensión, ángulo. En nodos genéricos algunos fabricantes numeran ajustes con el nombre del CDC (ASG01, ASG02…): qué ajusta cada uno lo dice el desc del SCL.	IEC 61850-7-3 §7.9.2
+CDC	VSG	Ajuste de texto	Visible string setting	Ajuste de texto (setVal), por ejemplo un nombre configurable.	IEC 61850-7-3 §7.8.7
+CDC	ORG	Ajuste de referencia a objeto	Object reference setting	Ajuste que contiene la referencia de otro objeto del modelo (setSrcRef), por ejemplo el GOOSE o la señal de la que se toma una entrada.	IEC 61850-7-3 §7.8.5
+CDC	VSS	Estado de texto	Visible string status	Estado de tipo texto (stVal), por ejemplo la fuente de hora en uso.	IEC 61850-7-3 §7.3.8
+CDC	CTS	Seguimiento de servicios de control	Control service tracking	Registro del último servicio de control recibido (quién lo pidió, qué valor, resultado y AddCause). Lo usa el LN LTRK.	IEC 61850-7-3 §7.10 (CTS)
+CDC	BTS	Seguimiento de bloques de reporte con buffer	Buffered report tracking	Registro del último servicio ejecutado sobre un BRCB. Lo usa el LN LTRK.	IEC 61850-7-3 §7.10 (BTS)
+CDC	UTS	Seguimiento de bloques de reporte sin buffer	Unbuffered report tracking	Registro del último servicio ejecutado sobre un URCB. Lo usa el LN LTRK.	IEC 61850-7-3 §7.10 (UTS)
+CDC	LTS	Seguimiento de bloques de log	Log control block tracking	Registro del último servicio ejecutado sobre un bloque de control de log. Lo usa el LN LTRK.	IEC 61850-7-3 §7.10 (LTS)
+CDC	GTS	Seguimiento de bloques GOOSE	GOOSE control block tracking	Registro del último servicio ejecutado sobre un bloque de control GOOSE. Lo usa el LN LTRK.	IEC 61850-7-3 §7.10 (GTS)
+CDC	STS	Seguimiento de grupos de ajustes	Setting group control block tracking	Registro del último servicio ejecutado sobre el bloque de control de grupos de ajustes (cambio de grupo, edición). Lo usa el LN LTRK.	IEC 61850-7-3 §7.10 (STS)
+CDC	CST	Seguimiento de servicios comunes	Common service tracking	Base común de los CDC de seguimiento de servicios: objeto, servicio, originador, hora y resultado.	IEC 61850-7-3 §7.10 (CST)
+CDC	CSG	Ajuste de curva	Curve shape setting	Ajuste que describe una curva por puntos.	IEC 61850-7-3 §7.9.5
+# --- DO: estado, salud y placa -------------------------------------------------------------------------
+DO	PhyNam	Placa del equipo físico	Physical device name plate	Placa del equipo físico en LPHD: fabricante, modelo, número de serie, versiones de hardware y software. Es de donde IEDNavigator toma el modelo que muestra en la barra de estado.	IEC 61850-7-4, LN LPHD
+DO	PhyHealth	Salud del equipo físico	Physical device health	Estado de salud del equipo físico: Ok, Warning o Alarm.	IEC 61850-7-4, LN LPHD
+DO	Proxy	Indicación de proxy	Proxy	Indica si el LD representa a otro equipo (actúa como proxy) en lugar de al propio.	IEC 61850-7-4, LN LPHD
+DO	InOv	Desborde de entrada	Input communication buffer overflow	Se desbordó el buffer de entrada de comunicaciones.	IEC 61850-7-4, LN LPHD
+DO	OutOv	Desborde de salida	Output communication buffer overflow	Se desbordó el buffer de salida de comunicaciones.	IEC 61850-7-4, LN LPHD
+DO	EEHealth	Salud del equipo externo	External equipment health	Salud del equipo externo asociado al nodo (sensor, transformador de medida, aparato).	IEC 61850-7-4, clases de equipo
+DO	EEName	Placa del equipo externo	External equipment name plate	Placa (fabricante, modelo, serie) del equipo externo asociado al nodo.	IEC 61850-7-4, clases de equipo
+DO	LocKey	Llave local	Local operation for complete logical device	Mando local para todo el LD: si es verdadero, no se aceptan órdenes por comunicaciones para ese LD (en la norma, junto con Loc y LocSta).	IEC 61850-7-4, LN LLN0
+DO	LocSta	Mando a nivel de estación	Switching authority at station level	Autoridad de mando a nivel de estación: si es verdadero, sólo se aceptan órdenes con categoría de origen de estación.	IEC 61850-7-4, LN LLN0/CSWI
+DO	MltLev	Mando desde varios niveles	Multiple level control	Si es verdadero, se acepta mando desde más de un nivel a la vez; si es falso, sólo desde el nivel que tiene la autoridad (anexo B de 7-4).	IEC 61850-7-4, LN LLN0
+DO	Diag	Correr diagnóstico	Run diagnostics	Orden para que el equipo ejecute su autodiagnóstico.	IEC 61850-7-4, LN LLN0
+DO	LEDRs	Reposición de LED	LED reset	Orden para reponer los LED del frente del equipo.	IEC 61850-7-4, LN LLN0
+DO	GrRef	Referencia a LD superior	Reference to a higher level logical device	Referencia al LD del que depende este, en una jerarquía de LD.	IEC 61850-7-4, LN LLN0
+DO	Blk	Bloqueo dinámico	Dynamic blocking	Bloqueo dinámico de la función que describe el LN.	IEC 61850-7-4, clases comunes
+DO	CmdBlk	Bloqueo de órdenes	Command blocking	Bloquea las órdenes de control sobre el nodo (por ejemplo, durante mantenimiento).	IEC 61850-7-4, clases de control
+DO	OpCntRs	Contador de operaciones reponible	Resettable operation counter	Contador de operaciones que puede ponerse en cero por orden.	IEC 61850-7-4, clases comunes
+DO	OpTmh	Tiempo de operación	Operation time	Tiempo de operación acumulado del equipo, en horas.	IEC 61850-7-4, clases de equipo
+DO	Sim	Recibir mensajes simulados	Receive simulated GOOSE or SV	Si es verdadero, el equipo acepta GOOSE y SV con la marca de simulación en lugar de los reales (modo de prueba de Ed.2).	IEC 61850-7-4, LN LPHD
+# --- DO: indicaciones y controles genéricos --------------------------------------------------------------
+DO	Ind	Indicación genérica	General indication	Indicación binaria genérica; cada instancia numerada (Ind1, Ind2…) es una señal distinta, cuyo significado lo da el desc del SCL.	IEC 61850-7-4, LN GGIO
+DO	Alm	Alarma genérica	General alarm	Alarma genérica; cada instancia numerada es una alarma distinta, cuyo significado lo da el desc del SCL.	IEC 61850-7-4, LN GGIO/GALM
+DO	SPCSO	Salida controlable genérica	Single point controllable status output	Salida binaria controlable genérica; cada instancia numerada es una salida distinta.	IEC 61850-7-4, LN GGIO
+# --- DO: transformadores de medida y valores nominales ------------------------------------------------
+DO	ARtg	Corriente nominal	Rated current	Corriente nominal primaria del transformador de corriente o del equipo.	IEC 61850-7-4, LN TCTR
+DO	VRtg	Tensión nominal	Rated voltage	Tensión nominal primaria del transformador de tensión o del equipo.	IEC 61850-7-4, LN TVTR
+DO	HzRtg	Frecuencia nominal	Rated frequency	Frecuencia nominal.	IEC 61850-7-4, LN TCTR/TVTR
+DO	AngCor	Corrección de ángulo	Phasor angle correction	Corrección del ángulo del fasor del transformador de medida externo.	IEC 61850-7-4, LN TCTR/TVTR
+DO	AmpSv	Corriente muestreada	Current (sampled value)	Corriente como valor muestreado (SV).	IEC 61850-7-4, LN TCTR
+DO	VolSv	Tensión muestreada	Voltage (sampled value)	Tensión como valor muestreado (SV).	IEC 61850-7-4, LN TVTR
+DO	FuFail	Fusión de fusible del TT	VT fuse failure	Falla (fusión de fusible) del circuito del transformador de tensión.	IEC 61850-7-4, LN TVTR
+# --- DO: medidas -------------------------------------------------------------------------------------------
+DO	PNV	Tensión fase-neutro	Phase to neutral voltage	Tensiones fase-neutro de las tres fases.	IEC 61850-7-4, LN MMXU
+DO	Amp	Corriente	Current	Corriente no asignada a una fase (por ejemplo, en corriente continua).	IEC 61850-7-4, LN MMXN
+DO	Vol	Tensión	Voltage	Tensión no asignada a una fase.	IEC 61850-7-4, LN MMXN
+DO	Watt	Potencia activa	Active power	Potencia activa no asignada a una fase.	IEC 61850-7-4, LN MMXN
+DO	VolAmpr	Potencia reactiva	Reactive power	Potencia reactiva no asignada a una fase.	IEC 61850-7-4, LN MMXN
+DO	VolAmp	Potencia aparente	Apparent power	Potencia aparente no asignada a una fase.	IEC 61850-7-4, LN MMXN
+DO	PwrFact	Factor de potencia	Power factor	Factor de potencia no asignado a una fase.	IEC 61850-7-4, LN MMXN
+DO	Imp	Impedancia	Impedance	Impedancia no asignada a una fase.	IEC 61850-7-4, LN MMXN
+DO	DQ0Seq	Secuencia DQ0	DQ0 sequence	Componentes en el marco de referencia DQ0.	IEC 61850-7-4, LN MSQI
+DO	ImbA	Desequilibrio de corriente	Imbalance current	Desequilibrio de las corrientes de fase.	IEC 61850-7-4, LN MSQI
+DO	ImbV	Desequilibrio de tensión	Imbalance voltage	Desequilibrio de las tensiones de fase.	IEC 61850-7-4, LN MSQI
+DO	ImbPPV	Desequilibrio de tensión entre fases	Imbalance phase-phase voltage	Desequilibrio de las tensiones entre fases.	IEC 61850-7-4, LN MSQI
+DO	ImbNgA	Desequilibrio de secuencia negativa (corriente)	Imbalance negative-sequence current	Relación de desequilibrio de secuencia negativa de la corriente.	IEC 61850-7-4, LN MSQI
+DO	ImbNgV	Desequilibrio de secuencia negativa (tensión)	Imbalance negative-sequence voltage	Relación de desequilibrio de secuencia negativa de la tensión.	IEC 61850-7-4, LN MSQI
+DO	ImbZroA	Desequilibrio homopolar (corriente)	Imbalance zero-sequence current	Relación de desequilibrio homopolar de la corriente.	IEC 61850-7-4, LN MSQI
+DO	ImbZroV	Desequilibrio homopolar (tensión)	Imbalance zero-sequence voltage	Relación de desequilibrio homopolar de la tensión.	IEC 61850-7-4, LN MSQI
+DO	MaxImbA	Desequilibrio máximo de corriente	Maximum imbalance current	Máximo desequilibrio de corriente registrado.	IEC 61850-7-4, LN MSQI
+DO	MaxImbV	Desequilibrio máximo de tensión	Maximum imbalance voltage	Máximo desequilibrio de tensión registrado.	IEC 61850-7-4, LN MSQI
+DO	MaxImbPPV	Desequilibrio máximo de tensión entre fases	Maximum imbalance phase-phase voltage	Máximo desequilibrio de tensión entre fases registrado.	IEC 61850-7-4, LN MSQI
+DO	SupWh	Energía activa entregada	Real energy supply	Energía activa con sentido hacia la barra.	IEC 61850-7-4, LN MMTR
+DO	SupVArh	Energía reactiva entregada	Reactive energy supply	Energía reactiva con sentido hacia la barra.	IEC 61850-7-4, LN MMTR
+DO	DmdWh	Energía activa demandada	Real energy demand	Energía activa con sentido desde la barra hacia afuera.	IEC 61850-7-4, LN MMTR
+DO	DmdVArh	Energía reactiva demandada	Reactive energy demand	Energía reactiva con sentido desde la barra hacia afuera.	IEC 61850-7-4, LN MMTR
+# --- DO: protección general ---------------------------------------------------------------------------
+DO	StrVal	Valor de arranque	Start value	Umbral de arranque de la función de protección.	IEC 61850-7-4, clases P
+DO	TmMult	Multiplicador de tiempo	Time dial multiplier	Multiplicador de la curva de tiempo inverso (TMS / dial de tiempo).	IEC 61850-7-4, LN PTOC
+DO	MinOpTmms	Tiempo mínimo de operación	Minimum operate time	Tiempo mínimo de operación, en ms.	IEC 61850-7-4, clases P
+DO	MaxOpTmms	Tiempo máximo de operación	Maximum operate time	Tiempo máximo de operación, en ms.	IEC 61850-7-4, clases P
+DO	RsDlTmms	Tiempo de reposición	Reset delay time	Tiempo de reposición, en ms.	IEC 61850-7-4, clases P
+DO	TypRsCrv	Tipo de curva de reposición	Type of reset curve	Tipo de curva de reposición (instantánea, temporizada, de tiempo inverso).	IEC 61850-7-4, LN PTOC
+DO	DirMod	Modo direccional	Directional mode	Modo direccional de la función: no direccional, hacia adelante o hacia atrás.	IEC 61850-7-4, clases P
+DO	BlkValA	Valor de bloqueo de corriente	Block value (minimum operating current)	Corriente mínima de operación: por debajo de ella la función no opera.	IEC 61850-7-4, LN RDIR/PDIS
+DO	BlkValV	Valor de bloqueo de tensión	Block value (minimum operating voltage)	Tensión mínima de operación: por debajo de ella la función no opera.	IEC 61850-7-4, LN RDIR/PDIS
+DO	Tr	Disparo	Trip	Orden de disparo resultante, combinación de las operaciones de las protecciones.	IEC 61850-7-4, LN PTRC
+DO	TrMod	Modo de disparo	Trip mode	Modo de disparo (monopolar, tripolar, según la falta).	IEC 61850-7-4, LN PTRC
+DO	TrPlsTmms	Tiempo de pulso de disparo	Trip pulse time	Duración del pulso de disparo, en ms.	IEC 61850-7-4, LN PTRC
+# --- DO: direccional (RDIR) ----------------------------------------------------------------------------
+DO	Dir	Dirección	Direction	Dirección de la falta (hacia adelante, hacia atrás o desconocida), con el detalle por fase.	IEC 61850-7-4, LN RDIR
+DO	ChrAng	Ángulo característico	Characteristic angle	Ángulo característico del elemento direccional.	IEC 61850-7-4, LN RDIR
+DO	PolQty	Magnitud de polarización	Polarizing quantity	Magnitud que polariza el elemento direccional (tensión homopolar, de secuencia negativa, corriente, etc.).	IEC 61850-7-4, LN RDIR
+DO	MinFwdAng	Ángulo mínimo hacia adelante	Minimum forward angle	Límite angular mínimo de la zona hacia adelante.	IEC 61850-7-4, LN RDIR
+DO	MaxFwdAng	Ángulo máximo hacia adelante	Maximum forward angle	Límite angular máximo de la zona hacia adelante.	IEC 61850-7-4, LN RDIR
+DO	MinRvAng	Ángulo mínimo hacia atrás	Minimum reverse angle	Límite angular mínimo de la zona hacia atrás.	IEC 61850-7-4, LN RDIR
+DO	MaxRvAng	Ángulo máximo hacia atrás	Maximum reverse angle	Límite angular máximo de la zona hacia atrás.	IEC 61850-7-4, LN RDIR
+DO	MinPPV	Tensión mínima entre fases	Minimum phase-to-phase voltage	Tensión mínima entre fases para que el elemento direccional decida.	IEC 61850-7-4, LN RDIR
+# --- DO: falla de interruptor (RBRF) --------------------------------------------------------------------
+DO	FailMod	Modo de detección de falla	Breaker failure detection mode	Criterio con que se detecta la falla del interruptor (corriente, contactos auxiliares o ambos).	IEC 61850-7-4, LN RBRF
+DO	FailTmms	Tiempo de falla de interruptor	Breaker failure time delay	Tiempo tras el cual se disparan los interruptores de la barra, en ms.	IEC 61850-7-4, LN RBRF
+DO	ReTrMod	Modo de redisparo	Retrip mode	Modo del redisparo del propio interruptor.	IEC 61850-7-4, LN RBRF
+DO	SPlTrTmms	Tiempo de redisparo monopolar	Single-pole retrip time	Tiempo de redisparo monopolar, en ms.	IEC 61850-7-4, LN RBRF
+DO	TPTrTmms	Tiempo de redisparo tripolar	Three-pole retrip time	Tiempo de redisparo tripolar, en ms.	IEC 61850-7-4, LN RBRF
+DO	DetValA	Valor del detector de corriente	Current detector value	Umbral del detector de corriente de la falla de interruptor.	IEC 61850-7-4, LN RBRF
+DO	OpEx	Disparo externo	Breaker failure trip ("external trip")	Disparo por falla de interruptor hacia los interruptores adyacentes.	IEC 61850-7-4, LN RBRF
+DO	OpIn	Redisparo interno	Operate, retrip ("internal trip")	Redisparo del propio interruptor.	IEC 61850-7-4, LN RBRF
+# --- DO: sincronismo (RSYN) -----------------------------------------------------------------------------
+DO	Rel	Cierre liberado	Breaker closing command released	La verificación de sincronismo libera la orden de cierre.	IEC 61850-7-4, LN RSYN
+DO	VInd	Indicador de diferencia de tensión	Voltage difference indicator	La diferencia de tensión está fuera del límite.	IEC 61850-7-4, LN RSYN
+DO	AngInd	Indicador de diferencia de ángulo	Angle difference indicator	La diferencia de ángulo está fuera del límite.	IEC 61850-7-4, LN RSYN
+DO	HzInd	Indicador de diferencia de frecuencia	Frequency difference indicator	La diferencia de frecuencia está fuera del límite.	IEC 61850-7-4, LN RSYN
+DO	DifV	Diferencia de tensión	Difference voltage	Máxima diferencia de tensión admitida para el cierre.	IEC 61850-7-4, LN RSYN
+DO	DifHz	Diferencia de frecuencia	Difference frequency	Máxima diferencia de frecuencia admitida para el cierre.	IEC 61850-7-4, LN RSYN
+DO	DifAng	Diferencia de ángulo	Difference phase angle	Máxima diferencia de ángulo admitida para el cierre.	IEC 61850-7-4, LN RSYN
+DO	DifVClc	Diferencia de tensión calculada	Calculated difference in voltage	Diferencia de tensión medida entre los dos lados.	IEC 61850-7-4, LN RSYN
+DO	DifHzClc	Diferencia de frecuencia calculada	Calculated difference in frequency	Diferencia de frecuencia medida entre los dos lados.	IEC 61850-7-4, LN RSYN
+DO	DifAngClc	Diferencia de ángulo calculada	Calculated difference of phase angle	Diferencia de ángulo medida entre los dos lados.	IEC 61850-7-4, LN RSYN
+DO	LivDeaMod	Modo vivo/muerto	Live dead mode	Qué combinaciones de barra y línea con o sin tensión permiten el cierre.	IEC 61850-7-4, LN RSYN
+DO	DeaLinVal	Umbral de línea muerta	Dead line value	Tensión por debajo de la cual la línea se considera sin tensión.	IEC 61850-7-4, LN RSYN
+DO	LivLinVal	Umbral de línea viva	Live line value	Tensión por encima de la cual la línea se considera con tensión.	IEC 61850-7-4, LN RSYN
+DO	DeaBusVal	Umbral de barra muerta	Dead bus value	Tensión por debajo de la cual la barra se considera sin tensión.	IEC 61850-7-4, LN RSYN
+DO	LivBusVal	Umbral de barra viva	Live bus value	Tensión por encima de la cual la barra se considera con tensión.	IEC 61850-7-4, LN RSYN
+DO	TotTmms	Tiempo total de sincronización	Total time of synchronising process	Tiempo máximo del proceso de sincronización, en ms.	IEC 61850-7-4, LN RSYN
+DO	SynPrg	Proceso de sincronización	Synchronising progress	Orden de inicio y parada del proceso de sincronización.	IEC 61850-7-4, LN RSYN
+# --- DO: aparatos (XCBR, XSWI, CSWI) ------------------------------------------------------------------
+DO	PosA	Posición fase A	Switch L1	Posición del polo de la fase A (aparatos con mando por polo).	IEC 61850-7-4, LN CSWI
+DO	PosB	Posición fase B	Switch L2	Posición del polo de la fase B.	IEC 61850-7-4, LN CSWI
+DO	PosC	Posición fase C	Switch L3	Posición del polo de la fase C.	IEC 61850-7-4, LN CSWI
+DO	OpOpn	Operación de apertura	Operation "open switch"	Se ejecutó la apertura del aparato.	IEC 61850-7-4, LN CSWI
+DO	OpCls	Operación de cierre	Operation "close switch"	Se ejecutó el cierre del aparato.	IEC 61850-7-4, LN CSWI
+DO	SelOpn	Selección de apertura	Selection "open switch"	El aparato está seleccionado para abrir (SBO).	IEC 61850-7-4, LN CSWI
+DO	SelCls	Selección de cierre	Selection "close switch"	El aparato está seleccionado para cerrar (SBO).	IEC 61850-7-4, LN CSWI
+DO	Dsc	Discrepancia	Discrepancy	Discrepancia entre los polos o entre la posición esperada y la medida.	IEC 61850-7-4, LN XCBR/XSWI
+DO	MaxOpCap	Capacidad de operación	Operating capability	Cantidad de operaciones que el aparato puede hacer con la energía almacenada completa.	IEC 61850-7-4, LN XCBR/XSWI
+DO	POWCap	Maniobra por punto de onda	Point on wave switching capability	Capacidad del interruptor de maniobrar en un punto elegido de la onda.	IEC 61850-7-4, LN XCBR
+DO	SwTyp	Tipo de aparato	Switch type	Tipo de aparato de maniobra (seccionador, puesta a tierra, etc.).	IEC 61850-7-4, LN XSWI
+DO	SwOpCap	Capacidad de maniobra	Switch operating capability	Qué puede maniobrar el seccionador (sin carga, con carga, etc.).	IEC 61850-7-4, LN XSWI
+DO	SumSwARs	Suma de corrientes cortadas	Sum of switched amperes, resettable	Suma acumulada de las corrientes cortadas por el interruptor, reponible.	IEC 61850-7-4, LN XCBR
+DO	ChaMotEna	Motor de carga habilitado	Charger motor enabled	Habilitación del motor de carga de resortes del interruptor.	IEC 61850-7-4, LN XCBR
+DO	CBTmms	Tiempo de operación del interruptor	Circuit breaker operating time	Tiempo propio de operación del interruptor, en ms.	IEC 61850-7-4, LN XCBR
+# --- DO: registro (RDRE, RFLO) -------------------------------------------------------------------------
+DO	RcdTrg	Disparo del registrador	Trigger recorder	Orden para disparar un registro.	IEC 61850-7-4, LN RDRE
+DO	RcdMade	Registro realizado	Recording made	Hay un registro nuevo completo.	IEC 61850-7-4, LN RDRE
+DO	RcdStr	Registro iniciado	Recording started	Se inició un registro.	IEC 61850-7-4, LN RDRE
+DO	FltNum	Número de falta	Fault number	Número de la última falta registrada.	IEC 61850-7-4, LN RDRE
+DO	GriFltNum	Número de falta de red	Grid fault number	Número de falta de red (puede agrupar varios registros de una misma falta).	IEC 61850-7-4, LN RDRE
+DO	MemUsed	Memoria usada	Memory used	Porcentaje de memoria del registrador en uso.	IEC 61850-7-4, LN RDRE
+DO	MemRs	Reposición de memoria	Reset recorder memory	Orden para volver el puntero de la memoria al principio.	IEC 61850-7-4, LN RDRE
+DO	MemClr	Borrado de memoria	Clear memory	Orden para borrar todo el contenido de la memoria del registrador.	IEC 61850-7-4, LN RDRE
+DO	MemFull	Nivel de memoria llena	Memory full level	Nivel de ocupación a partir del cual la memoria se considera llena.	IEC 61850-7-4, LN RDRE
+DO	MaxNumRcd	Cantidad máxima de registros	Maximum number of records	Cantidad máxima de registros que guarda el equipo.	IEC 61850-7-4, LN RDRE
+DO	RcdMod	Modo de registro	Recorder operation mode	Qué hace el registrador con la memoria llena: se detiene (saturación) o sobrescribe.	IEC 61850-7-4, LN RDRE
+DO	ReTrgMod	Modo de redisparo del registrador	Retrigger mode	Si un disparo durante un registro en curso inicia otro registro.	IEC 61850-7-4, LN RDRE
+DO	PerTrgTms	Tiempo de disparo periódico	Periodic trigger time	Período de los registros disparados periódicamente, en s.	IEC 61850-7-4, LN RDRE
+DO	ExclTmms	Tiempo de exclusión	Exclusion time	Tiempo durante el que no se aceptan nuevos disparos tras uno, en ms.	IEC 61850-7-4, LN RDRE
+DO	PreTmms	Tiempo de pre-disparo	Pre-trigger time	Tiempo registrado antes del disparo, en ms.	IEC 61850-7-4, LN RDRE
+DO	PstTmms	Tiempo de post-disparo	Post-trigger time	Tiempo registrado después del disparo, en ms.	IEC 61850-7-4, LN RDRE
+DO	StoRte	Tasa de muestreo	Storage rate	Tasa de muestreo del registrador de perturbaciones.	IEC 61850-7-4, LN RDRE
+DO	TrgMod	Modo de disparo	Trigger mode	Origen del disparo del registro: interno, externo o ambos.	IEC 61850-7-4, LN RDRE
+DO	LevMod	Modo de disparo por nivel	Level trigger mode	Cómo se dispara un registro por nivel de una magnitud.	IEC 61850-7-4, LN RADR
+DO	InRef	Referencia de entrada	Input reference	Referencia a la señal del modelo que entra a la función (por ejemplo, un canal del registrador).	IEC 61850-7-4 Ed.2.1, clases comunes
+DO	BlkRef	Referencia de bloqueo	Block reference	Referencia a la señal del modelo que bloquea la función.	IEC 61850-7-4 Ed.2.1, clases comunes
+DO	FltZ	Impedancia de falta	Fault impedance	Impedancia calculada hasta la falta.	IEC 61850-7-4, LN RFLO
+DO	FltDiskm	Distancia de falta	Fault distance	Distancia calculada hasta la falta, en km.	IEC 61850-7-4, LN RFLO
+DO	FltLoop	Lazo de falta	Fault loop	Lazo con que se calculó la falta (fase-tierra, fase-fase…).	IEC 61850-7-4, LN RFLO
+# --- DO: GOOSE, tiempo y seguimiento de servicios -------------------------------------------------------
+DO	St	Estado de la suscripción	Status of the subscription	Verdadero si la suscripción GOOSE o SV está activa (llegan los mensajes).	IEC 61850-7-4, LN LGOS/LSVS
+DO	SimSt	Recepción de mensajes simulados	Simulated messages received	Se están recibiendo y aceptando mensajes con la marca de simulación.	IEC 61850-7-4, LN LGOS/LSVS
+DO	LastStNum	Último stNum recibido	Last state number received	Último número de estado (stNum) recibido en el GOOSE suscripto.	IEC 61850-7-4, LN LGOS
+DO	ConfRevNum	Revisión de configuración esperada	Expected configuration revision number	Revisión de configuración (confRev) que se espera del GOOSE suscripto.	IEC 61850-7-4, LN LGOS
+DO	NdsCom	Necesita puesta en servicio	Subscription needs commissioning	La suscripción necesita revisarse: la configuración recibida no coincide con la esperada.	IEC 61850-7-4, LN LGOS
+DO	GoCBRef	Referencia del GoCB suscripto	Reference to the subscribed GOOSE control block	Qué bloque de control GOOSE supervisa esta instancia.	IEC 61850-7-4, LN LGOS
+DO	TmSrc	Fuente de hora	Current time source	Fuente de sincronización horaria en uso.	IEC 61850-7-4, LN LTMS
+DO	TmSyn	Sincronización horaria	Time synchronized	Estado de sincronización horaria del equipo.	IEC 61850-7-4, LN LTMS
+DO	TmAcc	Exactitud de hora	Time accuracy	Cantidad de bits significativos de la fracción de segundo en las marcas de tiempo.	IEC 61850-7-4, LN LTMS
+DO	TmChSt	Estado del canal de hora	Time channel status	Si el canal de sincronización horaria está activo; cada instancia es un canal.	IEC 61850-7-4, LN LTMS
+DO	TmSrcSet	Fuente de hora configurada	Time source setting	Fuente de sincronización horaria configurada.	IEC 61850-7-4, LN LTMS
+DO	SpcTrk	Seguimiento de controles SPC	SPC service tracking	Último servicio de control recibido por un objeto controlable de un bit.	IEC 61850-7-4, LN LTRK
+DO	DpcTrk	Seguimiento de controles DPC	DPC service tracking	Último servicio de control recibido por un objeto controlable de doble bit (por ejemplo, una posición).	IEC 61850-7-4, LN LTRK
+DO	GenTrk	Seguimiento de servicios generales	General service tracking	Último servicio común ejecutado sobre el servidor.	IEC 61850-7-4, LN LTRK
+DO	BrcbTrk	Seguimiento de BRCB	BRCB tracking	Último servicio ejecutado sobre un bloque de reportes con buffer.	IEC 61850-7-4, LN LTRK
+DO	UrcbTrk	Seguimiento de URCB	URCB tracking	Último servicio ejecutado sobre un bloque de reportes sin buffer.	IEC 61850-7-4, LN LTRK
+DO	LocbTrk	Seguimiento de bloques de log	LCB tracking	Último servicio ejecutado sobre un bloque de control de log.	IEC 61850-7-4, LN LTRK
+DO	GocbTrk	Seguimiento de GoCB	GoCB tracking	Último servicio ejecutado sobre un bloque de control GOOSE.	IEC 61850-7-4, LN LTRK
+DO	SgcbTrk	Seguimiento de grupos de ajustes	SGCB tracking	Último servicio ejecutado sobre el bloque de control de grupos de ajustes.	IEC 61850-7-4, LN LTRK
+# --- Sub-datos de los CDC de medida --------------------------------------------------------------------
+DA	c3	Componente de secuencia 3	Sequence component 3	Tercera componente de una magnitud de secuencias (CDC SEQ): según seqT, la homopolar o la de secuencia negativa.	IEC 61850-7-3 §7.4.7 (SEQ)
+DA	res	Residual	Residual	Magnitud residual de un conjunto trifásico (CDC WYE): suma de las tres fases.	IEC 61850-7-3 §7.4.5 (WYE)
+DA	net	Neta	Net	Magnitud neta de un conjunto trifásico (CDC WYE).	IEC 61850-7-3 §7.4.5 (WYE)
+DA	seqT	Tipo de secuencia	Sequence type	Qué representan c1, c2 y c3 en un CDC SEQ (positiva, negativa, homopolar u otra combinación).	IEC 61850-7-3 §7.4.7 (SEQ)
+# --- DA: valores y ajustes ------------------------------------------------------------------------------
+DA	cVal	Valor complejo	Complex value	Valor complejo (magnitud y ángulo) con banda muerta aplicada.	IEC 61850-7-3 (CMV)
+DA	instMag	Magnitud instantánea	Instantaneous magnitude	Magnitud sin banda muerta, tal como se mide.	IEC 61850-7-3 (MV/CMV)
+DA	setVal	Valor de ajuste	Setting value	Valor de un ajuste binario, entero, enumerado o de texto (SPG, ING, ENG, VSG).	IEC 61850-7-3 §7.8
+DA	setMag	Magnitud de ajuste	Setting magnitude	Valor de un ajuste analógico (ASG).	IEC 61850-7-3 §7.9
+DA	setSrcRef	Referencia de origen	Source reference setting	Referencia del objeto del que se toma la señal (ORG).	IEC 61850-7-3 §7.8.5 (ORG)
+DA	setSrcCB	Bloque de control de origen	Source control block	Bloque de control (GOOSE o SV) que publica la señal de origen.	IEC 61850-7-3 §7.8.5 (ORG)
+DA	setTstRef	Referencia de prueba	Test reference	Referencia del objeto que se usa en lugar del origen cuando la entrada está en prueba.	IEC 61850-7-3 §7.8.5 (ORG)
+DA	setTstCB	Bloque de control de prueba	Test control block	Bloque de control de la señal de prueba.	IEC 61850-7-3 §7.8.5 (ORG)
+DA	tstEna	Prueba habilitada	Test enable	Si es verdadero, la entrada toma la señal de prueba (setTstRef) en lugar de la de origen.	IEC 61850-7-3 §7.8.5 (ORG)
+DA	intAddr	Dirección interna	Internal address	Dirección interna del valor dentro del equipo.	IEC 61850-7-3 (ORG)
+DA	purpose	Propósito	Purpose	Para qué se usa la referencia.	IEC 61850-7-3 (ORG)
+DA	minVal	Valor mínimo	Minimum value	Valor mínimo admitido del ajuste.	IEC 61850-7-3 §7.8
+DA	maxVal	Valor máximo	Maximum value	Valor máximo admitido del ajuste.	IEC 61850-7-3 §7.8
+DA	stepSize	Paso	Step size	Paso entre valores admitidos del ajuste.	IEC 61850-7-3 §7.8
+DA	min	Mínimo	Minimum	Valor mínimo admitido.	IEC 61850-7-3
+DA	max	Máximo	Maximum	Valor máximo admitido.	IEC 61850-7-3
+DA	range	Rango	Range	Rango en que está la medida: normal, alto, bajo, muy alto, muy bajo.	IEC 61850-7-3 (MV)
+DA	rangeC	Configuración de rangos	Range configuration	Límites que definen los rangos de una medida.	IEC 61850-7-3 (MV)
+DA	sVC	Configuración de escala	Scaled value configuration	Escala y desplazamiento para convertir el entero transmitido en la magnitud real.	IEC 61850-7-3 (MV)
+DA	valRev	Revisión de valores	Value revision	Se incrementa cada vez que cambia un ajuste del nodo.	IEC 61850-7-3 / 7-4 Ed.2
+DA	paramRev	Revisión de parámetros	Parameter revision	Se incrementa cada vez que cambia un parámetro del nodo.	IEC 61850-7-3 / 7-4 Ed.2
+DA	pulsQty	Cantidad por pulso	Pulse quantity	Magnitud que representa cada pulso de un contador.	IEC 61850-7-3 (BCR)
+DA	frEna	Congelamiento habilitado	Freeze enable	Habilita el congelamiento periódico del contador.	IEC 61850-7-3 (BCR)
+DA	frPd	Período de congelamiento	Freeze period	Período del congelamiento del contador.	IEC 61850-7-3 (BCR)
+DA	frRs	Reposición al congelar	Reset at freeze	Si el contador vuelve a cero al congelarse.	IEC 61850-7-3 (BCR)
+DA	frTm	Hora del congelamiento	Freeze time	Hora del último congelamiento del contador.	IEC 61850-7-3 (BCR)
+DA	strTm	Hora de inicio	Start time	Hora de inicio del congelamiento.	IEC 61850-7-3 (BCR)
+DA	dirGeneral	Dirección general	General direction	Dirección de la falta (adelante, atrás o desconocida) para el conjunto.	IEC 61850-7-3 (ACD)
+DA	dirPhsA	Dirección fase A	Direction phase A	Dirección de la falta en la fase A.	IEC 61850-7-3 (ACD)
+DA	dirPhsB	Dirección fase B	Direction phase B	Dirección de la falta en la fase B.	IEC 61850-7-3 (ACD)
+DA	dirPhsC	Dirección fase C	Direction phase C	Dirección de la falta en la fase C.	IEC 61850-7-3 (ACD)
+DA	dirNeut	Dirección neutro	Direction neutral	Dirección de la falta a tierra.	IEC 61850-7-3 (ACD)
+DA	stSeld	Seleccionado	Selected	El objeto está seleccionado (SBO) y espera la orden.	IEC 61850-7-3 (controlables)
+DA	opRcvd	Orden recibida	Operate received	Se recibió una orden de operación.	IEC 61850-7-3 (controlables)
+DA	opOk	Orden aceptada	Operate OK	La orden fue aceptada.	IEC 61850-7-3 (controlables)
+DA	tOpOk	Hora de orden aceptada	Time operate OK	Hora en que la orden fue aceptada.	IEC 61850-7-3 (controlables)
+DA	ctlModel	Modelo de control	Control model	Cómo se controla el objeto: sólo estado (0), directo normal (1), SBO normal (2), directo reforzado (3), SBO reforzado (4).	IEC 61850-7-3 (controlables), 7-2 §20
+DA	sboTimeout	Tiempo de selección	SBO timeout	Tiempo máximo entre la selección y la orden de operación; vencido, la selección se cancela.	IEC 61850-7-3 (controlables)
+DA	sboClass	Clase de selección	SBO class	Si una selección sirve para una sola operación o para varias.	IEC 61850-7-3 (controlables)
+DA	operTimeout	Tiempo de operación	Operate timeout	Tiempo máximo para que la orden termine (por ejemplo, el recorrido del aparato).	IEC 61850-7-3 (controlables)
+DA	subEna	Sustitución habilitada	Substitution enable	Si es verdadero, el valor informado es el sustituido (subVal) en lugar del medido.	IEC 61850-7-3 (sustitución)
+DA	subVal	Valor sustituido	Substituted value	Valor que se informa mientras la sustitución está habilitada.	IEC 61850-7-3 (sustitución)
+DA	subMag	Magnitud sustituida	Substituted magnitude	Magnitud que se informa mientras la sustitución está habilitada.	IEC 61850-7-3 (sustitución)
+DA	subCVal	Valor complejo sustituido	Substituted complex value	Valor complejo que se informa mientras la sustitución está habilitada.	IEC 61850-7-3 (sustitución)
+DA	subQ	Calidad sustituida	Substituted quality	Calidad que se informa mientras la sustitución está habilitada.	IEC 61850-7-3 (sustitución)
+DA	subID	Quién sustituye	Substitution ID	Identificación de quien habilitó la sustitución.	IEC 61850-7-3 (sustitución)
+DA	blkEna	Bloqueo habilitado	Blocked enable	Si es verdadero, el valor queda congelado (bloqueado) y no se actualiza.	IEC 61850-7-3 (sustitución)
+DA	cnfEdit	Confirmar edición	Confirm edit	Escribir verdadero confirma los cambios hechos en el grupo de ajustes en edición.	IEC 61850-7-2 §16 (SGCB)
+# --- DA: control (estructuras de la orden) --------------------------------------------------------------
+DA	Oper	Operación	Operate	Estructura que se escribe para ejecutar una orden: valor, origen, ctlNum, hora, Test y Check.	IEC 61850-7-2 §20, 8-1
+DA	SBO	Selección	Select before operate	Lectura que selecciona el objeto antes de operarlo (seguridad normal).	IEC 61850-7-2 §20, 8-1
+DA	SBOw	Selección con valor	Select with value	Estructura que se escribe para seleccionar el objeto con el valor de la orden (seguridad reforzada).	IEC 61850-7-2 §20, 8-1
+DA	Cancel	Cancelación	Cancel	Estructura que se escribe para cancelar una selección u orden en curso.	IEC 61850-7-2 §20, 8-1
+DA	Test	Prueba	Test	Marca la orden como de prueba: el equipo la procesa sin actuar sobre el proceso, según su modo.	IEC 61850-7-2 §20
+DA	Check	Verificaciones	Check	Qué verificaciones pide la orden: sincronismo y enclavamiento.	IEC 61850-7-2 §20
+DA	T	Hora de la orden	Control time	Hora en que el cliente emitió la orden.	IEC 61850-7-2 §20, 8-1
+# --- DA: placa y descripción -----------------------------------------------------------------------------
+DA	configRev	Revisión de configuración	Configuration revision	Revisión de la configuración del LD (en la placa de LLN0).	IEC 61850-7-3 (LPL)
+DA	ldNs	Espacio de nombres del LD	Logical device name space	Edición de la norma (espacio de nombres) del LD, por ejemplo "IEC 61850-7-4:2007".	IEC 61850-7-3 (LPL)
+DA	dataNs	Espacio de nombres del dato	Data name space	Espacio de nombres del DO cuando no es el del LN (extensiones).	IEC 61850-7-3
+DA	location	Ubicación	Location	Ubicación del equipo, como texto.	IEC 61850-7-3 (DPL)
+DA	latitude	Latitud	Latitude	Latitud del equipo.	IEC 61850-7-3 (DPL)
+DA	longitude	Longitud	Longitude	Longitud del equipo.	IEC 61850-7-3 (DPL)
+DA	altitude	Altitud	Altitude	Altitud del equipo.	IEC 61850-7-3 (DPL)
+DA	mRID	Identificador del recurso	Master resource identifier	Identificador único del recurso (enlace con el modelo CIM).	IEC 61850-7-3 (DPL)
+DA	owner	Propietario	Owner	En una placa (DPL), el propietario del equipo. En un bloque de reportes, el cliente dueño del bloque.	IEC 61850-7-3 (DPL), 7-2 §17
+DA	ePSName	Nombre en el sistema eléctrico	Electric power system name	Nombre del equipo en el sistema eléctrico.	IEC 61850-7-3 (DPL)
+DA	primeOper	Operador principal	Primary operator	Operador principal del equipo.	IEC 61850-7-3 (DPL)
+DA	secondOper	Operador secundario	Secondary operator	Operador secundario del equipo.	IEC 61850-7-3 (DPL)
+DA	name	Nombre	Name	Nombre del elemento.	IEC 61850-7-3
+DA	maxTime	Hora del máximo	Time of maximum	Hora en que se registró el valor máximo.	IEC 61850-7-3
+DA	minTime	Hora del mínimo	Time of minimum	Hora en que se registró el valor mínimo.	IEC 61850-7-3
+DA	fixedOffs	Desplazamiento fijo	Fixed offset	Desplazamiento horario fijo respecto de UTC.	IEC 61850-7-3 / 7-4 (LTMS)
+DA	pulseConfig	Configuración de pulso	Pulse configuration	Forma del pulso de salida que genera la orden (tipo, duración, cantidad).	IEC 61850-7-3 (controlables)
+# --- DA: bloques de control de reportes, log y GOOSE -------------------------------------------------
+DA	rptID	Identificador del reporte	Report ID	Identificador que viaja en cada reporte del bloque.	IEC 61850-7-2 §17
+DA	rptEna	Reporte habilitado	Report enable	Habilita el envío de reportes del bloque.	IEC 61850-7-2 §17
+DA	resv	Reservado	Reserve	El URCB está reservado por un cliente.	IEC 61850-7-2 §17 (URCB)
+DA	resvTms	Tiempo de reserva	Reservation time	Tiempo que el BRCB queda reservado para un cliente tras desconectarse.	IEC 61850-7-2 §17 (BRCB)
+DA	datSet	Conjunto de datos	Data set	Referencia del DataSet que informa el bloque.	IEC 61850-7-2 §17-19
+DA	confRev	Revisión de configuración	Configuration revision	Revisión de la configuración del bloque; cambia si cambia su DataSet.	IEC 61850-7-2 §17-19
+DA	optFlds	Campos opcionales	Optional fields	Qué campos opcionales lleva cada reporte (número de secuencia, hora, motivo, DataSet, etc.).	IEC 61850-7-2 §17
+DA	bufTm	Tiempo de buffer	Buffer time	Tiempo que el servidor junta cambios antes de enviar un reporte.	IEC 61850-7-2 §17
+DA	sqNum	Número de secuencia	Sequence number	Número de secuencia de los reportes del bloque.	IEC 61850-7-2 §17
+DA	trgOps	Condiciones de disparo	Trigger options	Qué dispara un reporte: cambio de dato, de calidad, actualización, integridad o interrogación general.	IEC 61850-7-2 §17
+DA	intgPd	Período de integridad	Integrity period	Período de los reportes de integridad (todo el DataSet).	IEC 61850-7-2 §17
+DA	gi	Interrogación general	General interrogation	Escribir verdadero pide un reporte con todo el DataSet.	IEC 61850-7-2 §17
+DA	purgeBuf	Vaciar buffer	Purge buffer	Escribir verdadero descarta los reportes guardados en el buffer.	IEC 61850-7-2 §17 (BRCB)
+DA	entryID	Identificador de entrada	Entry ID	Identificador del último reporte guardado; permite retomar desde ahí.	IEC 61850-7-2 §17 (BRCB)
+DA	timeOfEntry	Hora de la entrada	Time of entry	Hora del último reporte guardado.	IEC 61850-7-2 §17 (BRCB)
+DA	logEna	Log habilitado	Log enable	Habilita el registro en el log.	IEC 61850-7-2 §17.3 (LCB)
+DA	logRef	Referencia del log	Log reference	Log en el que escribe el bloque.	IEC 61850-7-2 §17.3 (LCB)
+DA	oldEntrTm	Hora de la entrada más vieja	Oldest entry time	Hora de la entrada más vieja del log.	IEC 61850-7-2 §17.3 (LOG)
+DA	newEntrTm	Hora de la entrada más nueva	Newest entry time	Hora de la entrada más nueva del log.	IEC 61850-7-2 §17.3 (LOG)
+DA	oldEnt	Entrada más vieja	Oldest entry	Identificador de la entrada más vieja del log.	IEC 61850-7-2 §17.3 (LOG)
+DA	newEnt	Entrada más nueva	Newest entry	Identificador de la entrada más nueva del log.	IEC 61850-7-2 §17.3 (LOG)
+DA	goEna	GOOSE habilitado	GOOSE enable	Habilita la publicación del GOOSE.	IEC 61850-7-2 §18
+DA	goID	Identificador del GOOSE	GOOSE ID	Identificador que viaja en cada mensaje GOOSE.	IEC 61850-7-2 §18
+DA	ndsCom	Necesita puesta en servicio	Needs commissioning	El bloque necesita revisarse (por ejemplo, su DataSet no es válido).	IEC 61850-7-2 §18
+DA	dstAddress	Dirección de destino	Destination address	Dirección MAC multicast, prioridad, VLAN y APPID del GOOSE.	IEC 61850-7-2 §18, 8-1
+DA	numOfSG	Cantidad de grupos de ajustes	Number of setting groups	Cuántos grupos de ajustes tiene el LD.	IEC 61850-7-2 §16 (SGCB)
+DA	actSG	Grupo activo	Active setting group	Grupo de ajustes en uso.	IEC 61850-7-2 §16 (SGCB)
+DA	editSG	Grupo en edición	Edit setting group	Grupo de ajustes seleccionado para editar (0 = ninguno).	IEC 61850-7-2 §16 (SGCB)
+DA	lActTm	Hora de activación	Last activation time	Hora de la última activación de un grupo de ajustes.	IEC 61850-7-2 §16 (SGCB)
+# --- DA: seguimiento de servicios (LTRK) ----------------------------------------------------------------
+DA	objRef	Objeto	Object reference	Objeto sobre el que se ejecutó el servicio registrado.	IEC 61850-7-3 §7.10
+DA	serviceType	Tipo de servicio	Service type	Qué servicio se ejecutó.	IEC 61850-7-3 §7.10
+DA	errorCode	Código de error	Error code	Resultado del servicio (0 = sin error).	IEC 61850-7-3 §7.10
+DA	originatorID	Originador	Originator ID	Quién pidió el servicio.	IEC 61850-7-3 §7.10
+DA	respAddCause	Causa adicional	Response AddCause	AddCause de la respuesta a un servicio de control.	IEC 61850-7-3 §7.10

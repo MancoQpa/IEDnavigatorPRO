@@ -1,0 +1,275 @@
+# Objetos de dato (DO) que no define IEC 61850-7-4/7-410/7-420 y que usa al menos un fabricante.
+#
+# Origen de cada explicación: el desc que el propio fabricante pone en el SCL del equipo y, cuando
+# lo trae, la tabla de ajustes o de señales de su manual. No se inventa nada que no diga una de las
+# dos fuentes; cuando sólo hay el desc, la explicación se limita a él.
+#
+# Columnas (separadas por tabulador):
+#   clave  clases LN  CDC  nombre ES  nombre EN  descripción
+# La clave es el nombre del DO tal como aparece en el modelo. El diccionario prueba también el
+# nombre sin dígitos finales, así que una familia numerada (OUTMATR1…8) va una sola vez.
+# Los nombres con dígitos que forman parte del significado (Ena3U0, StrValI2) van completos.
+#
+# --- Ajustes generales del equipo -----------------------------------------------------------------
+ActSGST	LPHD	MV	Grupo de ajustes activo	Active setting group	Número del grupo de ajustes que el equipo está usando, informado como medida. Es el ajuste "Active_Grp" del menú de ajustes del sistema.
+SettingGrp	LPHD	ING	Grupo de ajustes	Setting group	Ajuste del grupo de ajustes activo ("Active_Grp"). Cambiarlo cambia qué conjunto de ajustes de protección usa el equipo.
+DeviceName	LPHD	VSG	Nombre del equipo	Device name	Nombre del equipo configurado en sus ajustes de sistema.
+StationNs	LPHD	VSG	Nombre de la estación	Station name	Nombre de la estación configurado en el equipo.
+LinNo	LLN0	VSG	Número de línea	Line number	Identificación de la línea o salida que protege el equipo, como texto de ajuste.
+TimeZone	LLN0	ING	Huso horario	Time zone	Huso horario configurado en el equipo para mostrar la hora local.
+SntpAddr	LLN0	ING	Dirección SNTP	SNTP address	Dirección del servidor de hora SNTP configurada en el equipo.
+LocStaAddr	LPHD	ING	Dirección de estación local	Local station address	Dirección de comunicación de la estación local (ajuste de comunicaciones del equipo).
+DstStaAddr	LPHD	ING	Dirección de estación de destino	Destination station address	Dirección de comunicación de la estación de destino (ajuste de comunicaciones del equipo).
+GooseEna	LPHD	SPG	Habilitación de entradas GOOSE	GOOSE inputs enable	Habilita que el equipo use las entradas binarias recibidas por GOOSE.
+OthGoEna	LPHD	SPG	Habilitación de otras entradas GOOSE	Other GOOSE inputs enable	Habilita las entradas binarias GOOSE adicionales ("Other GOOSE DI").
+FuncEna	LLN0	SPC	Habilitación de función	Function enable	Habilitación controlable de una función del equipo; cada instancia numerada (FuncEna1, FuncEna2…) corresponde a una función distinta ("Function n enabled").
+CommTest	LLN0	SPS	Prueba de comunicación	Communication test	Indicación de que el equipo está en prueba de comunicación.
+CommTstMet	LLN0	SPS	Prueba de comunicación habilitada	Communication test enabled	Indicación de que la prueba de comunicación está habilitada.
+RemTrig	LLN0	SPC	Disparo remoto del registrador	Remote trigger	Orden para disparar el registro oscilográfico desde el sistema (TrigDFR_Rmt en el manual).
+CBFlt	LLN0	SPC	Falla de interruptor	Circuit breaker fault	Señal de falla del interruptor declarada en LLN0 ("Current Breaker Flaut" en el SCL).
+DelayTRtg	LLN0	SAV	Retardo de valores muestreados	SV delay time	Tiempo de retardo nominal de los valores muestreados (SV) que recibe el equipo.
+ECVTDelay	TCTR	ASG	Retardo del transformador electrónico	ECVT delay time	Tiempo de retardo del transformador de medida electrónico (ECVT) asociado al canal.
+# --- Datos nominales de transformadores y equipos ----------------------------------------------------
+ARtgSnd	TCTR	ASG	Corriente nominal secundaria	Rated secondary current	Corriente nominal secundaria del transformador de corriente (ajustes "I2n": Prot.I2n, Neu.I2n, SEF.I2n). Complementa a ARtg, el valor primario.
+VRtgSnd	TVTR	ASG	Tensión nominal secundaria	Rated secondary voltage	Tensión nominal secundaria del transformador de tensión (ajustes "U2n": Prot.U2n, Syn.U2n).
+NegPol	TCTR	SPG	Polaridad invertida del TC	Reversed CT polarity	Invierte la polaridad del transformador de corriente ("En_RevCT"): el equipo toma la corriente con el sentido contrario.
+CTMod	TCTR	SPG	Modo del TC	CT mode	Modo de conexión del transformador de corriente.
+CTPAB	TCTR	SPG	TC fase AB	CT phase AB	Selección del TC conectado entre fases A y B.
+CTPBC	TCTR	SPG	TC fase BC	CT phase BC	Selección del TC conectado entre fases B y C.
+CTPCA	TCTR	SPG	TC fase CA	CT phase CA	Selección del TC conectado entre fases C y A.
+AmpChB	TCTR	SAV	Corriente del canal B	Current, channel B	Corriente muestreada del segundo canal (valor muestreado de otro canal de adquisición).
+VolChB	TVTR	SAV	Tensión del canal B	Voltage, channel B	Tensión muestreada del segundo canal (valor muestreado de otro canal de adquisición).
+LinPTMod	TVTR	SPG	Modo del TT de línea	Line VT mode	Modo de conexión del transformador de tensión de línea.
+LinTVMod	TVTR	SPG	Modo del TT de línea	Line VT mode	Modo de conexión del transformador de tensión de línea (variante de LinPTMod).
+ZroVCalEna	TVTR	SPG	Tensión homopolar calculada	Calculated zero-sequence voltage	Cuando está habilitado, la tensión homopolar (3U0) se calcula a partir de las tres fases en lugar de medirse.
+ZroACalEna	PTOC,TCTR	SPG	Corriente homopolar calculada	Calculated zero-sequence current	Selecciona si la corriente homopolar (3I0) se calcula a partir de las fases o se mide ("Opt_3I0" en el manual).
+InARtg	LPHD	ASG	Corriente nominal In	Rated current In	Corriente nominal del equipo.
+LinARtg	LPHD	ASG	Corriente nominal de línea	Line rated current	Corriente nominal de la línea.
+CapARtg	LPHD	ASG	Corriente nominal del capacitor	Capacitor rated current	Corriente nominal del banco de capacitores.
+CapXRtg	LPHD	ASG	Reactancia nominal del capacitor	Capacitor rated reactance	Valor nominal de reactancia del banco de capacitores.
+PARtg	LPHD	ASG	Corriente nominal de plataforma	Platform rated current	Corriente nominal de la plataforma (equipos de compensación serie).
+MovARtg	LPHD	ASG	Corriente nominal del varistor	MOV rated current	Corriente nominal del varistor de óxido metálico (MOV).
+MovV	LPHD	ASG	Tensión del módulo varistor	MOV module voltage	Tensión de cada módulo varistor (MOV).
+MovPNum	LPHD	ING	Módulos varistores en paralelo	MOV modules in parallel	Cantidad de módulos varistores conectados en paralelo.
+MovSNum	LPHD	ING	Módulos varistores en serie	MOV modules in series	Cantidad de módulos varistores conectados en serie.
+# --- Sobreintensidad (PTOC) ----------------------------------------------------------------------------
+InvertMod	PTOC	ING	Curva de tiempo inverso	Inverse-time curve	Selección de la curva característica de la etapa ("Opt_Curve"). En 0 la etapa es de tiempo definido; otro valor elige una curva de tiempo inverso (IDMT).
+ConsAlpha	PTOC	ASG	Constante alfa de la curva	Curve constant alpha	Exponente de la curva de tiempo inverso definida por el usuario ("Alpha" en el manual).
+ConsC	PTOC	ASG	Constante C de la curva	Curve constant C	Constante C de la curva de tiempo inverso definida por el usuario.
+ConsK	PTOC	ASG	Constante K de la curva	Curve constant K	Constante K de la curva de tiempo inverso definida por el usuario.
+CTmMult	PTOC	ASG	Multiplicador de tiempo en carga fría	Cold-load time multiplier	Multiplicador de tiempo (TMS) que usa la etapa mientras está activa la lógica de arranque en carga fría ("CLP.TMS").
+StrMult	PTOC	ASG	Multiplicador de arranque en carga fría	Cold-load pickup multiplier	Multiplicador del umbral de arranque mientras está activa la lógica de carga fría ("CLP.IMult").
+COpDlTmms	PTOC	ING	Tiempo de carga fría	Cold-load time	Tiempo de la lógica de arranque en carga fría, en ms ("CLP.t_Op").
+RsMult	PTOC	ASG	Multiplicador de reposición	Reset multiplier	Multiplicador del tiempo de reposición de la protección de sobrecarga.
+HaBlkEna	PTOC	SPG	Bloqueo por armónicos	Harmonic blocking enable	Habilita el bloqueo de la etapa por contenido de armónicos ("En_Hm_Blk"), típico para no disparar con la corriente de conexión de un transformador.
+AlmEna	PTOC	SPG	Disparo o alarma	Trip or alarm	Elige si la etapa dispara o sólo da alarma ("Opt_Trp/Alm").
+DirEna	PTOC	SPG	Habilitación direccional	Directional mode enable	Habilita el control direccional de la etapa.
+VolBlkEna	PTOC	SPG	Habilitación del bloqueo por tensión	Voltage blocking enable	Habilita el control de la etapa por tensión ("En_Volt_Blk").
+VolBlk	PTOC	ASG	Bloqueo por tensión homopolar	Zero-sequence voltage blocking	Umbral de tensión homopolar que bloquea la etapa.
+TVFailEna	PTOC	SPG	Bloqueo por falla de TT	VT failure blocking enable	Bloquea la etapa cuando se detecta falla del transformador de tensión.
+PhUVEna	PTOC	SPG	Habilitación de subtensión de fase	Phase undervoltage enable	Habilita el control por subtensión de fase.
+PhUVVal	PTOC	ASG	Umbral de subtensión de fase	Phase undervoltage value	Umbral de subtensión de fase.
+PPUVEna	PTOC	SPG	Habilitación de subtensión entre fases	Phase-to-phase undervoltage enable	Habilita el control por subtensión entre fases.
+PPUVVal	PTOC	ASG	Umbral de subtensión entre fases	Phase-to-phase undervoltage value	Umbral de subtensión entre fases.
+Ena3U0	PTOC	SPG	Habilitación de sobretensión homopolar	Zero-sequence overvoltage enable	Habilita el control por sobretensión homopolar (3U0).
+EnaU2	PTOC	SPG	Habilitación de sobretensión de secuencia negativa	Negative-sequence overvoltage enable	Habilita el control por sobretensión de secuencia negativa (U2).
+OVVal3U0	PTOC	ASG	Umbral de sobretensión homopolar	Zero-sequence overvoltage value	Umbral de sobretensión homopolar (3U0).
+OVValU2	PTOC	ASG	Umbral de sobretensión de secuencia negativa	Negative-sequence overvoltage value	Umbral de sobretensión de secuencia negativa (U2).
+OvPBlkValA	PTOC	ASG	Corriente máxima de operación	Maximum operating current	Valor de bloqueo: por encima de esta corriente la etapa no opera.
+OpDlTms	PTOC	ASG	Tiempo de operación (s)	Operate delay time (s)	Tiempo de operación en segundos. Es la variante en segundos del DO estándar OpDlTmms (milisegundos).
+AccDlTmms	PTOC	ING	Tiempo de reposición acelerada	Accelerate reset delay time	Tiempo de la reposición acelerada de la etapa, en ms.
+CBWaitTmms	PTOC	ING	Tiempo de espera del interruptor	Breaker wait time	Tiempo de espera asociado al interruptor, en ms.
+BlkRecEna	PTOC	SPG	Bloqueo del reenganche	Block reclose enable	Si está habilitado, la operación de la etapa bloquea el reenganche.
+TrigMod	GGIO,PTOC	ING	Modo de disparo	Trigger mode	Modo de disparo o activación de la función.
+# --- Disparo y reenganche (PTRC) ---------------------------------------------------------------------
+TPTrMod	PTRC	ING	Modo de disparo tripolar	Three-pole trip mode	Modo de disparo tripolar.
+TPTrModB	PTRC	SPG	Modo de disparo tripolar	Three-pole trip mode	Modo de disparo tripolar (como ajuste binario).
+TrStrp	PTRC	SPC	Puente de disparo	Trip strap	Puente (strap) de software que habilita la salida de disparo.
+StrBF	PTRC	ACT	Arranque de falla de interruptor	Start breaker failure	Arranque de la protección de falla de interruptor emitido por el disparo.
+StrBFStrp	PTRC	SPC	Puente de arranque de falla de interruptor	Start breaker failure strap	Puente (strap) de software que habilita el arranque de la falla de interruptor.
+BlkRecST	PTRC	SPS	Reenganche bloqueado	Block reclosing	Indicación de que el reenganche está bloqueado.
+BlkRecStrp	PTRC	SPC	Puente de bloqueo del reenganche	Block recloser strap	Puente (strap) de software que bloquea el reenganche.
+ReclsTmms	PTRC	ING	Tiempo de reenganche	Reclose delay time	Tiempo de reenganche, en ms.
+ReclsTms	PTRC	ASG	Tiempo de reenganche (s)	Reclose delay time (s)	Tiempo de reenganche, en segundos.
+PhSFailEna	PTRC	SPG	Falla de selección de fase	Phase selection failure enable	Habilita la lógica de falla de selección de fase.
+PhSFailTmms	PTRC	ING	Tiempo de falla de selección de fase	Phase selection failure time	Tiempo de la lógica de falla de selección de fase, en ms.
+PhSFailBlk	PTRC	SPG	Bloqueo del reenganche por falla de selección de fase	Phase selection failure blocks reclose	Si falla la selección de fase, se bloquea el reenganche.
+MPFBlkRec	PTRC	SPG	Bloqueo del reenganche en falta multifásica	Multi-phase fault blocks reclose	Una falta multifásica bloquea el reenganche.
+TPFBlkRec	PTRC	SPG	Bloqueo del reenganche en falta trifásica	Three-phase fault blocks reclose	Una falta trifásica bloquea el reenganche.
+Z2BlkRec	PTRC	SPG	Bloqueo del reenganche por zona 2	Zone 2 fault blocks reclose	Una falta en zona 2 bloquea el reenganche.
+Z3BlkRec	PTRC	SPG	Bloqueo del reenganche por zona 3	Zone 3 fault blocks reclose	Una falta en zona 3 bloquea el reenganche.
+AcsVTyp	PTRC	ING	Tipo de tensión de acceso	Access voltage type	Tipo de tensión de acceso configurado.
+OUTMATR	GGIO,PTOC,PTRC,RBRF	ING	Matriz de salidas	Output matrix	Matriz de salidas: un número cuyos bits eligen qué contactos de salida activa la función ("OutMap" en el manual). Cada instancia numerada es otra matriz.
+# --- Falla de interruptor (RBRF) -------------------------------------------------------------------
+BF1BF2Ena	RBRF	SPG	Habilitación de etapas 1 y 2	Stages 1 and 2 enable	Habilita la primera y la segunda etapa de la protección de falla de interruptor.
+BF1Ena	RBRF	SPG	Habilitación de la etapa 1	Stage 1 enable	Habilita la etapa 1 de falla de interruptor ("En_t1"): redisparo o disparo tras el primer tiempo.
+BF2Ena	RBRF	SPG	Habilitación de la etapa 2	Stage 2 enable	Habilita la etapa 2 de falla de interruptor ("En_t2"): disparo de los interruptores adyacentes.
+Fail1Tmms	RBRF	ING	Tiempo de la etapa 1	Stage 1 time	Tiempo de la etapa 1 de falla de interruptor ("t1_Op"), en ms: dispara el interruptor propio.
+Fail2Tmms	RBRF	ING	Tiempo de la etapa 2	Stage 2 time	Tiempo de la etapa 2 ("t2_Op"), en ms: dispara todos los interruptores adyacentes.
+OpTie	RBRF	ACT	Operación de la etapa 2	Stage 2 operate	Operación de la etapa 2 de falla de interruptor ("Op_t2").
+ReTrEna	RBRF	SPG	Habilitación del redisparo	Re-trip enable	Habilita el redisparo del propio interruptor ("En_ReTrp") antes de disparar los adyacentes.
+ReTrTmms	RBRF	ING	Tiempo de redisparo	Re-trip time	Tiempo de redisparo ("t_ReTrp"), en ms.
+ReTrA	RBRF	SPS	Redisparo fase A	Re-trip phase A	Redisparo de la fase A del interruptor.
+ReTrB	RBRF	SPS	Redisparo fase B	Re-trip phase B	Redisparo de la fase B del interruptor.
+ReTrC	RBRF	SPS	Redisparo fase C	Re-trip phase C	Redisparo de la fase C del interruptor.
+ReTrTP	RBRF	SPS	Redisparo tripolar	Three-phase re-trip	La falla de interruptor redisparó las tres fases del interruptor ("Op_ReTrp3P").
+StrValA	RBRF	ASG	Umbral de corriente de fase	Phase current setting	Umbral de corriente de fase del criterio de corriente ("I_Set").
+StrVal3I0	RBRF	ASG	Umbral de corriente homopolar	Zero-sequence current setting	Umbral de corriente homopolar 3I0 del criterio de corriente ("3I0_Set").
+StrValI2	RBRF	ASG	Umbral de corriente de secuencia negativa	Negative-sequence current setting	Umbral de corriente de secuencia negativa I2 ("I2_Set").
+IHOCEna	RBRF	SPG	Criterio de corriente de fase	Phase current criterion enable	Habilita el criterio de corriente de fase ("En_Ip").
+I0Ena	RBRF	SPG	Criterio de 3I0	3I0 criterion enable	Habilita el criterio de corriente homopolar.
+I2Ena	RBRF	SPG	Criterio de I2	I2 criterion enable	Habilita el criterio de corriente de secuencia negativa.
+I0BlkEna	RBRF	SPG	Criterio de 3I0 con disparo tripolar	3I0 criterion, three-pole	Habilita el criterio de 3I0 cuando la falla de interruptor arranca con un disparo tripolar ("En_3I0_3P").
+I2BlkEna	RBRF	SPG	Criterio de I2 con disparo tripolar	I2 criterion, three-pole	Habilita el criterio de I2 cuando arranca con un disparo tripolar ("En_I2_3P").
+SPlTrI0Ena	RBRF	SPG	Criterio de 3I0 con disparo monopolar	3I0 criterion, single-pole	Habilita el criterio de 3I0 cuando arranca con un disparo monopolar ("En_3I0_1P").
+CBClsEna	RBRF	SPG	Control por contacto del interruptor	Breaker contact control	Usa los contactos auxiliares del interruptor como criterio ("En_CB_Ctrl").
+DPFCEna	RBRF	SPG	Arranque por DPFC	DPFC start	Habilita el arranque por el elemento de variación de corriente (DPFC).
+FDBfpEna	RBRF	SPG	Falla de interruptor desde afuera	External breaker failure initiation	Habilita el arranque de la falla de interruptor desde una señal externa.
+BIAlm	RBRF	SPS	Alarma de arranque	Initiation alarm	Alarma: la señal que arranca la falla de interruptor quedó presente demasiado tiempo ("Alm_Init").
+BIAlmEna	RBRF	SPG	Habilitación de la alarma de arranque	Initiation alarm enable	Habilita la alarma de señal de arranque prolongada ("En_Alm_Init").
+PDPPosEna	RBRF	SPG	Bloqueo por discordancia de polos	Pole discrepancy blocking	La posición de discordancia de polos bloquea la falla de interruptor.
+TrPosEna	RBRF	SPG	Bloqueo por disparo de transformador	Transformer trip blocking	La posición de disparo del transformador bloquea la falla de interruptor.
+VolEna	RBRF	SPG	Habilitación del bloqueo por tensión	Voltage blocking enable	Habilita el bloqueo por tensión de la falla de interruptor.
+UVBlkVal	RBRF	ASG	Bloqueo por tensión de fase	Phase voltage blocking value	Valor de tensión de fase para el bloqueo.
+V0BlkVal	RBRF	ASG	Bloqueo por tensión homopolar	V0 blocking value	Valor de tensión homopolar para el bloqueo.
+V2BlkVal	RBRF	ASG	Bloqueo por tensión de secuencia negativa	V2 blocking value	Valor de tensión de secuencia negativa para el bloqueo.
+# --- Direccional (RDIR) ---------------------------------------------------------------------------
+DirModEna	RDIR	SPG	Habilitación del modo direccional	Directional mode enable	Habilita el modo direccional.
+ROCChrAng	RDIR	ASG	Ángulo característico residual	Residual characteristic angle	Ángulo característico (RCA) del elemento direccional de tierra: el desfase entre corriente y tensión de máxima sensibilidad.
+NgOCChrAng	RDIR	ASG	Ángulo característico de secuencia negativa	Negative-sequence characteristic angle	Ángulo característico del elemento direccional de secuencia negativa.
+ROCTVFEna	GGIO,RDIR	SPG	Bloqueo por falla de TT	VT failure blocking	Bloquea el direccional de tierra cuando hay falla del transformador de tensión ("En_VTS_Blk").
+Z0CVal	RDIR	ASG	Impedancia homopolar compensada	Compensated zero-sequence impedance	Impedancia homopolar de compensación del elemento direccional.
+Z2CVal	RDIR	ASG	Impedancia de secuencia negativa compensada	Compensated negative-sequence impedance	Impedancia de secuencia negativa de compensación del elemento direccional.
+# --- Arranques generales en LLN0 ----------------------------------------------------------------------
+DPFCStr	LLN0	ASG	Arranque por DPFC	DPFC start value	Umbral de arranque del elemento de variación de corriente (DPFC).
+ROCStr	LLN0	ASG	Arranque por corriente residual	Residual current start value	Umbral de arranque por corriente residual.
+N0CStr	LLN0	ASG	Arranque por corriente de secuencia negativa	Negative-sequence current start value	Umbral de arranque por corriente de secuencia negativa.
+NOCEna	LLN0	SPG	Habilitación del arranque por secuencia negativa	Negative-sequence current start enable	Habilita el arranque por corriente de secuencia negativa.
+Z3AuxStr	LLN0	SPG	Arranque auxiliar de zona 3	Zone 3 auxiliary start	Arranque auxiliar de la zona 3.
+# --- Supervisión de TC y TT (GGIO de supervisión) ------------------------------------------------------
+CTFlChkEna	GGIO	SPG	Supervisión de TC	CT supervision enable	Habilita la supervisión del circuito de corriente (CTS).
+CTFlTmms	GGIO	ING	Tiempo de supervisión de TC	CT supervision time	Tiempo de la supervisión del circuito de corriente, en ms.
+IROCCTFail	GGIO	ASG	Umbral de corriente por falla de TC	CT failure current value	Umbral de corriente de la supervisión de TC.
+IROVCTFail	GGIO	ASG	Umbral de tensión por falla de TC	CT failure voltage value	Umbral de tensión de la supervisión de TC.
+TVFlChkEna	GGIO	SPG	Supervisión de TT	VT supervision enable	Habilita la supervisión del circuito de tensión (VTS).
+TVFlTmms	GGIO	ING	Tiempo de supervisión de TT	VT supervision time	Tiempo de la supervisión del circuito de tensión, en ms.
+VPosTVFail	GGIO	ASG	Tensión de secuencia positiva para VTS	Positive-sequence voltage for VTS	Umbral de tensión de secuencia positiva de la supervisión de TT.
+VNegTVFail	GGIO	ASG	Tensión de secuencia negativa para VTS	Negative-sequence voltage for VTS	Umbral de tensión de secuencia negativa de la supervisión de TT.
+I2Blk	GGIO	ASG	Corriente de secuencia negativa para VTS	Negative-sequence current for VTS	Umbral de corriente de secuencia negativa que bloquea la supervisión de TT.
+IpBlk	GGIO	ASG	Corriente de fase para VTS	Phase current for VTS	Umbral de corriente de fase de la supervisión de TT.
+BlkValVNg	GGIO	ASG	Bloqueo por tensión de secuencia negativa	Negative-sequence voltage block	Valor de bloqueo por tensión de secuencia negativa.
+BlkValVpp	GGIO	ASG	Bloqueo por tensión entre fases	Phase-to-phase voltage block	Valor de bloqueo por tensión entre fases.
+BlkOthVEna	GGIO	SPG	Bloqueo por el otro lado	Block by other side	Habilita el bloqueo por la tensión del otro lado.
+VCETmms	GGIO	ING	Tiempo del elemento de control por tensión	Voltage control element timer	Temporizador del elemento de control por tensión, en ms.
+BO1PlsTmms	GGIO	ING	Tiempo de pulso de salida	Output pulse time	Duración del pulso del contacto de salida, en ms. En algunas instancias el SCL lo usa para otro tiempo (por ejemplo, retardo de alarma de la supervisión).
+BO2PlsTmms	GGIO	ING	Tiempo de pulso de salida	Output pulse time	Duración del pulso del contacto de salida, en ms.
+BO3PlsTmms	GGIO	ING	Tiempo de pulso de salida	Output pulse time	Duración del pulso del contacto de salida, en ms.
+BO4PlsTmms	GGIO	ING	Tiempo de pulso de salida	Output pulse time	Duración del pulso del contacto de salida, en ms.
+BO5PlsTmms	GGIO	ING	Tiempo de pulso de salida	Output pulse time	Duración del pulso del contacto de salida, en ms.
+BO6PlsTmms	GGIO	ING	Tiempo de pulso de salida	Output pulse time	Duración del pulso del contacto de salida, en ms.
+BO7PlsTmms	GGIO	ING	Tiempo de pulso de salida	Output pulse time	Duración del pulso del contacto de salida, en ms.
+BO8PlsTmms	GGIO	ING	Tiempo de pulso de salida	Output pulse time	Duración del pulso del contacto de salida, en ms.
+ACTSO	GGIO	ACT	Disparo del registrador	Recorder trigger	Señal que disparó el registro oscilográfico; cada instancia es un origen distinto (por muestreo, por entrada binaria, manual, por calidad, remoto).
+# --- Enclavamiento (CILO) ---------------------------------------------------------------------------
+EnaOp	CILO	SPS	Operación habilitada	Operation enabled	Indicación de que la apertura y el cierre del aparato están habilitados por el enclavamiento ("Opn/Cls_Enabled").
+EnaOpCtrl	CILO	SPC	Habilitar operación	Enable operation	Habilitación controlable de la operación (en el SCL: para unidad de control de vano).
+EnaClsLck	CILO	SPG	Enclavamiento de cierre	Close interlock enable	Habilita el enclavamiento del cierre.
+EnaOpnLck	CILO	SPG	Enclavamiento de apertura	Open interlock enable	Habilita el enclavamiento de la apertura.
+# --- Verificación de sincronismo (RSYN) -----------------------------------------------------------------
+SynChkEna	RSYN	SPG	Modo con verificación de sincronismo	Synchrocheck mode enable	Habilita el cierre con verificación de sincronismo.
+NoChkEna	RSYN	SPG	Modo sin verificación	No-check mode enable	Habilita el cierre sin ninguna verificación.
+DfHzChkEna	RSYN	SPG	Verificación de diferencia de frecuencia	Frequency difference check enable	Habilita la verificación de la diferencia de frecuencia.
+PhEna	RSYN	SPG	Sincronismo con tensión de fase	Phase voltage synchronism	Usa la tensión de fase para la verificación de sincronismo ("En_PhVolt_Syn").
+RecChkSyn	RSYN	SPG	Reenganche con sincronismo	Reclose with synchrocheck	El reenganche verifica sincronismo.
+RecChkDea	RSYN	SPG	Reenganche con línea muerta	Reclose with dead line check	El reenganche verifica línea sin tensión.
+BsDeaEna	RSYN	SPG	Barra muerta, línea viva	Dead bus, live line	Permite el cierre con barra sin tensión y línea con tensión ("En_DdB_LvL_AR").
+LnDeaEna	RSYN	SPG	Barra viva, línea muerta	Live bus, dead line	Permite el cierre con barra con tensión y línea sin tensión ("En_LvB_DdL_AR").
+LnBsDeaEna	RSYN	SPG	Barra muerta, línea muerta	Dead bus, dead line	Permite el cierre con barra y línea sin tensión ("En_DdB_DdL_AR").
+SDdRDdEna	RSYN	SPG	Habilitación muerto-muerto	Dead-dead enable	Habilita el cierre con los dos lados sin tensión (S = lado de origen, R = lado de referencia).
+SDdRLvEna	RSYN	SPG	Habilitación muerto-vivo	Dead-live enable	Habilita el cierre con el lado S sin tensión y el lado R con tensión.
+SLvRDdEna	RSYN	SPG	Habilitación vivo-muerto	Live-dead enable	Habilita el cierre con el lado S con tensión y el lado R sin tensión.
+OkSDdRDd	RSYN	SPS	Condición muerto-muerto cumplida	Dead-dead condition met	Se cumple la condición de los dos lados sin tensión.
+OkSDdRLv	RSYN	SPS	Condición muerto-vivo cumplida	Dead-live condition met	Se cumple la condición lado S sin tensión, lado R con tensión.
+OkSLvRDd	RSYN	SPS	Condición vivo-muerto cumplida	Live-dead condition met	Se cumple la condición lado S con tensión, lado R sin tensión.
+OkSynChk	RSYN	SPS	Sincronismo verificado	Synchrocheck OK	La verificación de sincronismo dio resultado favorable.
+OkChk	RSYN	SPS	Verificación cumplida	Check OK	La verificación del RSYN (sincronismo o tensión) dio resultado favorable.
+RSynPrg	RSYN	SPS	Sincronización en curso	Synchronising in progress	El equipo está buscando las condiciones de sincronismo.
+OptRSYNMod	RSYN	ING	Modo de verificación	Check mode selection	Selecciona qué modo de verificación del RSYN es válido.
+AlmRSYNMod	RSYN	SPS	Alarma de selección de modo	Mode selection alarm	Alarma de la selección del modo del RSYN.
+CfgMod	RSYN	ING	Modo de configuración	Configuration mode	Modo de configuración del RSYN.
+LivDeaModE	RSYN	ING	Modo vivo/muerto externo	External live/dead mode	Modo de verificación vivo/muerto seleccionado externamente.
+OpCmd	RSYN	ING	Tipo de orden	Operate command type	Tipo de orden de operación del RSYN.
+SynDlTmms	RSYN	ING	Tiempo de verificación de sincronismo	Synchrocheck time	Tiempo durante el que deben mantenerse las condiciones de sincronismo, en ms.
+SynRsTmms	RSYN	ING	Tiempo de reposición de sincronismo	Synchrocheck reset time	Tiempo de reposición de la verificación de sincronismo, en ms.
+ChkVTmms	RSYN	ING	Tiempo de verificación de tensión	Voltage check time	Tiempo de la verificación de tensión, en ms.
+BkrTmms	RSYN	ING	Tiempo de cierre del interruptor	Breaker closing time	Tiempo propio de cierre del interruptor, que la verificación tiene en cuenta.
+PlsTmms	RSYN	ING	Tiempo de pulso de cierre	Close pulse time	Duración del pulso de cierre, en ms.
+SynVTyp	RSYN	ING	Tensión de sincronismo	Synchrocheck voltage type	Qué tensión se usa para la verificación.
+Bus1VoltPh	RSYN	ING	Fase de la tensión de barra 1	Bus 1 voltage phase	Fase de la tensión de barra 1 que se compara.
+Bus2VoltPh	RSYN	ING	Fase de la tensión de barra 2	Bus 2 voltage phase	Fase de la tensión de barra 2 que se compara.
+Lin1VoltPh	RSYN	ING	Fase de la tensión de línea 1	Line 1 voltage phase	Fase de la tensión de línea 1 que se compara.
+Lin2VoltPh	RSYN	ING	Fase de la tensión de línea 2	Line 2 voltage phase	Fase de la tensión de línea 2 que se compara.
+ChkDeaPct	RSYN	ING	Umbral de línea muerta	Dead line percentage	Porcentaje de tensión por debajo del cual el lado se considera sin tensión.
+ChkLivPct	RSYN	ING	Umbral de línea viva	Live line percentage	Porcentaje de tensión por encima del cual el lado se considera con tensión.
+FixDifAng	RSYN	ASG	Diferencia de ángulo fija	Fixed angle difference	Diferencia angular fija entre las tensiones comparadas ("phi_Fix_Diff"), por ejemplo por un transformador intermedio.
+RSynAngCor	RSYN	ASG	Compensación de ángulo	Angle compensation	Ángulo de compensación de la verificación de sincronismo.
+SynComFact	RSYN	ASG	Factor de compensación de tensión	Voltage compensation factor	Factor de compensación de la magnitud de tensión.
+VolCor	RSYN	ASG	Factor de corrección de tensión	Voltage correction factor	Factor de corrección de la tensión comparada.
+VBlk	RSYN	ASG	Bloqueo por tensión	Voltage block	Tensión por debajo de la cual se bloquea la verificación.
+RteHz	RSYN	ASG	Umbral de df/dt	df/dt value	Umbral de la tasa de cambio de la diferencia de frecuencia.
+RteHzClc	RSYN	MV	df/dt calculada	Calculated df/dt	Tasa de cambio de la diferencia de frecuencia calculada.
+TVFBlkSyn	RSYN	SPG	Falla de TT bloquea sincronismo	VT failure blocks synchrocheck	Una falla de TT bloquea la verificación de sincronismo.
+TVFBlkDea	RSYN	SPG	Falla de TT bloquea línea muerta	VT failure blocks dead line check	Una falla de TT bloquea la verificación de línea sin tensión.
+TVFBlkSyDe	RSYN	SPG	Falla de TT bloquea ambas verificaciones	VT failure blocks both checks	Una falla de TT bloquea la verificación de sincronismo y la de línea sin tensión.
+# --- Medidas -----------------------------------------------------------------------------------------
+HarPhv	MMXU	MV	Armónico de tensión de fase	Phase voltage harmonic	Armónico de la tensión de fase, en valores secundarios; el número de instancia es el orden del armónico (HarPhv03 = tercer armónico).
+# --- Registro de faltas (RDRE) y localizador (RFLO) --------------------------------------------------
+FaultI	RDRE	MV	Corriente de falta	Fault current	Corriente de la falta registrada.
+FaultV	RDRE	MV	Tensión de falta	Fault voltage	Tensión de la falta registrada.
+FltDist	RDRE	MV	Distancia de falta	Fault distance	Distancia a la falta registrada.
+FltPhase	RDRE	INS	Fases en falta	Fault phase	Fases involucradas en la falta registrada.
+FltBay	RDRE	INS	Vano de la falta	Fault bay	Vano donde se registró la falta.
+FltI0ValA	RDRE	MV	Corriente homopolar máxima	Maximum zero-sequence fault current	Máxima corriente homopolar durante la falta.
+MaxFltValA	RDRE	MV	Corriente de falta máxima	Maximum fault current	Máxima corriente durante la falta.
+TripPhase	RDRE	INS	Fases disparadas	Trip phase	Fases disparadas.
+TripTime	RDRE	INS	Tiempo de disparo	Trip time	Tiempo de disparo registrado.
+OpenTime	RDRE	INS	Tiempo de apertura	Open time	Tiempo de apertura del interruptor registrado.
+RclsTime	RDRE	INS	Tiempo de reenganche	Reclose time	Tiempo de reenganche registrado.
+ReFaultI	RDRE	MV	Corriente de la refalta	Re-fault current	Corriente de la falta posterior al reenganche.
+ReFaultV	RDRE	MV	Tensión de la refalta	Re-fault voltage	Tensión de la falta posterior al reenganche.
+ReFltDist	RDRE	MV	Distancia de la refalta	Re-fault distance	Distancia de la falta posterior al reenganche.
+ReFltPhase	RDRE	INS	Fases de la refalta	Re-fault phase	Fases de la falta posterior al reenganche.
+ReOpenTime	RDRE	INS	Tiempo de reapertura	Re-open time	Tiempo de la nueva apertura tras la refalta.
+ReTrPhase	RDRE	INS	Fases redisparadas	Re-trip phase	Fases del redisparo registrado.
+ReTrTime	RDRE	INS	Tiempo de redisparo	Re-trip time	Tiempo del redisparo registrado.
+SelctEnd	RDRE	INS	Extremo seleccionado	Selected end	Extremo seleccionado del registro.
+NofUpdate	RDRE	INS	Actualizaciones	Number of updates	Cantidad de actualizaciones del registro.
+FltLinLenKm	RFLO	ASG	Longitud de línea	Line length	Longitud de la línea en km, para el localizador de faltas.
+FltDisPct	RFLO	MV	Distancia de falta (%)	Fault distance (%)	Distancia a la falta como porcentaje de la longitud de la línea.
+FltAPhA	RFLO	MV	Corriente de falta fase A	Fault current phase A	Corriente de la fase A durante la falta ("Faulty_Ia").
+FltAPhB	RFLO	MV	Corriente de falta fase B	Fault current phase B	Corriente de la fase B durante la falta ("Faulty_Ib").
+FltAPhC	RFLO	MV	Corriente de falta fase C	Fault current phase C	Corriente de la fase C durante la falta ("Faulty_Ic").
+FltVPhA	RFLO	MV	Tensión de falta fase A	Fault voltage phase A	Tensión de la fase A durante la falta ("Faulty_Ua").
+FltVPhB	RFLO	MV	Tensión de falta fase B	Fault voltage phase B	Tensión de la fase B durante la falta ("Faulty_Ub").
+FltVPhC	RFLO	MV	Tensión de falta fase C	Fault voltage phase C	Tensión de la fase C durante la falta ("Faulty_Uc").
+FltValV	RFLO	MV	Tensión de falta	Fault voltage	Tensión durante la falta; en otra instancia, la tensión homopolar calculada ("Faulty_3U0_Cal").
+FltValV0	RFLO	MV	Tensión homopolar de falta	Zero-sequence fault voltage	Tensión homopolar calculada durante la falta ("Faulty_3U0_Cal").
+FltImbValA	RFLO	MV	Corriente de desequilibrio de falta	Imbalance fault current	Corriente de desequilibrio durante la falta.
+FltImbValV	RFLO	MV	Tensión de desequilibrio de falta	Imbalance fault voltage	Tensión de desequilibrio durante la falta.
+MaxFltA	RFLO	MV	Corriente máxima de fase en falta	Maximum fault phase current	Máxima corriente de fase durante la falta.
+MaxFltDifA	RFLO	MV	Corriente diferencial de falta	Fault differential current	Corriente diferencial durante la falta.
+MaxFltI0A	RFLO	MV	Corriente homopolar de falta	Zero-sequence fault current	Corriente homopolar calculada durante la falta ("Faulty_3I0_Cal").
+StrA	RFLO	MV	Corriente de arranque	Start current	Corriente en el arranque de la protección.
+PsR	RFLO	ASG	Resistencia de secuencia positiva	Positive-sequence resistance	Resistencia de secuencia positiva de la línea, para el localizador.
+PsX	RFLO	ASG	Reactancia de secuencia positiva	Positive-sequence reactance	Reactancia de secuencia positiva de la línea, para el localizador.
+PsC	RFLO	ASG	Capacitancia de secuencia positiva	Positive-sequence capacitance	Capacitancia de secuencia positiva de la línea, para el localizador.
+ZroR	RFLO	ASG	Resistencia homopolar	Zero-sequence resistance	Resistencia homopolar de la línea, para el localizador.
+ZroX	RFLO	ASG	Reactancia homopolar	Zero-sequence reactance	Reactancia homopolar de la línea, para el localizador.
+Rm0	RFLO	ASG	Resistencia mutua	Mutual resistance	Resistencia mutua homopolar con una línea paralela.
+Xm0	RFLO	ASG	Reactancia mutua	Mutual reactance	Reactancia mutua homopolar con una línea paralela.
+# --- Supervisión de enlaces GOOSE (LGOS) ----------------------------------------------------------------
+LinkADisc	LGOS	SPS	Red A desconectada	Network A disconnected	Alarma: el enlace GOOSE está desconectado en la red A ("GAlm_ADisc").
+LinkBDisc	LGOS	SPS	Red B desconectada	Network B disconnected	Alarma: el enlace GOOSE está desconectado en la red B ("GAlm_BDisc").
+RecvEna	LGOS	SPC	Habilitación de recepción	Receive enable	Habilita la recepción de ese enlace GOOSE ("GLink_Recv").
+# --- Habilitación por función ---------------------------------------------------------------------
+Enable	GGIO,PTOC,RBRF,RSYN	SPG	Habilitación de la función	Function enable	Ajuste que habilita o deshabilita la función del nodo ("En" en el manual, por ejemplo 50/51G1.En). La norma usa para esto el modo del LN (Mod); este DO es un ajuste propio del fabricante.
