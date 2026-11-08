@@ -59,6 +59,18 @@ public class TestDiccionarioTablas {
         prefijo("CBXCBR1", "CB");
         prefijo("DSXSWI3", "DS");
         prefijo("DEVPGGIO10", "DEVP");
+        prefijo("DCBPSCH1", "DCB");
+        prefijo("DCUBPSCH1", "DCUB");       // DCUB gana a DCB
+        prefijo("POTTPSCH1", "POTT");
+        prefijo("POTT_PSCH1", "POTT_");     // el de guion bajo sigue siendo el suyo
+        prefijo("RBGGIO3", "RB");
+        prefijo("ONB1_GGIO1", "ONB1_");
+        prefijo("EXP3_GGIO4", "EXP3_");
+        prefijo("CUS2_GGIO7", "CUS2_");
+
+        // Armónicos (HWYE/HDEL)
+        tipo("phsAHar", "DATA_ATTRIBUTE");
+        tipo("numCyc", "DATA_ATTRIBUTE");
 
         // LD, con y sin el nombre del IED delante
         ld("IED1PROT", true);
@@ -66,6 +78,10 @@ public class TestDiccionarioTablas {
         ld("IED1PIGO", true);
         ld("RCD", true);
         ld("IED1XYZW", false);
+        ld("SEL_421MET", true);
+        ld("SEL_401MU01", true);
+        ldTexto("IED1PROT", "Funciones de protección");  // PROT, no el PRO más corto
+        ldTexto("IED1PRO", "Elementos de protección");
 
         System.out.println(ok + " pasaron, " + fallas + " fallaron");
         System.out.println(fallas == 0 ? "TODO OK" : "HAY FALLAS");
@@ -99,6 +115,11 @@ public class TestDiccionarioTablas {
     static void ld(String nombre, boolean conocido) throws Exception {
         Object r = describeLd.invoke(null, nombre);
         ver((r != null) == conocido, nombre + (conocido ? " reconocido" : " no reconocido"));
+    }
+
+    static void ldTexto(String nombre, String empieza) throws Exception {
+        String r = (String) describeLd.invoke(null, nombre);
+        ver(r != null && r.startsWith(empieza), nombre + " → " + (r == null ? null : r.substring(0, Math.min(40, r.length()))));
     }
 
     static void ver(boolean c, String msg) {

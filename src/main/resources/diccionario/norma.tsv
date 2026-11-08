@@ -308,3 +308,17 @@ DA	serviceType	Tipo de servicio	Service type	Qué servicio se ejecutó.	IEC 6185
 DA	errorCode	Código de error	Error code	Resultado del servicio (0 = sin error).	IEC 61850-7-3 §7.10
 DA	originatorID	Originador	Originator ID	Quién pidió el servicio.	IEC 61850-7-3 §7.10
 DA	respAddCause	Causa adicional	Response AddCause	AddCause de la respuesta a un servicio de control.	IEC 61850-7-3 §7.10
+# --- Sub-datos de armónicos (HWYE/HDEL) -----------------------------------------------------------
+DA	phsAHar	Armónicos fase A	Phase A harmonics	Arreglo con los armónicos de la fase A (CDC HWYE): uno por orden, como valor complejo.	IEC 61850-7-3 §7.4.10 (HWYE)
+DA	phsBHar	Armónicos fase B	Phase B harmonics	Arreglo con los armónicos de la fase B (CDC HWYE).	IEC 61850-7-3 §7.4.10 (HWYE)
+DA	phsCHar	Armónicos fase C	Phase C harmonics	Arreglo con los armónicos de la fase C (CDC HWYE).	IEC 61850-7-3 §7.4.10 (HWYE)
+DA	neutHar	Armónicos del neutro	Neutral harmonics	Arreglo con los armónicos del neutro (CDC HWYE).	IEC 61850-7-3 §7.4.10 (HWYE)
+DA	netHar	Armónicos netos	Net harmonics	Arreglo con los armónicos de la magnitud neta (CDC HWYE).	IEC 61850-7-3 §7.4.10 (HWYE)
+DA	resHar	Armónicos residuales	Residual harmonics	Arreglo con los armónicos de la magnitud residual (CDC HWYE).	IEC 61850-7-3 §7.4.10 (HWYE)
+DA	phsABHar	Armónicos fase AB	Phase AB harmonics	Arreglo con los armónicos de la tensión entre fases A y B (CDC HDEL).	IEC 61850-7-3 §7.4.11 (HDEL)
+DA	phsBCHar	Armónicos fase BC	Phase BC harmonics	Arreglo con los armónicos de la tensión entre fases B y C (CDC HDEL).	IEC 61850-7-3 §7.4.11 (HDEL)
+DA	phsCAHar	Armónicos fase CA	Phase CA harmonics	Arreglo con los armónicos de la tensión entre fases C y A (CDC HDEL).	IEC 61850-7-3 §7.4.11 (HDEL)
+DA	numHar	Cantidad de armónicos	Number of harmonics	Cantidad de órdenes de armónico que contiene el arreglo.	IEC 61850-7-3 (HMV/HWYE/HDEL)
+DA	numCyc	Cantidad de ciclos	Number of cycles	Cantidad de ciclos de la frecuencia fundamental usados para calcular los armónicos.	IEC 61850-7-3 (HMV/HWYE/HDEL)
+DA	evalTm	Tiempo de evaluación	Evaluation time	Ventana de tiempo usada para calcular los armónicos.	IEC 61850-7-3 (HMV/HWYE/HDEL)
+DA	hvRef	Referencia de armónicos	Harmonic reference	Referencia de los valores de armónicos: fundamental, valor eficaz o absoluto.	IEC 61850-7-3 (HMV/HWYE/HDEL)

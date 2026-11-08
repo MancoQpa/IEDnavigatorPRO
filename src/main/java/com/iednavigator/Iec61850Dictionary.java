@@ -2235,6 +2235,44 @@ public class Iec61850Dictionary {
         vp("DEVP", null,
            "Agrupa señales del equipo sobre la clase genérica GGIO: elementos de disparo, "
            + "alarmas, señales de falta y señales remotas, según el desc de cada instancia.");
+
+        // ── Familia de relés con LD CFG/PRO/MET/CON/ANN ─────────────────────────
+        // Expansiones tomadas del glosario del software de ingeniería del fabricante.
+        vp("DCB", "Directional Comparison Blocking",
+           "Esquema de teleprotección por comparación direccional con señal de bloqueo. "
+           + "Acompaña a la clase PSCH.");
+        vp("DCUB", "Directional Comparison Unblocking",
+           "Esquema de teleprotección por comparación direccional con desbloqueo. Acompaña a "
+           + "la clase PSCH.");
+        vp("POTT", "Permissive Overreaching Transfer Tripping",
+           "Esquema de teleprotección permisivo por sobrealcance. Acompaña a la clase PSCH.");
+        vp("PMV", "Protection Math Variables",
+           "Variables matemáticas de la lógica de protección, expuestas sobre la clase "
+           + "genérica GGIO.");
+        vp("RA", "Remote Analogs",
+           "Analógicas remotas: valores que el equipo recibe o expone para comunicación, sobre "
+           + "la clase genérica GGIO.");
+        vp("RB", "Remote Bits",
+           "Bits remotos: señales binarias controlables por comunicación, sobre la clase "
+           + "genérica GGIO.");
+
+        // ── Medidores con módulos GGIO Onboard / Expansion / Custom ───────────────
+        // Tomado del documento de protocolo IEC 61850 del fabricante.
+        for (String p : new String[]{"ONB1_", "ONB2_"}) {
+            vp(p, "Onboard I/O",
+               "Entradas y salidas propias del equipo (no de un módulo opcional), sobre la clase "
+               + "genérica GGIO. Pueden configurarse para controlar las salidas por IEC 61850.");
+        }
+        for (String p : new String[]{"EXP1_", "EXP2_", "EXP3_", "EXP4_"}) {
+            vp(p, "Expansion I/O",
+               "Entradas y salidas de un módulo de expansión (opcional) del equipo, sobre la "
+               + "clase genérica GGIO; el número es el módulo.");
+        }
+        for (String p : new String[]{"CUS1_", "CUS2_"}) {
+            vp(p, "Custom",
+               "Valores que el usuario mapea con el software del fabricante (analógicos o "
+               + "digitales que el modelo por defecto no trae), sobre la clase genérica GGIO.");
+        }
     }
 
     /**
@@ -2280,6 +2318,15 @@ public class Iec61850Dictionary {
             + "configuran en el archivo SCL.");
         VENDOR_LD_GROUPS.put("PISV", "LD del punto de acceso de valores muestreados (SV) del bus de "
             + "proceso, separado del de MMS. Por MMS sólo muestra LLN0 y LPHD.");
+
+        // Familia de relés con LD CFG/PRO/MET/CON/ANN/MU01 (LD por defecto según el manual
+        // del software de ingeniería del fabricante).
+        VENDOR_LD_GROUPS.put("CFG",  "Elementos de configuración del equipo (LD por defecto).");
+        VENDOR_LD_GROUPS.put("PRO",  "Elementos de protección (LD por defecto).");
+        VENDOR_LD_GROUPS.put("MET",  "Elementos de medición (LD por defecto).");
+        VENDOR_LD_GROUPS.put("CON",  "Elementos de control (LD por defecto).");
+        VENDOR_LD_GROUPS.put("ANN",  "Elementos de anunciador: señales y alarmas (LD por defecto).");
+        VENDOR_LD_GROUPS.put("MU",   "Elementos de merging unit: valores muestreados (LD por defecto).");
     }
 
     /**
@@ -2310,18 +2357,21 @@ public class Iec61850Dictionary {
         int us = base.indexOf('_');
         String group = (us > 0 ? base.substring(0, us) : base).replaceAll("\\d+$", "");
         String desc = VENDOR_LD_GROUPS.get(group);
-        if (desc == null && us < 0) {
-            // En el modelo el LD llega con el nombre del IED delante (IED1PROT, IED1LD0):
-            // se busca el grupo más largo con el que termina.
+        boolean subgrupo = desc != null && us > 0;
+        if (desc == null) {
+            // En el modelo el LD llega con el nombre del IED delante (IED1PROT, IED1LD0, y
+            // también SEL_421MET, donde el guion bajo es del nombre del IED y no un subgrupo):
+            // se busca el grupo más largo con el que termina el nombre completo.
+            String todo = base.replaceAll("\\d+$", "");
             String mejor = null;
             for (String k : VENDOR_LD_GROUPS.keySet()) {
-                if (group.endsWith(k) && group.length() > k.length()
+                if (todo.endsWith(k) && todo.length() > k.length()
                         && (mejor == null || k.length() > mejor.length())) mejor = k;
             }
             if (mejor != null) desc = VENDOR_LD_GROUPS.get(mejor);
         }
         if (desc == null) return null;
-        if (us > 0) {
+        if (subgrupo) {
             String fn = ldName.trim().substring(us + 1);
             String ansi = ansiHint(fn);
             desc = desc + " — subgrupo \"" + fn + "\"" + (ansi != null ? " (" + ansi + ")" : "") + ".";
