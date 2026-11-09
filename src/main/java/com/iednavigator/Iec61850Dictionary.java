@@ -2273,6 +2273,41 @@ public class Iec61850Dictionary {
                "Valores que el usuario mapea con el software del fabricante (analógicos o "
                + "digitales que el modelo por defecto no trae), sobre la clase genérica GGIO.");
         }
+
+        // ── Familia de relés de alimentador con LD Control/Protection/Measurements… ──
+        // Expansión sólo donde la clase del LN no deja dudas; el resto queda registrado sin
+        // significado (falta el manual del equipo). Todos tienen además un Mod/Beh propio en
+        // LLN0 con el mismo prefijo (OcpMod, CbfBeh…).
+        vp("Arc", "Auto-reclose",
+           "Reenganche automático: acompaña a la clase RREC. Su modo se gobierna con ArcMod en LLN0.");
+        vp("Cbf", "Circuit breaker failure",
+           "Falla de interruptor: acompaña a la clase RBRF. Su modo se gobierna con CbfMod en LLN0.");
+        vp("Thm", "Thermal",
+           "Protección térmica: acompaña a la clase PTTR. Su modo se gobierna con ThmMod en LLN0.");
+        vp("Frq", "Frequency",
+           "Protección de frecuencia: acompaña a PTOF (sobrefrecuencia) y PTUF (subfrecuencia). "
+           + "Su modo se gobierna con FrqMod en LLN0.");
+        vp("Dfp", "df/dt",
+           "Protección por tasa de cambio de frecuencia: acompaña a la clase PFRC.");
+        String ptoc = "Distingue un tipo de etapa de sobreintensidad (PTOC) de los otros del mismo "
+            + "equipo (Ocp, Efd, Efm, Ngc, SenEft); qué tipo es lo dice el manual del equipo. "
+            + "Su modo se gobierna con el Mod del mismo prefijo en LLN0.";
+        for (String p : new String[]{"SenEft", "Ocp", "Efd", "Efm", "Ngc"}) vp(p, null, ptoc);
+        vp("SenRef", null, "Acompaña a una protección diferencial (PDIF) del grupo Sen; su modo se "
+            + "gobierna con SenMod en LLN0.");
+        vp("Ngv", null, "Acompaña a una sobretensión (PTOV); su modo se gobierna con NgvMod en LLN0.");
+        for (String p : new String[]{"VtpPhs", "VtpRes"}) {
+            vp(p, null, "Protección de tensión (PTOV/PTUV) del grupo Vtp; su modo se gobierna con "
+                + "VtpMod en LLN0.");
+        }
+        for (String p : new String[]{"PriFou", "PriRms", "SecFou", "SecRms", "Pri", "Sec"}) {
+            vp(p, null, "Distingue juegos de medidas del mismo tipo (MMXU, MMTR, MSQI, MSTA) dentro "
+                + "del LD de medidas.");
+        }
+        for (String p : new String[]{"OrdRun", "Alm", "Gos", "Led", "Opt", "Plo", "Rly"}) {
+            vp(p, null, "Bloque de señales sobre la clase genérica GGIO; qué representa cada señal "
+                + "lo define el manual del equipo.");
+        }
     }
 
     /**
@@ -2327,6 +2362,19 @@ public class Iec61850Dictionary {
         VENDOR_LD_GROUPS.put("CON",  "Elementos de control (LD por defecto).");
         VENDOR_LD_GROUPS.put("ANN",  "Elementos de anunciador: señales y alarmas (LD por defecto).");
         VENDOR_LD_GROUPS.put("MU",   "Elementos de merging unit: valores muestreados (LD por defecto).");
+
+        // Familia de relés de alimentador con LD de nombre descriptivo en inglés (el desc del
+        // LD en el SCL dice "<modelo> Protection Domain", etc.).
+        VENDOR_LD_GROUPS.put("CONTROL",      "Dominio de control: interruptor (XCBR), enclavamiento "
+            + "(CILO) y reenganche (RREC).");
+        VENDOR_LD_GROUPS.put("PROTECTION",   "Dominio de protección: todas las funciones de protección "
+            + "(PTOC, PTOV, PTUV, PTOF, PTUF, PFRC, PTTR, PDIF, RBRF) y el disparo (PTRC).");
+        VENDOR_LD_GROUPS.put("MEASUREMENTS", "Dominio de medidas: medidas primarias y secundarias "
+            + "(MMXU, MMTR, MSQI, MSTA).");
+        VENDOR_LD_GROUPS.put("RECORDS",      "Dominio de registros: registrador de perturbaciones "
+            + "(RDRE) y localizador de faltas (RFLO).");
+        VENDOR_LD_GROUPS.put("SYSTEM",       "Dominio de sistema: entradas, salidas, LED, alarmas y "
+            + "señales GOOSE sobre la clase genérica GGIO.");
     }
 
     /**

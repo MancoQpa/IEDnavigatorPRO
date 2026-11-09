@@ -322,3 +322,21 @@ DA	numHar	Cantidad de armónicos	Number of harmonics	Cantidad de órdenes de arm
 DA	numCyc	Cantidad de ciclos	Number of cycles	Cantidad de ciclos de la frecuencia fundamental usados para calcular los armónicos.	IEC 61850-7-3 (HMV/HWYE/HDEL)
 DA	evalTm	Tiempo de evaluación	Evaluation time	Ventana de tiempo usada para calcular los armónicos.	IEC 61850-7-3 (HMV/HWYE/HDEL)
 DA	hvRef	Referencia de armónicos	Harmonic reference	Referencia de los valores de armónicos: fundamental, valor eficaz o absoluto.	IEC 61850-7-3 (HMV/HWYE/HDEL)
+# --- Ed.1/Ed.2 que faltaban (relé de alimentador Px40) -----------------------------------------
+LN	PFRC	Tasa de cambio de frecuencia	Rate of change of frequency	Protección por tasa de cambio de la frecuencia (df/dt): opera cuando la frecuencia sube o baja más rápido que el ajuste.	IEC 61850-7-4 §5.11.7 (PFRC)
+LN	PTUF	Subfrecuencia	Underfrequency	Protección de subfrecuencia: opera cuando la frecuencia cae por debajo del ajuste.	IEC 61850-7-4 §5.11.26 (PTUF)
+DO	AutoRecSt	Estado del reenganche	Auto reclosing status	Estado del ciclo de reenganche (listo, en curso, bloqueado, etc.).	IEC 61850-7-4, LN RREC
+DO	AlmThm	Alarma térmica	Thermal alarm	Alarma de la protección térmica antes del disparo.	IEC 61850-7-4, LN PTTR
+DO	TmpRl	Relación de temperatura	Relation between temperature and maximum temperature	Estado térmico como relación entre la temperatura calculada y la máxima admitida.	IEC 61850-7-4, LN PTTR
+DO	DifAClc	Corriente diferencial calculada	Differential current	Corriente diferencial calculada por fase.	IEC 61850-7-4, LN PDIF
+DO	RstA	Corriente de frenado	Restraint current	Corriente de frenado (estabilización) por fase de la protección diferencial.	IEC 61850-7-4, LN PDIF
+DO	PwrUp	Encendido detectado	Power-up detected	El equipo detectó un arranque (encendido o reinicio).	IEC 61850-7-4, LN LPHD
+DO	AvAmps	Corriente promedio	Average current	Corriente promedio en el intervalo de evaluación.	IEC 61850-7-4, LN MSTA
+DO	MaxAmps	Corriente máxima	Maximum current	Corriente máxima registrada.	IEC 61850-7-4, LN MSTA
+DO	MinAmps	Corriente mínima	Minimum current	Corriente mínima registrada.	IEC 61850-7-4, LN MSTA
+DO	AvW	Potencia activa promedio	Average real power	Potencia activa promedio en el intervalo de evaluación.	IEC 61850-7-4, LN MSTA
+DO	MaxW	Potencia activa máxima	Maximum real power	Potencia activa máxima registrada.	IEC 61850-7-4, LN MSTA
+DO	MinW	Potencia activa mínima	Minimum real power	Potencia activa mínima registrada.	IEC 61850-7-4, LN MSTA
+DO	AvVAr	Potencia reactiva promedio	Average reactive power	Potencia reactiva promedio en el intervalo de evaluación.	IEC 61850-7-4, LN MSTA
+DO	MaxVAr	Potencia reactiva máxima	Maximum reactive power	Potencia reactiva máxima registrada.	IEC 61850-7-4, LN MSTA
+DO	MinVAr	Potencia reactiva mínima	Minimum reactive power	Potencia reactiva mínima registrada.	IEC 61850-7-4, LN MSTA
