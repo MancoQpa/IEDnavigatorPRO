@@ -83,6 +83,20 @@ public class TestDiccionarioTablas {
         ldTexto("IED1PROT", "Funciones de protección");  // PROT, no el PRO más corto
         ldTexto("IED1PRO", "Elementos de protección");
 
+        // Relé de alimentador con LD descriptivos y Mod/Beh por grupo en LLN0
+        ldTexto("IED1Protection", "Dominio de protección");
+        ldTexto("IED1Control", "Dominio de control");
+        tipo("PFRC1", "LOGICAL_NODE");
+        tipo("PTUF2", "LOGICAL_NODE");
+        prefijo("CbfRBRF1", "CBF");          // no el CB de los seccionadores/interruptores
+        prefijo("ArcRREC1", "ARC");
+        prefijo("PriFouMMXU1", "PRIFOU");
+        prefijo("OcpPTOC3", "OCP");
+        normaEmpieza("OcpMod", "No definido");
+        normaEmpieza("CbfBeh", "No definido");
+        normaEmpieza("AutoRecSt", "IEC 61850-7-4");
+        normaEmpieza("AvAmps2", "IEC 61850-7-4");
+
         System.out.println(ok + " pasaron, " + fallas + " fallaron");
         System.out.println(fallas == 0 ? "TODO OK" : "HAY FALLAS");
         if (fallas > 0) System.exit(1);
