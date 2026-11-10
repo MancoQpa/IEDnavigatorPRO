@@ -2,6 +2,24 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.13.11
+-----
+- Barra de estado: ademas del fabricante y el tipo, muestra el modelo del equipo
+  (LPHD.PhyNam.model). En modo cliente se lee del IED; en modo servidor, del archivo
+  SCL cuando lo trae. La placa del equipo se busca en todos los LD, no solo en el
+  primero.
+- Ayuda del modelo (diccionario IEC 61850):
+  - Muestra la descripcion (desc) que el archivo SCL cargado da para el nodo
+    seleccionado. En modo cliente es el CID que entrega el IED. Cuando un nombre no
+    esta en el diccionario, esa descripcion es la explicacion disponible.
+  - Nombres de la norma que faltaban: clases de LN (LGOS, RDIR, PFRC, PTUF), clases
+    de dato comunes, objetos y atributos de IEC 61850-7-4, 7-3 y 7-2.
+  - Nombres propios de fabricantes, explicados a partir de su SCL y su
+    documentacion: objetos de dato, prefijos de nodos logicos y nombres de
+    dispositivos logicos de varias familias de reles y medidores.
+  - La ayuda de un dispositivo logico (LD) ya no dice "no encontrado": explica que
+    es un LD y, si el nombre corresponde a un esquema conocido, que contiene.
+
 v4.13.10
 -----
 - Mandos con seguridad reforzada (ctlModel 3 y 4): la aplicacion espera la
