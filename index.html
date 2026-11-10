@@ -266,6 +266,7 @@
     <div class="brand"><img src="icon.jpg" alt="IEDNavigator PRO">IEDNavigator<span style="color:var(--amber)">PRO</span></div>
     <div class="navlinks">
       <a href="#features"><span lang="es">Funciones</span><span lang="en">Features</span></a>
+      <a href="#simulator"><span lang="es">Simulador Android</span><span lang="en">Android simulator</span></a>
       <a href="#equipment"><span lang="es">Equipos</span><span lang="en">Equipment</span></a>
       <a href="#install"><span lang="es">Instalación</span><span lang="en">Install</span></a>
       <a href="#license"><span lang="es">Licencia</span><span lang="en">License</span></a>
@@ -304,6 +305,9 @@
       </a>
       <a class="btn btn-ghost" href="https://github.com/MancoQpa/IEDnavigatorPRO">
         <span lang="es">Ver código fuente</span><span lang="en">View source</span>
+      </a>
+      <a class="btn btn-ghost" href="#simulator">
+        <span lang="es">Probá el simulador Android</span><span lang="en">Try the Android simulator</span>
       </a>
       <a class="btn btn-kofi" href="https://ko-fi.com/mancoqpa" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16">
@@ -495,9 +499,70 @@
     </div>
   </section>
 
+  <section id="simulator" class="wrap">
+    <div class="section-head">
+      <div class="section-tag">02 <span lang="es">— IEDsimulatorPRO</span><span lang="en">— IEDsimulatorPRO</span></div>
+      <h2><span lang="es">Tu IED de práctica, en el teléfono</span><span lang="en">Your practice IED, on your phone</span></h2>
+      <p><span lang="es"><strong>IEDsimulatorPRO</strong> es el compañero de IEDNavigator PRO para Android: cargás un archivo SCL (ICD, CID o SCD) en el teléfono o la tablet y lo sirve por MMS en la red Wi-Fi, como si fuera el equipo real. Conectás IEDNavigator PRO desde la PC y practicás lectura, reportes y maniobras sin necesitar un relé.</span><span lang="en"><strong>IEDsimulatorPRO</strong> is IEDNavigator PRO's Android companion: load an SCL file (ICD, CID or SCD) on your phone or tablet and it serves it over MMS on the Wi-Fi network, just like the real device. Connect IEDNavigator PRO from your PC and practice reading, reports and switching without needing a relay.</span></p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="k">A</div>
+        <h3><span lang="es">Servidor MMS de bolsillo</span><span lang="en">Pocket MMS server</span></h3>
+        <p><span lang="es">El modelo completo del archivo —dispositivos y nodos lógicos, DataSets y bloques de reporte— servido desde el teléfono. En un SCD con varios IED, elegís cuál simular.</span><span lang="en">The file's full model —logical devices and nodes, DataSets and report control blocks— served from the phone. In an SCD with several IEDs, you choose which one to simulate.</span></p>
+      </div>
+      <div class="card">
+        <div class="k">B</div>
+        <h3><span lang="es">Maniobras como en el equipo real</span><span lang="en">Switching like the real device</span></h3>
+        <p><span lang="es">Los cuatro modelos de control, incluido el SBO con seguridad reforzada. Responde con el motivo de cada rechazo (LastApplError con AddCause) y con la terminación del comando, positiva o negativa.</span><span lang="en">All four control models, including SBO with enhanced security. It answers with the reason for each rejection (LastApplError with AddCause) and with the command termination, positive or negative.</span></p>
+      </div>
+      <div class="card">
+        <div class="k">C</div>
+        <h3><span lang="es">Autoridad y enclavamientos</span><span lang="en">Authority and interlocking</span></h3>
+        <p><span lang="es">Autoridad de mando local, bahía, estación o remoto, llave local por aparato, enclavamiento, verificación de sincronismo y modo de prueba: para ver por qué un equipo rechaza una orden.</span><span lang="en">Local, bay, station or remote control authority, per-device local key, interlocking, synchrocheck and test mode: to see why a device rejects a command.</span></p>
+      </div>
+      <div class="card">
+        <div class="k">D</div>
+        <h3><span lang="es">Aparatos que no responden</span><span lang="en">Devices that don't respond</span></h3>
+        <p><span lang="es">Desde la ventana de maniobra local elegís cómo responde cada aparato: normal, sin cablear, trabado o lento, y el sincronismo en falla de los interruptores. Ideal para practicar el diagnóstico.</span><span lang="en">From the local switching window you choose how each device responds: normal, unwired, stuck or slow, and failed synchrocheck for breakers. Ideal for practicing diagnosis.</span></p>
+      </div>
+      <div class="card">
+        <div class="k">E</div>
+        <h3><span lang="es">Valores en tiempo real</span><span lang="en">Live values</span></h3>
+        <p><span lang="es">Editás medidas y estados desde el árbol del modelo y los cambios llegan al cliente por los reportes, como en una subestación.</span><span lang="en">Edit measurements and states from the model tree and the changes reach the client through reports, as in a substation.</span></p>
+      </div>
+    </div>
+    <div class="steps" style="margin-top:24px;">
+      <div class="step">
+        <h4><span lang="es">Instalá el APK</span><span lang="en">Install the APK</span></h4>
+        <p><span lang="es">Android 7.0 o superior. Descargalo en el teléfono o la tablet y abrilo; Android pide permitir la instalación desde esa fuente.</span><span lang="en">Android 7.0 or later. Download it on your phone or tablet and open it; Android asks to allow installing from that source.</span></p>
+      </div>
+      <div class="step">
+        <h4><span lang="es">Cargá un SCL e iniciá el servidor</span><span lang="en">Load an SCL and start the server</span></h4>
+        <p><span lang="es">«Seleccionar SCL» → «Iniciar servidor». La app muestra la IP y el puerto (por defecto <code class="inline">10102</code>: Android no permite el 102 sin root).</span><span lang="en">"Select SCL" → "Start server". The app shows the IP and port (<code class="inline">10102</code> by default: Android doesn't allow port 102 without root).</span></p>
+      </div>
+      <div class="step">
+        <h4><span lang="es">Conectá IEDNavigator PRO</span><span lang="en">Connect IEDNavigator PRO</span></h4>
+        <p><span lang="es">En modo Cliente, ingresá esa IP y ese puerto. La PC y el teléfono tienen que estar en la misma red Wi-Fi.</span><span lang="en">In Client mode, enter that IP and port. The PC and the phone must be on the same Wi-Fi network.</span></p>
+      </div>
+    </div>
+    <div class="cta-row" style="margin-top:24px;">
+      <a class="btn btn-primary" href="https://github.com/MancoQpa/IEDsimulatorPRO/releases/download/v5.5.1/IEDsimulatorPRO_v5.5.1.apk">
+        <span lang="es">Descargar IEDsimulatorPRO (APK)</span><span lang="en">Download IEDsimulatorPRO (APK)</span>
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/MancoQpa/IEDsimulatorPRO">
+        <span lang="es">Ver código fuente</span><span lang="en">View source</span>
+      </a>
+    </div>
+    <p class="equip-note">
+      <span lang="es">Solo MMS sobre TCP/IP: no publica ni recibe GOOSE. Software libre bajo GPL v3, de uso educativo: no apto para comisionamiento ni maniobras en instalaciones en servicio.</span>
+      <span lang="en">MMS over TCP/IP only: it does not publish or receive GOOSE. Free software under GPL v3, for educational use: not suitable for commissioning or switching in live installations.</span>
+    </p>
+  </section>
+
   <section id="equipment" class="wrap">
     <div class="section-head">
-      <div class="section-tag">02 <span lang="es">— EQUIPOS VERIFICADOS</span><span lang="en">— VERIFIED EQUIPMENT</span></div>
+      <div class="section-tag">03 <span lang="es">— EQUIPOS VERIFICADOS</span><span lang="en">— VERIFIED EQUIPMENT</span></div>
       <h2><span lang="es">Probado contra IEDs reales</span><span lang="en">Tested against real IEDs</span></h2>
       <p><span lang="es">Equipos reales contra los que se ejercitó la herramienta, con lo que se verificó en cada uno. Los nombres identifican el producto: no implican compatibilidad declarada, homologación ni respaldo de ningún fabricante.</span><span lang="en">Real devices the tool has been exercised against, and what was verified on each. Names identify the product: they imply no declared compatibility, certification or endorsement by any manufacturer.</span></p>
     </div>
@@ -553,7 +618,7 @@
 
   <section id="install" class="wrap">
     <div class="section-head">
-      <div class="section-tag">03 <span lang="es">— INSTALACIÓN</span><span lang="en">— INSTALLATION</span></div>
+      <div class="section-tag">04 <span lang="es">— INSTALACIÓN</span><span lang="en">— INSTALLATION</span></div>
       <h2><span lang="es">Arriba en tres pasos</span><span lang="en">Up and running in three steps</span></h2>
     </div>
     <div class="steps">
