@@ -352,6 +352,13 @@ public final class ControlEngine {
             if (v != null && ponerEntero(copia, v)) {
                 cambiados.add(copia);
                 marcarTiempo(model, raiz, cambiados);
+                // Mod manda sobre Beh: el del LN y, si es el LLN0, el de todo el LD.
+                if (raiz.endsWith(".Mod") && raiz.indexOf('/') > 0) {
+                    java.util.Map<String, Integer> nuevos = new java.util.HashMap<>();
+                    nuevos.put(raiz, v.intValue());
+                    cambiados.addAll(EstadoLocal.recalcularComportamiento(
+                            model, raiz.substring(0, raiz.indexOf('/')), nuevos));
+                }
                 return "valor " + v;
             }
         }

@@ -444,6 +444,140 @@ public final class EstadoLocal {
         return salida;
     }
 
+    // ------------------------------------------- modo y comportamiento (Mod / Beh)
+
+    /** Valores de Mod y Beh (IEC 61850-7-3): on, bloqueado, test, test/bloqueado, off. */
+    public static final int MODO_ON = 1, MODO_BLOQUEADO = 2, MODO_TEST = 3,
+            MODO_TEST_BLOQUEADO = 4, MODO_OFF = 5;
+
+    /**
+     * Comportamiento de un LN segun el modo de su LD (LLN0.Mod) y su modo propio
+     * (IEC 61850-7-4, anexo A).
+     *
+     * Antes el simulador miraba solo el Beh que traia el archivo: operar Mod no cambiaba
+     * nada, y poner el LD en prueba desde el LLN0 no llegaba a sus nodos. En un relé, el
+     * modo del LD manda sobre todos sus LN: off apaga todo, y test o bloqueado se suman al
+     * modo propio de cada nodo.
+     */
+    public static int comportamiento(int modoLd, int modoLn) {
+        if (modoLd == MODO_OFF || modoLn == MODO_OFF) return MODO_OFF;
+        boolean test = esTest(modoLd) || esTest(modoLn);
+        boolean bloq = esBloqueado(modoLd) || esBloqueado(modoLn);
+        return test ? (bloq ? MODO_TEST_BLOQUEADO : MODO_TEST) : (bloq ? MODO_BLOQUEADO : MODO_ON);
+    }
+
+    private static boolean esTest(int m) { return m == MODO_TEST || m == MODO_TEST_BLOQUEADO; }
+    private static boolean esBloqueado(int m) { return m == MODO_BLOQUEADO || m == MODO_TEST_BLOQUEADO; }
+
+    /** Modo de un DO Mod: el ya decidido en nuevos, o el del modelo; on si no hay. */
+    private static int modoDe(ServerModel model, String modRef, Map<String, Integer> nuevos) {
+        if (nuevos != null && nuevos.containsKey(modRef)) return nuevos.get(modRef);
+        ModelNode n = model.findModelNode(modRef + ".stVal", Fc.ST);
+        Long v = n instanceof BasicDataAttribute ? leerEntero((BasicDataAttribute) n) : null;
+        return (v == null || v < MODO_ON || v > MODO_OFF) ? MODO_ON : v.intValue();
+    }
+
+    /**
+     * Recalcula el Beh de todos los LN de un LD y devuelve los que cambian, en copias para
+     * publicar con setValues().
+     *
+     * @param nuevos modos ya decididos que todavia no estan en el modelo (ref del DO Mod,
+     *               "LD/LN.Mod", -> valor): el Oper de un Mod se publica despues de responder
+     */
+    public static List<BasicDataAttribute> recalcularComportamiento(ServerModel model, String ld,
+                                                                    Map<String, Integer> nuevos) {
+        List<BasicDataAttribute> cambiados = new ArrayList<>();
+        if (model == null || ld == null) return cambiados;
+        ModelNode ldNodo = model.getChild(ld);
+        if (ldNodo == null) return cambiados;
+        int modoLd = modoDe(model, ld + "/LLN0.Mod", nuevos);
+        for (ModelNode ln : ldNodo.getChildren()) {
+            String lnRef = ld + "/" + ln.getName();
+            ModelNode beh = model.findModelNode(lnRef + ".Beh.stVal", Fc.ST);
+            if (!(beh instanceof BasicDataAttribute)) continue;
+            int modoLn = "LLN0".equals(ln.getName()) ? modoLd : modoDe(model, lnRef + ".Mod", nuevos);
+            int debe = comportamiento(modoLd, modoLn);
+            Long hoy = leerEntero((BasicDataAttribute) beh);
+            if (hoy != null && hoy == debe) continue;
+            BasicDataAttribute copia = copiaDe(beh);
+            if (!escribirEntero(copia, debe)) continue;
+            cambiados.add(copia);
+            estampar(model, lnRef + ".Beh", cambiados, true);
+        }
+        return cambiados;
+    }
+
+    /**
+     * Pone el modo de un LD (ref "LD/LLN0.Mod") o de un LN ("LD/LN.Mod"), como lo haria el
+     * operador desde el frente del relé, y recalcula el Beh del LD.
+     *
+     * @return los cambios para publicar, o vacio si el nodo no declara Mod
+     */
+    public static List<BasicDataAttribute> ponerModo(ServerModel model, String modRef, int modo) {
+        List<BasicDataAttribute> cambiados = new ArrayList<>();
+        if (model == null || modRef == null || !modRef.endsWith(".Mod")) return cambiados;
+        ModelNode st = model.findModelNode(modRef + ".stVal", Fc.ST);
+        if (!(st instanceof BasicDataAttribute)) return cambiados;
+        BasicDataAttribute copia = copiaDe(st);
+        if (!escribirEntero(copia, modo)) return cambiados;
+        cambiados.add(copia);
+        estampar(model, modRef, cambiados, true);
+        Map<String, Integer> nuevos = new LinkedHashMap<>();
+        nuevos.put(modRef, modo);
+        cambiados.addAll(recalcularComportamiento(model, modRef.substring(0, modRef.indexOf('/')), nuevos));
+        Log.i(TAG, "Modo de " + modRef + " -> " + modo + ": " + cambiados.size() + " cambio(s)");
+        return cambiados;
+    }
+
+    /** Pone el mismo modo en el LLN0 de todos los LD que lo declaran: el modo del IED. */
+    public static List<BasicDataAttribute> ponerModoIed(ServerModel model, int modo) {
+        List<BasicDataAttribute> cambiados = new ArrayList<>();
+        if (model == null) return cambiados;
+        for (ModelNode ld : model.getChildren()) {
+            cambiados.addAll(ponerModo(model, ld.getName() + "/LLN0.Mod", modo));
+        }
+        return cambiados;
+    }
+
+    /**
+     * Modo del IED: el del LLN0 de sus LD si todos coinciden, o null si no hay ninguno o
+     * difieren.
+     */
+    public static Integer modoIed(ServerModel model) {
+        if (model == null) return null;
+        Integer comun = null;
+        for (ModelNode ld : model.getChildren()) {
+            String ref = ld.getName() + "/LLN0.Mod";
+            if (model.findModelNode(ref + ".stVal", Fc.ST) == null) continue;
+            int m = modoDe(model, ref, null);
+            if (comun == null) comun = m;
+            else if (comun != m) return null;
+        }
+        return comun;
+    }
+
+    /**
+     * Deja cada Beh como lo derivan los Mod del archivo, antes de crear el ServerSap (escribe
+     * el modelo directamente: todavia no hay clientes). Va despues de inicializarModoYSalud.
+     *
+     * @return cantidad de Beh corregidos
+     */
+    public static int derivarComportamiento(ServerModel model) {
+        if (model == null) return 0;
+        int n = 0;
+        for (ModelNode ld : model.getChildren()) {
+            for (BasicDataAttribute copia : recalcularComportamiento(model, ld.getName(), null)) {
+                if (!copia.getReference().toString().endsWith(".Beh.stVal")) continue;
+                ModelNode original = model.findModelNode(copia.getReference(), Fc.ST);
+                Long v = leerEntero(copia);
+                if (original instanceof BasicDataAttribute && v != null
+                        && escribirEntero((BasicDataAttribute) original, v)) n++;
+            }
+        }
+        if (n > 0) Log.i(TAG, "derivarComportamiento: " + n + " Beh ajustados a los Mod del archivo");
+        return n;
+    }
+
     // ------------------------------------------- autoridad de mando
 
     /** Los tres niveles de autoridad que tiene un tablero real. */

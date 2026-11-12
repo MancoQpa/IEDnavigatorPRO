@@ -108,6 +108,12 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     as one: `posicionesVinculadas` adds the XCBRs without their own CSWI when the LD has only
     one commanded XCBR (`test/TestInterruptorPolos`, `test_interruptor_polos.cid`).
     `test/TestInterruptorVirtual`, `TestFallasInterruptor`, `TestBobinasGoose`.
+  - Mode and behaviour (since 2026-11-12): `Beh` is derived from the LD mode (`LLN0.Mod`) and
+    the LN's own `Mod` as in IEC 61850-7-4 annex A (`EstadoLocal.comportamiento`), at start
+    (`derivarComportamiento`), when a client operates a `Mod`, when `Mod.stVal` is edited in
+    the tree, and from the server panel button "Modo test del IED" / the tree's right-click
+    "Modo" submenus. A command on `Mod` itself skips the Beh/Test rules (otherwise an LN in
+    test or off could not be brought back). `test/TestModoTest`. Same code in the simulator.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
     pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
   - Sampled Values: not in the desktop app (the SV tab is commented out in

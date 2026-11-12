@@ -64,6 +64,7 @@ public class IEDNavigatorApp extends JFrame {
     private JLabel lblFileName;
     private JTextField tfServerPort;
     private JButton btnStartStop;
+    private JToggleButton btnModoTest;
     private JButton btnCheckPort;
     private JButton btnReleasePort;
 
@@ -1160,7 +1161,16 @@ public class IEDNavigatorApp extends JFrame {
         btnStartStop.setEnabled(false);
         btnStartStop.setToolTipText(I18n.t("btn.startsim.tip"));
         row3.add(btnStartStop);
+        // Modo test del IED: pone en test el LLN0 de todos los LD (y con eso a sus LN).
+        btnModoTest = new JToggleButton(I18n.t("modo.boton"));
+        btnModoTest.setToolTipText(I18n.t("modo.boton.tip"));
+        btnModoTest.setMargin(new Insets(2, 6, 2, 6));
+        btnModoTest.setEnabled(false);
+        btnModoTest.addActionListener(e -> alternarModoTest());
         panel.add(row3);
+        JPanel row3b = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
+        row3b.add(btnModoTest);
+        panel.add(row3b);
 
         // Fila 4: Verificar Puerto + Liberar Puerto
         JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
@@ -1652,6 +1662,12 @@ public class IEDNavigatorApp extends JFrame {
         if (!(userObj instanceof NodeInfo)) return;
         NodeInfo info = (NodeInfo) userObj;
 
+        // Modo (Mod) del IED, del LD o del LN, con el Beh derivado como en un relé
+        if (info.node instanceof LogicalDevice || info.node instanceof LogicalNode) {
+            agregarMenuModo(info.node);
+            serverPopupMenu.addSeparator();
+        }
+
         // Detect data type
         boolean isBoolean = (info.node instanceof BdaBoolean)
             || (info.type != null && info.type.equalsIgnoreCase("Boolean"));
@@ -1737,6 +1753,84 @@ public class IEDNavigatorApp extends JFrame {
         miInfoSrv.setFont(miInfoSrv.getFont().deriveFont(Font.BOLD));
         miInfoSrv.addActionListener(e -> showDictionaryForSelectedNode());
         serverPopupMenu.add(miInfoSrv);
+    }
+
+    /** Submenus de modo para un LD (su LLN0.Mod) o un LN (su Mod), y el del IED entero. */
+    private void agregarMenuModo(ModelNode nodo) {
+        boolean esLd = nodo instanceof LogicalDevice;
+        String modRef = esLd ? nodo.getName() + "/LLN0.Mod" : nodo.getReference().toString() + ".Mod";
+        String nombre = esLd ? nodo.getName() : nodo.getReference().toString();
+        Integer actual = server.valorEnum(modRef);
+        if (actual != null) {
+            JMenu m = new JMenu(I18n.t(esLd ? "modo.menu.ld" : "modo.menu.ln", nombre));
+            for (int v = 1; v <= 5; v++) {
+                final int modo = v;
+                JRadioButtonMenuItem mi = new JRadioButtonMenuItem(IEC61850Server.textoModo(v), actual == v);
+                mi.addActionListener(ev -> {
+                    if (!isServerRunning) { avisoModoSinServidor(); return; }
+                    server.ponerModo(modRef, modo);
+                    log(I18n.t("modo.evt.nodo", modRef, IEC61850Server.textoModo(modo)));
+                    refrescarBotonModo();
+                });
+                m.add(mi);
+            }
+            if (!esLd) {
+                Integer beh = server.valorEnum(nodo.getReference().toString() + ".Beh");
+                if (beh != null) {
+                    m.addSeparator();
+                    JMenuItem info = new JMenuItem(I18n.t("modo.beh", IEC61850Server.textoModo(beh)));
+                    info.setEnabled(false);
+                    m.add(info);
+                }
+            }
+            serverPopupMenu.add(m);
+        }
+        JMenu mIed = new JMenu(I18n.t("modo.menu.ied"));
+        Integer modoIed = server.modoIed();
+        for (int v = 1; v <= 5; v++) {
+            final int modo = v;
+            JRadioButtonMenuItem mi = new JRadioButtonMenuItem(IEC61850Server.textoModo(v),
+                    modoIed != null && modoIed == v);
+            mi.addActionListener(ev -> {
+                if (!isServerRunning) { avisoModoSinServidor(); return; }
+                server.ponerModoIed(modo);
+                log(I18n.t("modo.evt.ied", IEC61850Server.textoModo(modo)));
+                refrescarBotonModo();
+            });
+            mIed.add(mi);
+        }
+        serverPopupMenu.add(mIed);
+    }
+
+    private void avisoModoSinServidor() {
+        JOptionPane.showMessageDialog(this, I18n.t("modo.sinservidor"), I18n.t("modo.boton"),
+                JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /** Boton "Modo test del IED": test en todos los LLN0, o de vuelta a on. */
+    private void alternarModoTest() {
+        if (server == null || server.getServerModel() == null || !isServerRunning) {
+            avisoModoSinServidor();
+            refrescarBotonModo();
+            return;
+        }
+        Integer m = server.modoIed();
+        int nuevo = (m != null && m == 3) ? 1 : 3;
+        server.ponerModoIed(nuevo);
+        log(I18n.t("modo.evt.ied", IEC61850Server.textoModo(nuevo)));
+        refrescarBotonModo();
+    }
+
+    private void refrescarBotonModo() {
+        if (btnModoTest == null) return;
+        boolean hay = currentMode == AppMode.SERVER && server != null && server.getServerModel() != null
+                && isServerRunning;
+        Integer m = hay ? server.modoIed() : null;
+        boolean enTest = m != null && (m == 3 || m == 4);
+        btnModoTest.setEnabled(hay);
+        btnModoTest.setSelected(enTest);
+        btnModoTest.setText(I18n.t(enTest ? "modo.boton.activo" : "modo.boton"));
+        btnModoTest.setForeground(enTest ? new Color(0xEF6C00) : null);
     }
 
     private void handleTreePopup(MouseEvent e) {
@@ -3459,7 +3553,7 @@ public class IEDNavigatorApp extends JFrame {
             public boolean isConnected() { return IEDNavigatorApp.this.isConnected; }
             public void setConnected(boolean v) { isConnected = v; }
             public boolean isServerRunning() { return IEDNavigatorApp.this.isServerRunning; }
-            public void setServerRunning(boolean v) { isServerRunning = v; }
+            public void setServerRunning(boolean v) { isServerRunning = v; SwingUtilities.invokeLater(IEDNavigatorApp.this::refrescarBotonModo); }
             public File getLoadedSclFile() { return loadedSclFile; }
             public void setLoadedSclFile(File f) { loadedSclFile = f; }
             public String getLoadedIedName() { return loadedIedName; }
