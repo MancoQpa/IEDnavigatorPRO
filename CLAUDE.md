@@ -99,8 +99,8 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     nothing moves, negative CommandTermination with AddCause 16 after `tiempoFallaMs`), a
     discharged spring (close rejected, AddCause 9, CBOpCap Open), SF6 alarm/lockout (InsAlm,
     InsBlk, Health) and separate opening/closing times that pass through intermediate; they
-    live in `EstadoLocal` and `ControlPolicy` rule 4b, so they still have to be copied to the
-    simulator. `ordenarAparato(ref, cerrar, origen)` is the direct order to the coils (panel
+    live in `EstadoLocal` and `ControlPolicy` rule 4b; the simulator has the same code since
+    2026-11-12 (its maneuver window has the buttons). `ordenarAparato(ref, cerrar, origen)` is the direct order to the coils (panel
     and GOOSE) and respects the same failures. `BobinasGoose` wires the opening/closing coils
     to boolean data of received GOOSE (rising edge only, so retransmissions and a signal
     already true do nothing), fed by `GoosePanel.agregarOyenteGoose`.
