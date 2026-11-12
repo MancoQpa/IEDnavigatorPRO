@@ -55,7 +55,19 @@ final class InterruptorVirtualDialog extends JDialog {
     private final JSpinner spApertura = new JSpinner(new SpinnerNumberModel(0, 0, 60000, 10));
     private final JSpinner spCierre = new JSpinner(new SpinnerNumberModel(0, 0, 60000, 10));
     private final JSpinner spFalla = new JSpinner(new SpinnerNumberModel(2000, 0, 60000, 100));
-    private final JTextArea taRegistro = new JTextArea(10, 60);
+    private final JTextArea taRegistro = new JTextArea(7, 60);
+    /** Pestaña GOOSE de la ventana principal; null si no hay (prueba sin ventana). */
+    private final GoosePanel goose;
+    private final BobinasGoose bobinas;
+    private final java.util.function.Consumer<GooseSubscriber.GooseMessage> oyenteGoose;
+    private final JLabel lblPublica = new JLabel();
+    private final JLabel lblSinTramas = new JLabel();
+    private final JComboBox<String> cbGocb = new JComboBox<>();
+    private final JComboBox<DatoItem> cbDato = new JComboBox<>();
+    private final JComboBox<BobinasGoose.Bobina> cbBobina = new JComboBox<>(BobinasGoose.Bobina.values());
+    private final JButton btnCablear = new JButton(I18n.t("vint.goose.cablear"));
+    private final DefaultListModel<EnlaceItem> mdlEnlaces = new DefaultListModel<>();
+    private final JList<EnlaceItem> lstEnlaces = new JList<>(mdlEnlaces);
     private final Timer refresco;
     private final IEC61850Server.ObservadorMando observador;
     /** true mientras se actualiza la pantalla desde el modelo: los cambios no son del usuario. */
@@ -70,9 +82,30 @@ final class InterruptorVirtualDialog extends JDialog {
         }
     }
 
+    /** Dato booleano de la última trama de un GoCB. */
+    private static final class DatoItem {
+        final int indice;
+        final String texto;
+        DatoItem(int indice, String texto) { this.indice = indice; this.texto = texto; }
+        @Override public String toString() { return texto; }
+    }
+
+    private static final class EnlaceItem {
+        final BobinasGoose.Enlace e;
+        EnlaceItem(BobinasGoose.Enlace e) { this.e = e; }
+        @Override public String toString() { return textoEnlace(e); }
+    }
+
     InterruptorVirtualDialog(Frame owner, IEC61850Server srv) {
+        this(owner, srv, null);
+    }
+
+    InterruptorVirtualDialog(Frame owner, IEC61850Server srv, GoosePanel goose) {
         super(owner, I18n.t("vint.titulo"), false);
         this.srv = srv;
+        this.goose = goose;
+        this.bobinas = new BobinasGoose(srv);
+        this.oyenteGoose = bobinas::recibir;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         JPanel raiz = new JPanel(new BorderLayout(8, 8));
@@ -115,10 +148,12 @@ final class InterruptorVirtualDialog extends JDialog {
         srv.agregarObservadorMando(observador);
         refresco = new Timer(400, e -> refrescar());
         refresco.start();
+        if (goose != null) goose.agregarOyenteGoose(oyenteGoose);
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosed(WindowEvent e) {
                 refresco.stop();
                 srv.quitarObservadorMando(observador);
+                if (goose != null) goose.quitarOyenteGoose(oyenteGoose);
             }
         });
 
@@ -198,8 +233,148 @@ final class InterruptorVirtualDialog extends JDialog {
         }
         autoridad.setMaximumSize(new Dimension(Integer.MAX_VALUE, autoridad.getPreferredSize().height));
         p.add(alineado(autoridad));
+        p.add(alineado(panelGoose()));
         p.add(Box.createVerticalGlue());
         return p;
+    }
+
+    /**
+     * GOOSE: qué GoCB del modelo publican la posición del aparato, y las bobinas de apertura y
+     * cierre cableadas a datos booleanos de GOOSE recibido (un disparo de otro IED).
+     */
+    private JPanel panelGoose() {
+        JPanel p = new JPanel();
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        p.setBorder(new TitledBorder(I18n.t("vint.goose")));
+        if (goose == null) {
+            p.add(alineado(new JLabel(I18n.t("vint.goose.nodisponible"))));
+            return p;
+        }
+        lblPublica.setForeground(GRIS);
+        p.add(alineado(lblPublica));
+
+        JPanel bob = new JPanel(new GridBagLayout());
+        bob.setBorder(new TitledBorder(I18n.t("vint.goose.bobinas")));
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(1, 2, 1, 2);
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.gridy = 0; g.gridx = 0; g.weightx = 0;
+        bob.add(new JLabel(I18n.t("vint.goose.gocb")), g);
+        g.gridx = 1; g.weightx = 1;
+        bob.add(cbGocb, g);
+        JButton btnActualizar = new JButton(I18n.t("vint.goose.actualizar"));
+        btnActualizar.addActionListener(e -> cargarGocbs());
+        g.gridx = 2; g.weightx = 0;
+        bob.add(btnActualizar, g);
+        g.gridy = 1; g.gridx = 0;
+        bob.add(new JLabel(I18n.t("vint.goose.dato")), g);
+        g.gridx = 1; g.gridwidth = 2; g.weightx = 1;
+        bob.add(cbDato, g);
+        g.gridy = 2; g.gridx = 0; g.gridwidth = 1; g.weightx = 0;
+        bob.add(new JLabel(I18n.t("vint.goose.bobina")), g);
+        g.gridx = 1; g.weightx = 1;
+        bob.add(cbBobina, g);
+        g.gridx = 2; g.weightx = 0;
+        bob.add(btnCablear, g);
+        lblSinTramas.setForeground(AMBAR);
+        g.gridy = 3; g.gridx = 0; g.gridwidth = 3;
+        bob.add(lblSinTramas, g);
+        lstEnlaces.setVisibleRowCount(3);
+        JScrollPane spEnlaces = new JScrollPane(lstEnlaces);
+        spEnlaces.setPreferredSize(new Dimension(100, 64));
+        spEnlaces.setMinimumSize(new Dimension(100, 64));
+        g.gridy = 4; g.fill = GridBagConstraints.BOTH;
+        bob.add(spEnlaces, g);
+        JButton btnQuitar = new JButton(I18n.t("vint.goose.quitar"));
+        g.gridy = 5; g.fill = GridBagConstraints.NONE; g.anchor = GridBagConstraints.EAST;
+        bob.add(btnQuitar, g);
+
+        cbBobina.setRenderer(new DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean s, boolean f) {
+                return super.getListCellRendererComponent(l,
+                        v instanceof BobinasGoose.Bobina ? textoBobina((BobinasGoose.Bobina) v) : v, i, s, f);
+            }
+        });
+        cbGocb.addActionListener(e -> cargarDatos());
+        btnCablear.addActionListener(e -> cablear());
+        btnQuitar.addActionListener(e -> {
+            EnlaceItem it = lstEnlaces.getSelectedValue();
+            if (it == null) return;
+            bobinas.quitar(it.e);
+            mdlEnlaces.removeElement(it);
+            registrar("GOOSE", I18n.t("vint.evt.goose.descableado", textoEnlace(it.e)), true);
+        });
+        cargarGocbs();
+        bob.setMaximumSize(new Dimension(Integer.MAX_VALUE, bob.getPreferredSize().height));
+        p.add(alineado(bob));
+        return p;
+    }
+
+    /** Llena el combo con los GoCB recibidos que traen algún dato booleano. */
+    private void cargarGocbs() {
+        Object antes = cbGocb.getSelectedItem();
+        cbGocb.removeAllItems();
+        for (GooseSubscriber.GooseMessage m : goose.mensajesRecibidos()) {
+            String id = BobinasGoose.idDe(m);
+            if (id.isEmpty() || ((DefaultComboBoxModel<String>) cbGocb.getModel()).getIndexOf(id) >= 0) continue;
+            for (GooseSubscriber.DataEntry d : m.dataEntries) {
+                if (BobinasGoose.booleano(d) != null) { cbGocb.addItem(id); break; }
+            }
+        }
+        if (antes != null) cbGocb.setSelectedItem(antes);
+        lblSinTramas.setText(cbGocb.getItemCount() == 0 ? I18n.t("vint.goose.sintramas") : " ");
+        cargarDatos();
+    }
+
+    private void cargarDatos() {
+        cbDato.removeAllItems();
+        Object id = cbGocb.getSelectedItem();
+        if (id != null) {
+            for (GooseSubscriber.GooseMessage m : goose.mensajesRecibidos()) {
+                if (!id.equals(BobinasGoose.idDe(m))) continue;
+                for (GooseSubscriber.DataEntry d : m.dataEntries) {
+                    Boolean b = BobinasGoose.booleano(d);
+                    if (b != null) cbDato.addItem(new DatoItem(d.index, "[" + d.index + "]  " + b));
+                }
+                break;
+            }
+        }
+        btnCablear.setEnabled(cbDato.getItemCount() > 0);
+    }
+
+    private void cablear() {
+        Item it = (Item) cbAparato.getSelectedItem();
+        Object id = cbGocb.getSelectedItem();
+        DatoItem d = (DatoItem) cbDato.getSelectedItem();
+        if (it == null || id == null || d == null) return;
+        BobinasGoose.Enlace e = bobinas.cablear(id.toString(), d.indice,
+                (BobinasGoose.Bobina) cbBobina.getSelectedItem(), it.o.ref);
+        mdlEnlaces.addElement(new EnlaceItem(e));
+        registrar("GOOSE", I18n.t("vint.evt.goose.cableado", textoEnlace(e)), true);
+    }
+
+    private static String textoBobina(BobinasGoose.Bobina b) {
+        return I18n.t(b == BobinasGoose.Bobina.CIERRE ? "vint.goose.bob.cierre" : "vint.goose.bob.apertura");
+    }
+
+    private static String textoEnlace(BobinasGoose.Enlace e) {
+        return I18n.t("vint.goose.enlace", e.gocb, String.valueOf(e.indice), textoBobina(e.bobina), e.aparato);
+    }
+
+    /** Qué GoCB del modelo llevan la posición del aparato (o la de los CSWI que lo comandan). */
+    private String textoPublica(EstadoLocal.Objeto o) {
+        java.util.Map<String, Boolean> gocbs = new java.util.LinkedHashMap<>(goose.gocbsQueLlevan(o.ld, o.nombre));
+        for (String cswi : o.comandadoPor.split("[,\\s]+")) {
+            if (!cswi.isEmpty()) gocbs.putAll(goose.gocbsQueLlevan(o.ld, cswi + ".Pos"));
+        }
+        if (gocbs.isEmpty()) return I18n.t("vint.goose.nopublica");
+        StringBuilder sb = new StringBuilder();
+        for (java.util.Map.Entry<String, Boolean> x : gocbs.entrySet()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(x.getKey()).append(" (")
+              .append(I18n.t(x.getValue() ? "vint.goose.publicando" : "vint.goose.detenido")).append(")");
+        }
+        return "<html><body style='width:300px'>" + I18n.t("vint.goose.publica", sb.toString()) + "</body></html>";
     }
 
     private JPanel panelInstructor() {
@@ -386,6 +561,7 @@ final class InterruptorVirtualDialog extends JDialog {
             chkFallaCierre.setSelected(srv.fallaCierre(o.ref));
             chkResorte.setSelected(srv.resorteDescargado(o.ref));
             cbSf6.setSelectedItem(srv.sf6De(o.ref));
+            if (goose != null) lblPublica.setText(textoPublica(o));
         } finally {
             actualizando = false;
         }

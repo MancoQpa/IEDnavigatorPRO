@@ -1540,7 +1540,7 @@ public class IEC61850Server implements ServerEventListener {
 
     public void quitarObservadorMando(ObservadorMando o) { observadoresMando.remove(o); }
 
-    private void avisarMando(String origen, String texto, boolean aceptado) {
+    void avisarMando(String origen, String texto, boolean aceptado) {
         for (ObservadorMando o : observadoresMando) {
             try { o.evento(origen, texto, aceptado); } catch (Exception ignorada) { }
         }

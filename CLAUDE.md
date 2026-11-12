@@ -95,7 +95,16 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     `ponerRespuesta`, `ponerSincronismo`, `forzarPosicion`, `ponerCalidadInvalida`) and logs
     MMS and panel events via `ObservadorMando`. Changes go out by reports and through
     `onClientWrite`, so the tree, the monitor and active GOOSE publishers follow them.
-    `test/TestInterruptorVirtual`.
+    The instructor can also set mechanism failures (opening/closing: the order is accepted,
+    nothing moves, negative CommandTermination with AddCause 16 after `tiempoFallaMs`), a
+    discharged spring (close rejected, AddCause 9, CBOpCap Open), SF6 alarm/lockout (InsAlm,
+    InsBlk, Health) and separate opening/closing times that pass through intermediate; they
+    live in `EstadoLocal` and `ControlPolicy` rule 4b, so they still have to be copied to the
+    simulator. `ordenarAparato(ref, cerrar, origen)` is the direct order to the coils (panel
+    and GOOSE) and respects the same failures. `BobinasGoose` wires the opening/closing coils
+    to boolean data of received GOOSE (rising edge only, so retransmissions and a signal
+    already true do nothing), fed by `GoosePanel.agregarOyenteGoose`.
+    `test/TestInterruptorVirtual`, `TestFallasInterruptor`, `TestBobinasGoose`.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
     pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
   - Sampled Values: not in the desktop app (the SV tab is commented out in
