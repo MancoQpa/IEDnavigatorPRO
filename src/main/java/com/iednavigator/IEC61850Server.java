@@ -1471,6 +1471,7 @@ public class IEC61850Server implements ServerEventListener {
                 String aviso = "[SERVER] Mando RECHAZADO: " + ctl.error.getMessage();
                 System.out.println(aviso);
                 if (listener != null) listener.onLog(aviso);
+                avisarMando("MMS", I18n.t("vint.evt.rechazado", ctl.error.getMessage()), false);
                 // Un error por cada atributo escrito: la librería solo toma el rechazo si los
                 // tamaños coinciden; con uno solo lo daría por exitoso y el mando se aplicaría.
                 List<ServiceError> errores = new ArrayList<>();
@@ -1480,6 +1481,7 @@ public class IEC61850Server implements ServerEventListener {
             String aviso = "[SERVER] Mando aceptado: " + ctl.descripcion;
             System.out.println(aviso);
             if (listener != null) listener.onLog(aviso);
+            avisarMando("MMS", ctl.descripcion, true);
             // Cómo termina el mando (en el acto, diferido o negativo): lo toma la asociación
             // apenas vuelve este write().
             com.iednavigator.mando.Terminacion.publicador = this::publicarCambiosDeMando;
@@ -1522,6 +1524,121 @@ public class IEC61850Server implements ServerEventListener {
     /** Autoridad de mando actual de un LD. */
     public com.iednavigator.mando.EstadoLocal.Autoridad autoridadDe(String ldName) {
         return com.iednavigator.mando.EstadoLocal.autoridadDe(serverModel, ldName);
+    }
+
+    // ── Interruptor virtual: lo que usa el panel ─────────────────────────────
+
+    /** Quien recibe los eventos de mando (MMS y panel), para el registro del panel. */
+    public interface ObservadorMando {
+        /** @param origen "MMS" o "Panel"; @param aceptado false si el mando se rechazó */
+        void evento(String origen, String texto, boolean aceptado);
+    }
+
+    private final List<ObservadorMando> observadoresMando = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public void agregarObservadorMando(ObservadorMando o) { observadoresMando.add(o); }
+
+    public void quitarObservadorMando(ObservadorMando o) { observadoresMando.remove(o); }
+
+    private void avisarMando(String origen, String texto, boolean aceptado) {
+        for (ObservadorMando o : observadoresMando) {
+            try { o.evento(origen, texto, aceptado); } catch (Exception ignorada) { }
+        }
+    }
+
+    /** Aparatos de maniobra del modelo (posiciones de XCBR, XSWI, CSWI…), con su estado. */
+    public List<com.iednavigator.mando.EstadoLocal.Objeto> listarAparatos() {
+        if (serverModel == null) return new ArrayList<>();
+        return com.iednavigator.mando.EstadoLocal.listarAparatos(serverModel);
+    }
+
+    /** Abre o cierra el aparato a pie de equipo (sin pasar por MMS) y lo publica. */
+    public void maniobrarLocal(String ref, boolean cerrar) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.maniobrar(serverModel, ref, cerrar));
+        avisarMando("Panel", I18n.t(cerrar ? "vint.evt.cierre" : "vint.evt.apertura", ref), true);
+    }
+
+    /** Llave local del aparato: true = LOCAL (no acepta órdenes por comunicaciones). */
+    public Boolean enLocal(String ref) {
+        return serverModel == null ? null : com.iednavigator.mando.EstadoLocal.enLocal(serverModel, ref);
+    }
+
+    public void ponerLlave(String ref, boolean local) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerLlave(serverModel, ref, local));
+        avisarMando("Panel", I18n.t("vint.evt.llave", ref, local ? "LOCAL" : "REMOTO"), true);
+    }
+
+    /** Cómo responde el aparato a un mando aceptado (normal, sin cablear, trabado, lento). */
+    public com.iednavigator.mando.EstadoLocal.Respuesta respuestaDe(String ref) {
+        return com.iednavigator.mando.EstadoLocal.respuestaDe(ref);
+    }
+
+    public void ponerRespuesta(String ref, com.iednavigator.mando.EstadoLocal.Respuesta r) {
+        com.iednavigator.mando.EstadoLocal.ponerRespuesta(ref, r);
+        avisarMando("Panel", I18n.t("vint.evt.respuesta", ref, textoRespuesta(r)), true);
+    }
+
+    /** Nombre de la respuesta del aparato en el idioma activo. */
+    public static String textoRespuesta(com.iednavigator.mando.EstadoLocal.Respuesta r) {
+        switch (r) {
+            case SIN_CABLEAR: return I18n.t("vint.resp.sin_cablear");
+            case TRABADO:     return I18n.t("vint.resp.trabado");
+            case LENTO:       return I18n.t("vint.resp.lento");
+            default:          return I18n.t("vint.resp.normal");
+        }
+    }
+
+    public boolean sincronismoEnFalla(String ref) {
+        return com.iednavigator.mando.EstadoLocal.sincronismoEnFalla(ref);
+    }
+
+    public void ponerSincronismo(String ref, boolean falla) {
+        com.iednavigator.mando.EstadoLocal.ponerSincronismo(ref, falla);
+        avisarMando("Panel", I18n.t(falla ? "vint.evt.sync.falla" : "vint.evt.sync.ok", ref), true);
+    }
+
+    /** Tiempo de recorrido de un aparato "lento", en ms (común a todos los aparatos). */
+    public long tiempoRecorridoMs() { return com.iednavigator.mando.EstadoLocal.recorridoLentoMs; }
+
+    public void ponerTiempoRecorridoMs(long ms) {
+        com.iednavigator.mando.EstadoLocal.recorridoLentoMs = Math.max(0, ms);
+    }
+
+    /**
+     * Fuerza la posición del aparato (intermedio o bad-state), como una falla de los contactos
+     * auxiliares. Va por copia, como el motor, para que salga por los reportes.
+     */
+    public void forzarPosicion(String ref, BdaDoubleBitPos.DoubleBitPos pos) {
+        if (serverModel == null) return;
+        ModelNode st = serverModel.findModelNode(ref + ".stVal", Fc.ST);
+        if (!(st instanceof BdaDoubleBitPos)) return;
+        List<BasicDataAttribute> c = new ArrayList<>();
+        BdaDoubleBitPos copia = ((BdaDoubleBitPos) st).copy();
+        copia.setDoubleBitPos(pos);
+        c.add(copia);
+        ModelNode t = serverModel.findModelNode(ref + ".t", Fc.ST);
+        if (t instanceof BdaTimestamp) {
+            BdaTimestamp tc = (BdaTimestamp) ((BdaTimestamp) t).copy();
+            tc.setCurrentTime();
+            c.add(tc);
+        }
+        publicarCambiosDeMando(c);
+        avisarMando("Panel", I18n.t("vint.evt.forzada", ref, pos.name()), true);
+    }
+
+    /** Calidad de la posición: inválida (true) o buena (false). */
+    public void ponerCalidadInvalida(String ref, boolean invalida) {
+        if (serverModel == null) return;
+        ModelNode q = serverModel.findModelNode(ref + ".q", Fc.ST);
+        if (!(q instanceof BdaQuality)) return;
+        BdaQuality copia = ((BdaQuality) q).copy();
+        copia.setValidity(invalida ? BdaQuality.Validity.INVALID : BdaQuality.Validity.GOOD);
+        List<BasicDataAttribute> c = new ArrayList<>();
+        c.add(copia);
+        publicarCambiosDeMando(c);
+        avisarMando("Panel", I18n.t(invalida ? "vint.evt.calidad.mala" : "vint.evt.calidad.buena", ref), true);
     }
 
     /**

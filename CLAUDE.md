@@ -89,6 +89,13 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     replaced by a local `Log`. Keep both copies in step: a fix in one belongs in the other.
     `IEC61850Server.write()` delegates to it; `start()` runs `EstadoLocal.inicializarModoYSalud`
     and `normalizar` before creating the `ServerSap`.
+  - Virtual breaker panel (since 2026-11-12): `InterruptorVirtualDialog` (Tools → Virtual
+    breaker, server mode only). It drives one switching device of the served model through
+    `IEC61850Server` (`listarAparatos`, `maniobrarLocal`, `ponerLlave`, `ponerAutoridad`,
+    `ponerRespuesta`, `ponerSincronismo`, `forzarPosicion`, `ponerCalidadInvalida`) and logs
+    MMS and panel events via `ObservadorMando`. Changes go out by reports and through
+    `onClientWrite`, so the tree, the monitor and active GOOSE publishers follow them.
+    `test/TestInterruptorVirtual`.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
     pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
   - Sampled Values: not in the desktop app (the SV tab is commented out in

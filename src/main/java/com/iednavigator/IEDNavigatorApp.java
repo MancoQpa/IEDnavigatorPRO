@@ -543,6 +543,10 @@ public class IEDNavigatorApp extends JFrame {
         JMenuItem miHtmlReport = new JMenuItem(I18n.t("menu.tools.htmlreport"));
         miHtmlReport.addActionListener(e -> generateModelReport());
         menuTools.add(miHtmlReport);
+        menuTools.addSeparator();
+        JMenuItem miInterruptor = new JMenuItem(I18n.t("menu.tools.interruptor"));
+        miInterruptor.addActionListener(e -> abrirInterruptorVirtual());
+        menuTools.add(miInterruptor);
         menuBar.add(menuTools);
 
         // Menu Ayuda
@@ -1805,6 +1809,23 @@ public class IEDNavigatorApp extends JFrame {
     // F22: tree navigation — delegado a ModelTreeBuilder.java
     private void navigateToFcdaInModel(String fcdaName) {
         ModelTreeBuilder.navigateToFcdaInModel(modelTree, fcdaName, this::log, this::logGoose);
+    }
+
+    /** Panel "Interruptor virtual" (uno solo abierto a la vez). Requiere un modelo en modo servidor. */
+    private InterruptorVirtualDialog interruptorVirtual;
+
+    private void abrirInterruptorVirtual() {
+        if (currentMode != AppMode.SERVER || server == null || server.getServerModel() == null) {
+            JOptionPane.showMessageDialog(this, I18n.t("vint.requiere"), I18n.t("vint.titulo"),
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (interruptorVirtual != null && interruptorVirtual.isDisplayable()) {
+            interruptorVirtual.toFront();
+            return;
+        }
+        interruptorVirtual = new InterruptorVirtualDialog(this, server);
+        interruptorVirtual.setVisible(true);
     }
 
     /** Muestra el diálogo educativo IEC 61850 para el nodo actualmente seleccionado en el árbol. */
