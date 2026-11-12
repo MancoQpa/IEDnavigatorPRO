@@ -159,7 +159,10 @@ public final class ControlPolicy {
         }
 
         // --- 2. Modo de comportamiento del LN ---
-        Integer beh = readIntStVal(model, lnRef + ".Beh");
+        //
+        // El mando sobre el propio Mod no pasa por aca: es justamente como se saca a un LN
+        // de test o de off, y con estas reglas quedaba encerrado.
+        Integer beh = controlRoot.endsWith(".Mod") ? null : readIntStVal(model, lnRef + ".Beh");
         if (beh != null) {
             if (beh == BEH_OFF) {
                 return new ServiceError(ServiceError.ACCESS_NOT_ALLOWED_IN_CURRENT_STATE,

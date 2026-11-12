@@ -1163,6 +1163,7 @@ public class IEC61850Server implements ServerEventListener {
             // maniobra—, ANTES de crear el ServerSap, para que el primer cliente ya lea un
             // modelo que se puede maniobrar.
             com.iednavigator.mando.EstadoLocal.inicializarModoYSalud(serverModel);
+            com.iednavigator.mando.EstadoLocal.derivarComportamiento(serverModel);
             com.iednavigator.mando.EstadoLocal.olvidarSimulacion();
             com.iednavigator.mando.EstadoLocal.normalizar(serverModel, new ArrayList<BasicDataAttribute>());
 
@@ -1278,6 +1279,12 @@ public class IEC61850Server implements ServerEventListener {
 
                 String newValue = ValorBda.texto(bda);
                 System.out.println("[SERVER] Value set: " + cleanRef + " [" + fc + "] = " + newValue);
+
+                // Editar un Mod a mano tambien cambia el Beh del LD (IEC 61850-7-4, anexo A).
+                if (cleanRef.endsWith(".Mod.stVal") && cleanRef.indexOf('/') > 0) {
+                    publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.recalcularComportamiento(
+                            serverModel, cleanRef.substring(0, cleanRef.indexOf('/')), null));
+                }
 
                 return true;
             } else {
@@ -1641,6 +1648,50 @@ public class IEC61850Server implements ServerEventListener {
         if (serverModel == null) return;
         publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerResorteDescargado(serverModel, ref, descargado));
         avisarMando("Panel", I18n.t(descargado ? "vint.evt.resorte.si" : "vint.evt.resorte.no", ref), true);
+    }
+
+    // Modo del IED, de un LD o de un LN (Mod), con el Beh derivado como en un relé
+
+    /** Modo del IED (el de los LLN0 si coinciden), o null si no hay o difieren. */
+    public Integer modoIed() {
+        return com.iednavigator.mando.EstadoLocal.modoIed(serverModel);
+    }
+
+    /** Pone el mismo modo en el LLN0 de todos los LD. */
+    public void ponerModoIed(int modo) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerModoIed(serverModel, modo));
+        avisarMando("Panel", I18n.t("modo.evt.ied", textoModo(modo)), true);
+    }
+
+    /** Pone el modo de un LD ("LD/LLN0.Mod") o de un LN ("LD/LN.Mod"). */
+    public boolean ponerModo(String modRef, int modo) {
+        if (serverModel == null) return false;
+        List<BasicDataAttribute> c = com.iednavigator.mando.EstadoLocal.ponerModo(serverModel, modRef, modo);
+        if (c.isEmpty()) return false;
+        publicarCambiosDeMando(c);
+        avisarMando("Panel", I18n.t("modo.evt.nodo", modRef, textoModo(modo)), true);
+        return true;
+    }
+
+    /** Valor de Mod.stVal o Beh.stVal de un nodo ("LD/LN.Mod"), o null si no lo declara. */
+    public Integer valorEnum(String doRef) {
+        if (serverModel == null) return null;
+        ModelNode n = serverModel.findModelNode(doRef + ".stVal", Fc.ST);
+        if (!(n instanceof BasicDataAttribute)) return null;
+        try { return Integer.valueOf(ValorBda.texto((BasicDataAttribute) n).trim()); }
+        catch (NumberFormatException e) { return null; }
+    }
+
+    public static String textoModo(int modo) {
+        switch (modo) {
+            case 1:  return I18n.t("modo.on");
+            case 2:  return I18n.t("modo.bloqueado");
+            case 3:  return I18n.t("modo.test");
+            case 4:  return I18n.t("modo.test.bloqueado");
+            case 5:  return I18n.t("modo.off");
+            default: return String.valueOf(modo);
+        }
     }
 
     public void ponerSf6(String ref, com.iednavigator.mando.EstadoLocal.Sf6 estado) {
