@@ -104,6 +104,9 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     and GOOSE) and respects the same failures. `BobinasGoose` wires the opening/closing coils
     to boolean data of received GOOSE (rising edge only, so retransmissions and a signal
     already true do nothing), fed by `GoosePanel.agregarOyenteGoose`.
+    A breaker modeled per pole (one XCBR per phase plus a three-pole one, a single CSWI) moves
+    as one: `posicionesVinculadas` adds the XCBRs without their own CSWI when the LD has only
+    one commanded XCBR (`test/TestInterruptorPolos`, `test_interruptor_polos.cid`).
     `test/TestInterruptorVirtual`, `TestFallasInterruptor`, `TestBobinasGoose`.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
     pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.

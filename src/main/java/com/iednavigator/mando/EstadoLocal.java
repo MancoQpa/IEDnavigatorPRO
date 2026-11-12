@@ -167,6 +167,12 @@ public final class EstadoLocal {
                         break;
                     }
                 }
+            } else if ("XCBR".equals(clase)) {
+                // Un polo (o el trifasico) de un interruptor por polos va en el renglon
+                // del XCBR comandado: es el mismo interruptor.
+                ModelNode ldNodo = model.getChild(o.ld);
+                String principal = ldNodo == null ? null : principalDe(ldNodo, lnDe(o.ref));
+                if (principal != null) aparatoRef = o.ld + "/" + principal + ".Pos";
             }
             List<String> ctrls = grupos.get(aparatoRef);
             if (ctrls == null) { ctrls = new ArrayList<>(); grupos.put(aparatoRef, ctrls); }
@@ -329,10 +335,72 @@ public final class EstadoLocal {
             for (String otro : controladoresDe(ldNodo, aparato)) {
                 if (!otro.equals(ln)) salida.add(ld + "/" + otro + ".Pos");
             }
+            for (String polo : polosDe(ldNodo, aparato)) salida.add(ld + "/" + polo + ".Pos");
         } else if ("XCBR".equals(clase) || "XSWI".equals(clase)) {
-            for (String c : controladoresDe(ldNodo, ln)) salida.add(ld + "/" + c + ".Pos");
+            String principal = principalDe(ldNodo, ln);
+            String base = principal != null ? principal : ln;
+            if (!base.equals(ln)) salida.add(ld + "/" + base + ".Pos");
+            for (String c : controladoresDe(ldNodo, base)) salida.add(ld + "/" + c + ".Pos");
+            if (principal != null) {
+                for (String polo : polosDe(ldNodo, principal)) {
+                    if (!polo.equals(ln)) salida.add(ld + "/" + polo + ".Pos");
+                }
+            }
         }
         return salida;
+    }
+
+    /**
+     * Los otros XCBR del mismo interruptor: los polos y el trifasico.
+     *
+     * Un relé de linea con disparo monopolar modela un XCBR por polo (fase A, B y C) y
+     * otro para el interruptor completo, con un solo CSWI que los comanda. El vinculo
+     * por prefijo e instancia emparejaba el CSWI1 con el XCBR1 (el polo A) y los demas
+     * quedaban quietos: un cliente que miraba el XCBR del trifasico veia el interruptor
+     * abierto con el CSWI cerrado.
+     *
+     * Regla: si en el LD hay un solo XCBR comandado por algun CSWI, los XCBR del LD que
+     * no tienen CSWI propio son parte de ese mismo interruptor. Con dos interruptores
+     * comandados en el LD no se puede decidir y no se agrupa nada. Los XSWI no entran:
+     * un seccionador sin CSWI es un aparato aparte (de puesta a tierra, por ejemplo).
+     */
+    private static List<String> polosDe(ModelNode ld, String principal) {
+        List<String> salida = new ArrayList<>();
+        if (!"XCBR".equals(ControlPolicy.classOf(principal))) return salida;
+        if (!principal.equals(interruptorComandado(ld))) return salida;
+        for (ModelNode ln : ld.getChildren()) {
+            String n = ln.getName();
+            if (n.equals(principal) || !"XCBR".equals(ControlPolicy.classOf(n))) continue;
+            if (controladoresDe(ld, n).isEmpty()) salida.add(n);
+        }
+        return salida;
+    }
+
+    /**
+     * El XCBR comandado del interruptor al que pertenece este aparato: el mismo si es el
+     * comandado y tiene polos, el comandado si este es uno de sus polos, o null si el
+     * aparato no forma parte de un interruptor por polos.
+     */
+    private static String principalDe(ModelNode ld, String aparato) {
+        if (!"XCBR".equals(ControlPolicy.classOf(aparato))) return null;
+        String comandado = interruptorComandado(ld);
+        if (comandado == null) return null;
+        List<String> polos = polosDe(ld, comandado);
+        if (polos.isEmpty()) return null;
+        return comandado.equals(aparato) || polos.contains(aparato) ? comandado : null;
+    }
+
+    /** El unico XCBR del LD comandado por algun CSWI, o null si hay ninguno o varios. */
+    private static String interruptorComandado(ModelNode ld) {
+        String unico = null;
+        for (ModelNode ln : ld.getChildren()) {
+            if (!"CSWI".equals(ControlPolicy.classOf(ln.getName()))) continue;
+            String ap = aparatoDe(ld, ln.getName());
+            if (ap == null || !"XCBR".equals(ControlPolicy.classOf(ap))) continue;
+            if (unico == null) unico = ap;
+            else if (!unico.equals(ap)) return null;
+        }
+        return unico;
     }
 
     /** El XCBR/XSWI que comanda este CSWI, o null si no se puede decidir. */
