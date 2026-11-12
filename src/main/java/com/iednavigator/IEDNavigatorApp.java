@@ -1824,7 +1824,7 @@ public class IEDNavigatorApp extends JFrame {
             interruptorVirtual.toFront();
             return;
         }
-        interruptorVirtual = new InterruptorVirtualDialog(this, server);
+        interruptorVirtual = new InterruptorVirtualDialog(this, server, goosePanel);
         interruptorVirtual.setVisible(true);
     }
 

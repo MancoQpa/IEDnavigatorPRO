@@ -7,6 +7,10 @@ import com.beanit.iec61850bean.BdaDoubleBitPos;
 import com.beanit.iec61850bean.BdaInt16;
 import com.beanit.iec61850bean.BdaInt32;
 import com.beanit.iec61850bean.BdaInt8;
+import com.beanit.iec61850bean.BdaInt64;
+import com.beanit.iec61850bean.BdaInt8U;
+import com.beanit.iec61850bean.BdaInt16U;
+import com.beanit.iec61850bean.BdaInt32U;
 import com.beanit.iec61850bean.BdaQuality;
 import com.beanit.iec61850bean.BdaTimestamp;
 import com.beanit.iec61850bean.Fc;
@@ -623,6 +627,193 @@ public final class EstadoLocal {
     public static void olvidarSimulacion() {
         RESPUESTAS.clear();
         SINCRONISMO_FALLA.clear();
+        FALLA_APERTURA.clear();
+        FALLA_CIERRE.clear();
+        RESORTE_DESCARGADO.clear();
+        SF6.clear();
+        CBOPCAP_ORIGINAL.clear();
+    }
+
+    // ------------------------------------------------------------- mecanismo y gas
+    //
+    // Fallas del interruptor que un instructor provoca para practicar el diagnóstico:
+    //   - falla de apertura / de cierre: el mando se acepta, el mecanismo no actúa y la
+    //     terminación es negativa por tiempo (AddCause 16, time-limit-over) al cabo de
+    //     tiempoFallaMs. Es lo que ve un relé cuando no le llega la confirmación de posición
+    //     (la base de la falla de interruptor, ANSI 50BF).
+    //   - resorte descargado: el cierre se rechaza (AddCause 9, blocked-by-process); CBOpCap
+    //     pasa a "Open" (solo puede abrir).
+    //   - SF6 en alarma: solo la señal (SIMG.InsAlm, Health=Warning); en bloqueo, apertura y
+    //     cierre rechazados (AddCause 9), SIMG.InsBlk y CBOpCap "None".
+    // Las señales se escriben si el modelo las tiene; si no, la falla actúa igual sobre el mando.
+    //
+    // Tiempos de maniobra: con tiempoAperturaMs / tiempoCierreMs mayores que 0, cada maniobra
+    // pasa por intermedio (00) y llega a la posición final al cabo de ese tiempo, con la
+    // terminación positiva recién ahí. En 0 (por defecto) cambia en el acto, como antes.
+
+    /** Estado del gas aislante de un interruptor. */
+    public enum Sf6 { NORMAL, ALARMA, BLOQUEO }
+
+    private static final Set<String> FALLA_APERTURA = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final Set<String> FALLA_CIERRE = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final Set<String> RESORTE_DESCARGADO = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final Map<String, Sf6> SF6 = new java.util.concurrent.ConcurrentHashMap<>();
+    /** CBOpCap de cada interruptor antes de la primera falla, para restituirlo. */
+    private static final Map<String, Long> CBOPCAP_ORIGINAL = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static volatile long tiempoAperturaMs = 0;
+    public static volatile long tiempoCierreMs = 0;
+    /** Cuánto espera un mando con falla de mecanismo antes de terminar en negativo. */
+    public static volatile long tiempoFallaMs = 2000;
+
+    public static boolean fallaApertura(String ref) { return ref != null && FALLA_APERTURA.contains(ref); }
+    public static boolean fallaCierre(String ref) { return ref != null && FALLA_CIERRE.contains(ref); }
+    public static boolean resorteDescargado(String ref) { return ref != null && RESORTE_DESCARGADO.contains(ref); }
+    public static Sf6 sf6De(String ref) {
+        Sf6 s = ref == null ? null : SF6.get(ref);
+        return s == null ? Sf6.NORMAL : s;
+    }
+
+    public static void ponerFallaApertura(String ref, boolean falla) { poner(FALLA_APERTURA, ref, falla); }
+    public static void ponerFallaCierre(String ref, boolean falla) { poner(FALLA_CIERRE, ref, falla); }
+
+    /** Resorte descargado: además de la regla de mando, escribe CBOpCap. Devuelve lo que cambió. */
+    public static List<BasicDataAttribute> ponerResorteDescargado(ServerModel model, String ref, boolean descargado) {
+        poner(RESORTE_DESCARGADO, ref, descargado);
+        return senialesDeProceso(model, ref);
+    }
+
+    /** Estado del SF6: además de la regla de mando, escribe SIMG y CBOpCap. Devuelve lo que cambió. */
+    public static List<BasicDataAttribute> ponerSf6(ServerModel model, String ref, Sf6 estado) {
+        if (ref == null) return new ArrayList<>();
+        if (estado == null || estado == Sf6.NORMAL) SF6.remove(ref); else SF6.put(ref, estado);
+        Log.i(TAG, "SF6 de " + ref + " -> " + sf6De(ref));
+        return senialesDeProceso(model, ref);
+    }
+
+    private static void poner(Set<String> conjunto, String ref, boolean si) {
+        if (ref == null) return;
+        if (si) conjunto.add(ref); else conjunto.remove(ref);
+    }
+
+    /** ¿Falla de apertura (o de cierre, según cerrar) en el objeto o en un aparato vinculado? */
+    public static boolean fallaMecanismoPara(ServerModel model, String raiz, boolean cerrar) {
+        return enConjuntoPara(cerrar ? FALLA_CIERRE : FALLA_APERTURA, model, raiz);
+    }
+
+    public static boolean resorteDescargadoPara(ServerModel model, String raiz) {
+        return enConjuntoPara(RESORTE_DESCARGADO, model, raiz);
+    }
+
+    public static Sf6 sf6Para(ServerModel model, String raiz) {
+        Sf6 s = sf6De(raiz);
+        if (s != Sf6.NORMAL || model == null) return s;
+        for (String v : posicionesVinculadas(model, raiz)) {
+            s = sf6De(v);
+            if (s != Sf6.NORMAL) return s;
+        }
+        return Sf6.NORMAL;
+    }
+
+    private static boolean enConjuntoPara(Set<String> conjunto, ServerModel model, String raiz) {
+        if (raiz != null && conjunto.contains(raiz)) return true;
+        if (model == null || raiz == null) return false;
+        for (String v : posicionesVinculadas(model, raiz)) {
+            if (conjunto.contains(v)) return true;
+        }
+        return false;
+    }
+
+    /** Tiempo de maniobra que corresponde a una apertura o a un cierre (0 = en el acto). */
+    public static long tiempoManiobraMs(boolean cerrar) {
+        return Math.max(0, cerrar ? tiempoCierreMs : tiempoAperturaMs);
+    }
+
+    /**
+     * Escribe las señales del proceso según las fallas de ref: CBOpCap del interruptor y, si el
+     * LD tiene un SIMG, InsAlm, InsBlk y Health. Valores de CBOpCap (IEC 61850-7-4): 1 None,
+     * 2 Open; al quedar sin fallas se restituye el que tenía.
+     */
+    static List<BasicDataAttribute> senialesDeProceso(ServerModel model, String ref) {
+        List<BasicDataAttribute> c = new ArrayList<>();
+        if (model == null || ref == null) return c;
+        int punto = ref.indexOf('.');
+        String lnRef = punto > 0 ? ref.substring(0, punto) : ref;
+        Sf6 gas = sf6De(ref);
+        boolean resorte = resorteDescargado(ref);
+
+        ModelNode cap = model.findModelNode(lnRef + ".CBOpCap.stVal", Fc.ST);
+        if (cap instanceof BasicDataAttribute) {
+            Long actual = leerEntero((BasicDataAttribute) cap);
+            if (actual != null && !CBOPCAP_ORIGINAL.containsKey(lnRef)) CBOPCAP_ORIGINAL.put(lnRef, actual);
+            Long deseado = gas == Sf6.BLOQUEO ? Long.valueOf(1) : resorte ? Long.valueOf(2) : CBOPCAP_ORIGINAL.get(lnRef);
+            if (deseado != null && !deseado.equals(actual)) {
+                BasicDataAttribute copia = copiaDe(cap);
+                if (escribirEntero(copia, deseado)) {
+                    c.add(copia);
+                    estampar(model, lnRef + ".CBOpCap", c, true);
+                }
+            }
+        }
+
+        int barra = lnRef.indexOf('/');
+        String simg = barra > 0 ? lnDeClase(model, lnRef.substring(0, barra), "SIMG") : null;
+        if (simg != null) {
+            booleanoEnCopia(model, simg + ".InsAlm.stVal", gas != Sf6.NORMAL, c);
+            booleanoEnCopia(model, simg + ".InsBlk.stVal", gas == Sf6.BLOQUEO, c);
+            ModelNode h = model.findModelNode(simg + ".Health.stVal", Fc.ST);
+            if (h instanceof BasicDataAttribute) {
+                long salud = gas == Sf6.BLOQUEO ? 3 : gas == Sf6.ALARMA ? 2 : 1;   // Alarm, Warning, Ok
+                Long actual = leerEntero((BasicDataAttribute) h);
+                if (actual == null || actual != salud) {
+                    BasicDataAttribute copia = copiaDe(h);
+                    if (escribirEntero(copia, salud)) c.add(copia);
+                }
+            }
+        }
+        return c;
+    }
+
+    /** Primer LN de la clase pedida en el LD (cualquier prefijo e instancia), o null. */
+    private static String lnDeClase(ServerModel model, String ldName, String clase) {
+        for (ModelNode ld : model.getChildren()) {
+            if (!ld.getName().equals(ldName)) continue;
+            for (ModelNode ln : ld.getChildren()) {
+                String n = ln.getName().replaceAll("\\d+$", "");
+                if (n.endsWith(clase)) return ldName + "/" + ln.getName();
+            }
+        }
+        return null;
+    }
+
+    private static void booleanoEnCopia(ServerModel model, String ref, boolean valor, List<BasicDataAttribute> c) {
+        ModelNode n = model.findModelNode(ref, Fc.ST);
+        if (!(n instanceof BdaBoolean) || ((BdaBoolean) n).getValue() == valor) return;
+        BdaBoolean copia = (BdaBoolean) copiaDe(n);
+        copia.setValue(valor);
+        c.add(copia);
+    }
+
+    private static Long leerEntero(BasicDataAttribute b) {
+        if (b instanceof BdaInt8) return (long) ((BdaInt8) b).getValue();
+        if (b instanceof BdaInt16) return (long) ((BdaInt16) b).getValue();
+        if (b instanceof BdaInt32) return (long) ((BdaInt32) b).getValue();
+        if (b instanceof BdaInt64) return ((BdaInt64) b).getValue();
+        if (b instanceof BdaInt8U) return (long) ((BdaInt8U) b).getValue();
+        if (b instanceof BdaInt16U) return (long) ((BdaInt16U) b).getValue();
+        if (b instanceof BdaInt32U) return ((BdaInt32U) b).getValue();
+        return null;
+    }
+
+    private static boolean escribirEntero(BasicDataAttribute b, long v) {
+        if (b instanceof BdaInt8) { ((BdaInt8) b).setValue((byte) v); return true; }
+        if (b instanceof BdaInt16) { ((BdaInt16) b).setValue((short) v); return true; }
+        if (b instanceof BdaInt32) { ((BdaInt32) b).setValue((int) v); return true; }
+        if (b instanceof BdaInt64) { ((BdaInt64) b).setValue(v); return true; }
+        if (b instanceof BdaInt8U) { ((BdaInt8U) b).setValue((short) v); return true; }
+        if (b instanceof BdaInt16U) { ((BdaInt16U) b).setValue((int) v); return true; }
+        if (b instanceof BdaInt32U) { ((BdaInt32U) b).setValue(v); return true; }
+        return false;
     }
 
     /** Respuesta que rige un mando sobre raiz: la del objeto o la de un aparato vinculado. */
@@ -647,7 +838,7 @@ public final class EstadoLocal {
     }
 
     /** Pone la posicion en intermedio (00), con calidad buena y hora nueva. */
-    static void aplicarIntermedio(ServerModel model, String doRef, List<BasicDataAttribute> cambiados) {
+    public static void aplicarIntermedio(ServerModel model, String doRef, List<BasicDataAttribute> cambiados) {
         ModelNode st = model.findModelNode(doRef + ".stVal", Fc.ST);
         if (!(st instanceof BdaDoubleBitPos)) return;
         BdaDoubleBitPos p = (BdaDoubleBitPos) copiaDe(st);

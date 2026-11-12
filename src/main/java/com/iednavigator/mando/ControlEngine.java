@@ -263,8 +263,21 @@ public final class ControlEngine {
                         .con(Terminacion.negativaEn(ventana, 11));
             }
 
+            // Falla del mecanismo (apertura o cierre): se acepta, no se mueve, y al cabo de
+            // tiempoFallaMs termina en negativo por tiempo (AddCause 16, time-limit-over).
+            if (EstadoLocal.fallaMecanismoPara(model, raiz, cerrar)) {
+                selecciones.remove(raiz);
+                List<BasicDataAttribute> c = new ArrayList<>();
+                ponerStSeld(model, raiz, false, c);
+                long espera = Math.max(0, EstadoLocal.tiempoFallaMs);
+                return Resultado.ok(c, nombre + ": falla de " + (cerrar ? "cierre" : "apertura")
+                        + ", el mecanismo no actua (terminacion negativa en " + (espera / 1000.0) + " s)")
+                        .con(Terminacion.negativaEn(espera, 16));
+            }
+
             EstadoLocal.Respuesta respuesta = EstadoLocal.respuestaPara(model, raiz);
-            if (respuesta != EstadoLocal.Respuesta.NORMAL) {
+            long tiempoNormal = EstadoLocal.tiempoManiobraMs(cerrar);
+            if (respuesta != EstadoLocal.Respuesta.NORMAL || tiempoNormal > 0) {
                 selecciones.remove(raiz);
                 List<BasicDataAttribute> c = new ArrayList<>();
                 ponerStSeld(model, raiz, false, c);
@@ -278,19 +291,11 @@ public final class ControlEngine {
                         for (String p : posiciones) EstadoLocal.aplicarIntermedio(model, p, c);
                         return Resultado.ok(c, nombre + ": aparato sin cablear, queda en intermedio");
                     case LENTO:
+                        return recorrer(model, raiz, ctlVal, posiciones, c, EstadoLocal.recorridoLentoMs, nombre);
+                    case NORMAL:
                     default:
-                        for (String p : posiciones) EstadoLocal.aplicarIntermedio(model, p, c);
-                        long recorrido = EstadoLocal.recorridoLentoMs;
-                        final BasicDataAttribute orden = ctlVal;
-                        final String objeto = raiz;
-                        return Resultado.ok(c, nombre + ": en recorrido, llega en "
-                                + (recorrido / 1000.0) + " s")
-                                .con(Terminacion.positivaEn(recorrido, () -> {
-                                    List<BasicDataAttribute> fin = new ArrayList<>();
-                                    aplicarAlEstado(model, objeto,
-                                            model.findModelNode(objeto + ".stVal", Fc.ST), orden, fin);
-                                    return fin;
-                                }));
+                        // Normal con tiempo de maniobra: pasa por intermedio y llega a tiempo.
+                        return recorrer(model, raiz, ctlVal, posiciones, c, tiempoNormal, nombre);
                 }
             }
         }
@@ -314,6 +319,21 @@ public final class ControlEngine {
         ponerStSeld(model, raiz, false, cambiados);
 
         return Resultado.ok(cambiados, nombre + ": " + detalle + (test ? " (modo prueba)" : ""));
+    }
+
+    /**
+     * El aparato recorre: sus posiciones pasan a intermedio ahora y llegan a la posición final
+     * al cabo de ms, con la terminación positiva recién entonces.
+     */
+    private Resultado recorrer(final ServerModel model, final String raiz, final BasicDataAttribute orden,
+                               List<String> posiciones, List<BasicDataAttribute> c, long ms, String nombre) {
+        for (String p : posiciones) EstadoLocal.aplicarIntermedio(model, p, c);
+        return Resultado.ok(c, nombre + ": en recorrido, llega en " + (ms / 1000.0) + " s")
+                .con(Terminacion.positivaEn(ms, () -> {
+                    List<BasicDataAttribute> fin = new ArrayList<>();
+                    aplicarAlEstado(model, raiz, model.findModelNode(raiz + ".stVal", Fc.ST), orden, fin);
+                    return fin;
+                }));
     }
 
     /** Escribe el resultado del mando en el stVal del objeto controlado. */

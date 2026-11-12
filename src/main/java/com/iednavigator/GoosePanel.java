@@ -123,6 +123,48 @@ class GoosePanel {
         return activePublishers;
     }
 
+    // ─── Interruptor virtual ───────────────────────────────────────────────────
+
+    /** Reciben cada trama que llega (retransmisiones incluidas), en el hilo de captura. */
+    private final List<java.util.function.Consumer<GooseSubscriber.GooseMessage>> oyentesGoose =
+            new CopyOnWriteArrayList<>();
+
+    void agregarOyenteGoose(java.util.function.Consumer<GooseSubscriber.GooseMessage> o) { oyentesGoose.add(o); }
+
+    void quitarOyenteGoose(java.util.function.Consumer<GooseSubscriber.GooseMessage> o) { oyentesGoose.remove(o); }
+
+    /** Última trama de cada GoCB visto en la tabla de recepción. Llamar en el hilo de Swing. */
+    List<GooseSubscriber.GooseMessage> mensajesRecibidos() {
+        return new ArrayList<>(gooseMessages.values());
+    }
+
+    /**
+     * GoCB del modelo cuyo DataSet lleva la posición {@code LD/LN.DO} (LD con el nombre del IED
+     * delante, como en el modelo servido), con true si se está publicando.
+     */
+    Map<String, Boolean> gocbsQueLlevan(String ld, String lnDo) {
+        Map<String, Boolean> r = new LinkedHashMap<>();
+        List<SclGoCB> gcbs = ctx.getSclGoCBs();
+        if (gcbs == null || ctx.getSclDataSets() == null) return r;
+        String ied = ctx.getLoadedIedName();
+        String ldInst = ied != null && ld.startsWith(ied) ? ld.substring(ied.length()) : ld;
+        String buscado = ldInst + "/" + lnDo;
+        for (int i = 0; i < gcbs.size(); i++) {
+            SclGoCB g = gcbs.get(i);
+            for (SclDataSet ds : ctx.getSclDataSets()) {
+                if (ds.name == null || !ds.name.equals(g.datSet)) continue;
+                if (ds.ldInst != null && !ds.ldInst.equals(g.ldInst)) continue;
+                for (String m : ds.members) {
+                    if (m.equals(buscado) || m.startsWith(buscado + ".") || m.startsWith(buscado + " ")) {
+                        r.put(g.cbName, activePublishers.containsKey(i));
+                        break;
+                    }
+                }
+            }
+        }
+        return r;
+    }
+
     void logGoose(String message) {
         SwingUtilities.invokeLater(() -> {
             String timestamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
@@ -1526,6 +1568,9 @@ class GoosePanel {
     }
 
     private void handleGooseMessage(GooseSubscriber.GooseMessage msg) {
+        for (java.util.function.Consumer<GooseSubscriber.GooseMessage> o : oyentesGoose) {
+            try { o.accept(msg); } catch (Exception ignorada) { }
+        }
         String key = msg.appId + "|" + (msg.gocbRef != null ? msg.gocbRef : "");
         if (!shouldShowGoose(key, msg.stNum)) return;
 

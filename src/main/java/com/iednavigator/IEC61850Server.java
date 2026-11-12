@@ -1540,7 +1540,7 @@ public class IEC61850Server implements ServerEventListener {
 
     public void quitarObservadorMando(ObservadorMando o) { observadoresMando.remove(o); }
 
-    private void avisarMando(String origen, String texto, boolean aceptado) {
+    void avisarMando(String origen, String texto, boolean aceptado) {
         for (ObservadorMando o : observadoresMando) {
             try { o.evento(origen, texto, aceptado); } catch (Exception ignorada) { }
         }
@@ -1554,10 +1554,115 @@ public class IEC61850Server implements ServerEventListener {
 
     /** Abre o cierra el aparato a pie de equipo (sin pasar por MMS) y lo publica. */
     public void maniobrarLocal(String ref, boolean cerrar) {
-        if (serverModel == null) return;
-        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.maniobrar(serverModel, ref, cerrar));
-        avisarMando("Panel", I18n.t(cerrar ? "vint.evt.cierre" : "vint.evt.apertura", ref), true);
+        ordenarAparato(ref, cerrar, "Panel");
     }
+
+    private final java.util.concurrent.ScheduledExecutorService relojManiobra =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread h = new Thread(r, "maniobra-aparato");
+                h.setDaemon(true);
+                return h;
+            });
+
+    /**
+     * Orden directa a las bobinas del aparato, sin pasar por el modelo de control: la del panel
+     * (a pie de equipo) y la que llega por GOOSE (disparo o cierre de una protección). Respeta
+     * las fallas del instructor igual que un mando por MMS: SF6 en bloqueo y resorte descargado
+     * impiden la maniobra, una falla de mecanismo deja el aparato quieto, y las respuestas y
+     * tiempos de maniobra lo hacen pasar por intermedio.
+     *
+     * @return true si el aparato empezó a moverse
+     */
+    public boolean ordenarAparato(String ref, boolean cerrar, String origen) {
+        if (serverModel == null || ref == null) return false;
+        com.iednavigator.mando.EstadoLocal.Sf6 gas = com.iednavigator.mando.EstadoLocal.sf6Para(serverModel, ref);
+        if (gas == com.iednavigator.mando.EstadoLocal.Sf6.BLOQUEO) {
+            avisarMando(origen, I18n.t("vint.evt.bloq.sf6", ref), false);
+            return false;
+        }
+        if (cerrar && com.iednavigator.mando.EstadoLocal.resorteDescargadoPara(serverModel, ref)) {
+            avisarMando(origen, I18n.t("vint.evt.bloq.resorte", ref), false);
+            return false;
+        }
+        if (com.iednavigator.mando.EstadoLocal.fallaMecanismoPara(serverModel, ref, cerrar)) {
+            avisarMando(origen, I18n.t(cerrar ? "vint.evt.falla.cierre" : "vint.evt.falla.apertura", ref), false);
+            return false;
+        }
+        com.iednavigator.mando.EstadoLocal.Respuesta r = com.iednavigator.mando.EstadoLocal.respuestaPara(serverModel, ref);
+        if (r == com.iednavigator.mando.EstadoLocal.Respuesta.TRABADO) {
+            avisarMando(origen, I18n.t("vint.evt.trabado", ref), false);
+            return false;
+        }
+        long ms = r == com.iednavigator.mando.EstadoLocal.Respuesta.LENTO
+                ? com.iednavigator.mando.EstadoLocal.recorridoLentoMs
+                : com.iednavigator.mando.EstadoLocal.tiempoManiobraMs(cerrar);
+        if (r == com.iednavigator.mando.EstadoLocal.Respuesta.SIN_CABLEAR || ms > 0) {
+            List<String> posiciones = new ArrayList<>();
+            posiciones.add(ref);
+            posiciones.addAll(com.iednavigator.mando.EstadoLocal.posicionesVinculadas(serverModel, ref));
+            List<BasicDataAttribute> intermedio = new ArrayList<>();
+            for (String p : posiciones) com.iednavigator.mando.EstadoLocal.aplicarIntermedio(serverModel, p, intermedio);
+            publicarCambiosDeMando(intermedio);
+            if (r == com.iednavigator.mando.EstadoLocal.Respuesta.SIN_CABLEAR) {
+                avisarMando(origen, I18n.t("vint.evt.sincablear", ref), false);
+                return true;
+            }
+            final long inicio = System.currentTimeMillis();
+            relojManiobra.schedule(() -> {
+                publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.maniobrar(serverModel, ref, cerrar));
+                avisarMando(origen, I18n.t(cerrar ? "vint.evt.cerrado.en" : "vint.evt.abierto.en", ref,
+                        String.valueOf(System.currentTimeMillis() - inicio)), true);
+            }, ms, java.util.concurrent.TimeUnit.MILLISECONDS);
+            return true;
+        }
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.maniobrar(serverModel, ref, cerrar));
+        avisarMando(origen, I18n.t(cerrar ? "vint.evt.cierre" : "vint.evt.apertura", ref), true);
+        return true;
+    }
+
+    // Fallas del mecanismo y del gas, y tiempos de maniobra (paridad con un interruptor de práctica)
+
+    public boolean fallaApertura(String ref) { return com.iednavigator.mando.EstadoLocal.fallaApertura(ref); }
+    public boolean fallaCierre(String ref) { return com.iednavigator.mando.EstadoLocal.fallaCierre(ref); }
+    public boolean resorteDescargado(String ref) { return com.iednavigator.mando.EstadoLocal.resorteDescargado(ref); }
+    public com.iednavigator.mando.EstadoLocal.Sf6 sf6De(String ref) { return com.iednavigator.mando.EstadoLocal.sf6De(ref); }
+
+    public void ponerFallaApertura(String ref, boolean falla) {
+        com.iednavigator.mando.EstadoLocal.ponerFallaApertura(ref, falla);
+        avisarMando("Panel", I18n.t(falla ? "vint.evt.f.apertura.si" : "vint.evt.f.apertura.no", ref), true);
+    }
+
+    public void ponerFallaCierre(String ref, boolean falla) {
+        com.iednavigator.mando.EstadoLocal.ponerFallaCierre(ref, falla);
+        avisarMando("Panel", I18n.t(falla ? "vint.evt.f.cierre.si" : "vint.evt.f.cierre.no", ref), true);
+    }
+
+    public void ponerResorteDescargado(String ref, boolean descargado) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerResorteDescargado(serverModel, ref, descargado));
+        avisarMando("Panel", I18n.t(descargado ? "vint.evt.resorte.si" : "vint.evt.resorte.no", ref), true);
+    }
+
+    public void ponerSf6(String ref, com.iednavigator.mando.EstadoLocal.Sf6 estado) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerSf6(serverModel, ref, estado));
+        avisarMando("Panel", I18n.t("vint.evt.sf6", ref, textoSf6(estado)), true);
+    }
+
+    public static String textoSf6(com.iednavigator.mando.EstadoLocal.Sf6 s) {
+        switch (s) {
+            case ALARMA:  return I18n.t("vint.sf6.alarma");
+            case BLOQUEO: return I18n.t("vint.sf6.bloqueo");
+            default:      return I18n.t("vint.sf6.normal");
+        }
+    }
+
+    public long tiempoAperturaMs() { return com.iednavigator.mando.EstadoLocal.tiempoAperturaMs; }
+    public long tiempoCierreMs() { return com.iednavigator.mando.EstadoLocal.tiempoCierreMs; }
+    public long tiempoFallaMs() { return com.iednavigator.mando.EstadoLocal.tiempoFallaMs; }
+    public void ponerTiempoAperturaMs(long ms) { com.iednavigator.mando.EstadoLocal.tiempoAperturaMs = Math.max(0, ms); }
+    public void ponerTiempoCierreMs(long ms) { com.iednavigator.mando.EstadoLocal.tiempoCierreMs = Math.max(0, ms); }
+    public void ponerTiempoFallaMs(long ms) { com.iednavigator.mando.EstadoLocal.tiempoFallaMs = Math.max(0, ms); }
 
     /** Llave local del aparato: true = LOCAL (no acepta órdenes por comunicaciones). */
     public Boolean enLocal(String ref) {

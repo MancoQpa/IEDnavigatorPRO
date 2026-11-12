@@ -218,6 +218,22 @@ public final class ControlPolicy {
             }
         }
 
+        // --- 4b. Bloqueos de proceso del interruptor: gas y mecanismo ---
+        //
+        // Los provoca el instructor (EstadoLocal): SF6 en bloqueo impide abrir y cerrar; el
+        // resorte descargado impide cerrar. Un relé real los rechaza por el proceso
+        // (AddCause 9, blocked-by-process), igual que un bloqueo del aparato.
+        if (controlRoot != null) {
+            if (EstadoLocal.sf6Para(model, controlRoot) == EstadoLocal.Sf6.BLOQUEO) {
+                return new ServiceError(ServiceError.ACCESS_VIOLATION,
+                        lnName + ": presion de SF6 baja, maniobra bloqueada (bloqueo de proceso)");
+            }
+            if (cerrando && EstadoLocal.resorteDescargadoPara(model, controlRoot)) {
+                return new ServiceError(ServiceError.ACCESS_VIOLATION,
+                        lnName + ": resorte descargado, el cierre no esta disponible (bloqueo de proceso)");
+            }
+        }
+
         // --- 5. Enclavamiento, solo si el cliente lo pidio ---
         //
         // El bit interlkChk significa "servidor, verifica el enclavamiento". Si
