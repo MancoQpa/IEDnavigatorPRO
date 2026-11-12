@@ -83,6 +83,12 @@ Main class: `com.iednavigator.IEDNavigatorApp`
 - **CachedValue**: Inner class in IEC61850Client for tracking attribute values with timestamps.
 - **Who does what** (verified 2026-10-11 in the code, not deduced from names):
   - MMS client and simulated server: iec61850bean.
+  - Control decisions in server mode (since 2026-11-12): package `com.iednavigator.mando`, the
+    same control engine as the Android IEDsimulatorPRO (`ControlEngine`, `ControlPolicy`,
+    `EstadoLocal`, `Terminacion`), copied with only the package changed and `android.util.Log`
+    replaced by a local `Log`. Keep both copies in step: a fix in one belongs in the other.
+    `IEC61850Server.write()` delegates to it; `start()` runs `EstadoLocal.inicializarModoYSalud`
+    and `normalizar` before creating the `ServerSap`.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
     pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
   - Sampled Values: not in the desktop app (the SV tab is commented out in
@@ -219,6 +225,16 @@ because `classes` comes first in the classpath). Each file says why and what cha
   request in flight but did not enforce it (shared output buffer, response queue and expected
   invoke id), so the polling thread, the control dialog and the keep-alive could cross
   responses and break the association (`test/TestPedidosConcurrentes`).
+- `ServerAssociation.java` (since 2026-11-12): the IEDsimulatorPRO's patched copy, with only the
+  reference to `Terminacion` moved to `com.iednavigator.mando`. Its changes are documented
+  one by one in the simulator's `PARCHES-LIBRERIA.md` and marked `PARCHE IEDSimulator` in the
+  file. In short: ctlModel 3 and 4, SBOw/SBO/Cancel and the full control structure now reach
+  `write()` (the original answered "unsupported" and only passed `ctlVal`); a rejection sends
+  `LastApplError` with AddCause and answers object-access-denied; an accepted Oper with
+  ctlModel 3/4 sends `CommandTermination`, possibly deferred (`Terminacion`).
+  `test/TestServidorMando` maneuvers a ctlModel-4 CSWI with the app's own client.
+  Known: changing the command authority (`ponerAutoridad`) changes `Loc` in the model but the
+  library cannot report it (`setValues` needs a mirror copy); the same happens in the simulator.
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.
