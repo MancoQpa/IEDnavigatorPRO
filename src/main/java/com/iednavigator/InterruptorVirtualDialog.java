@@ -49,6 +49,12 @@ final class InterruptorVirtualDialog extends JDialog {
     private final JSpinner spRecorrido = new JSpinner(new SpinnerNumberModel(4000, 0, 60000, 50));
     private final JCheckBox chkSincronismo = new JCheckBox();
     private final JCheckBox chkCalidad = new JCheckBox();
+    private final JCheckBox chkFallaApertura = new JCheckBox(), chkFallaCierre = new JCheckBox(),
+            chkResorte = new JCheckBox();
+    private final JComboBox<EstadoLocal.Sf6> cbSf6 = new JComboBox<>(EstadoLocal.Sf6.values());
+    private final JSpinner spApertura = new JSpinner(new SpinnerNumberModel(0, 0, 60000, 10));
+    private final JSpinner spCierre = new JSpinner(new SpinnerNumberModel(0, 0, 60000, 10));
+    private final JSpinner spFalla = new JSpinner(new SpinnerNumberModel(2000, 0, 60000, 100));
     private final JTextArea taRegistro = new JTextArea(10, 60);
     private final Timer refresco;
     private final IEC61850Server.ObservadorMando observador;
@@ -119,7 +125,7 @@ final class InterruptorVirtualDialog extends JDialog {
         registrar(I18n.t("vint.origen.sistema"), I18n.t("vint.evt.abierto", String.valueOf(cbAparato.getItemCount())), true);
         refrescar();
         pack();
-        setMinimumSize(new Dimension(820, 640));
+        setMinimumSize(new Dimension(880, 820));
         setLocationRelativeTo(owner);
     }
 
@@ -205,6 +211,40 @@ final class InterruptorVirtualDialog extends JDialog {
         ayuda.setForeground(GRIS);
         p.add(alineado(ayuda));
 
+        // Mecanismo
+        JPanel mec = new JPanel(new GridLayout(0, 1));
+        mec.setBorder(new TitledBorder(I18n.t("vint.mecanismo")));
+        chkFallaApertura.setText(I18n.t("vint.falla.apertura"));
+        chkFallaApertura.addActionListener(e -> {
+            if (!actualizando) conAparato(o -> srv.ponerFallaApertura(o.ref, chkFallaApertura.isSelected()));
+        });
+        chkFallaCierre.setText(I18n.t("vint.falla.cierre"));
+        chkFallaCierre.addActionListener(e -> {
+            if (!actualizando) conAparato(o -> srv.ponerFallaCierre(o.ref, chkFallaCierre.isSelected()));
+        });
+        chkResorte.setText(I18n.t("vint.resorte"));
+        chkResorte.addActionListener(e -> {
+            if (!actualizando) conAparato(o -> srv.ponerResorteDescargado(o.ref, chkResorte.isSelected()));
+        });
+        mec.add(chkFallaApertura);
+        mec.add(chkFallaCierre);
+        mec.add(chkResorte);
+        mec.setMaximumSize(new Dimension(Integer.MAX_VALUE, mec.getPreferredSize().height));
+        p.add(alineado(mec));
+
+        // Gas SF6
+        cbSf6.setRenderer(new DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean s, boolean f) {
+                return super.getListCellRendererComponent(l,
+                        v instanceof EstadoLocal.Sf6 ? IEC61850Server.textoSf6((EstadoLocal.Sf6) v) : v, i, s, f);
+            }
+        });
+        cbSf6.addActionListener(e -> {
+            if (!actualizando) conAparato(o -> srv.ponerSf6(o.ref, (EstadoLocal.Sf6) cbSf6.getSelectedItem()));
+        });
+        p.add(fila(I18n.t("vint.sf6"), cbSf6));
+
+        // Otras respuestas al mando
         cbRespuesta.setRenderer(new DefaultListCellRenderer() {
             @Override public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean s, boolean f) {
                 return super.getListCellRendererComponent(l,
@@ -218,10 +258,30 @@ final class InterruptorVirtualDialog extends JDialog {
         });
         p.add(fila(I18n.t("vint.respuesta"), cbRespuesta));
 
-        spRecorrido.setEditor(new JSpinner.NumberEditor(spRecorrido, "#"));
+        // Tiempos (comunes a todos los aparatos)
+        JPanel tiempos = new JPanel(new GridLayout(0, 2, 6, 2));
+        tiempos.setBorder(new TitledBorder(I18n.t("vint.tiempos")));
+        for (JSpinner sp : new JSpinner[]{spApertura, spCierre, spFalla, spRecorrido}) {
+            sp.setEditor(new JSpinner.NumberEditor(sp, "#"));
+        }
+        spApertura.setValue((int) srv.tiempoAperturaMs());
+        spCierre.setValue((int) srv.tiempoCierreMs());
+        spFalla.setValue((int) srv.tiempoFallaMs());
         spRecorrido.setValue((int) srv.tiempoRecorridoMs());
+        spApertura.addChangeListener(e -> srv.ponerTiempoAperturaMs(((Number) spApertura.getValue()).longValue()));
+        spCierre.addChangeListener(e -> srv.ponerTiempoCierreMs(((Number) spCierre.getValue()).longValue()));
+        spFalla.addChangeListener(e -> srv.ponerTiempoFallaMs(((Number) spFalla.getValue()).longValue()));
         spRecorrido.addChangeListener(e -> srv.ponerTiempoRecorridoMs(((Number) spRecorrido.getValue()).longValue()));
-        p.add(fila(I18n.t("vint.recorrido"), spRecorrido));
+        tiempos.add(new JLabel(I18n.t("vint.t.apertura")));
+        tiempos.add(spApertura);
+        tiempos.add(new JLabel(I18n.t("vint.t.cierre")));
+        tiempos.add(spCierre);
+        tiempos.add(new JLabel(I18n.t("vint.t.falla")));
+        tiempos.add(spFalla);
+        tiempos.add(new JLabel(I18n.t("vint.recorrido")));
+        tiempos.add(spRecorrido);
+        tiempos.setMaximumSize(new Dimension(Integer.MAX_VALUE, tiempos.getPreferredSize().height));
+        p.add(alineado(tiempos));
 
         chkSincronismo.setText(I18n.t("vint.sincronismo"));
         chkSincronismo.addActionListener(e -> {
@@ -230,6 +290,7 @@ final class InterruptorVirtualDialog extends JDialog {
         });
         p.add(alineado(chkSincronismo));
 
+        // Señales
         JPanel forzar = new JPanel(new GridLayout(1, 2, 8, 0));
         forzar.setBorder(new TitledBorder(I18n.t("vint.forzar")));
         JButton btnIntermedio = new JButton(I18n.t("vint.forzar.intermedio"));
@@ -255,8 +316,13 @@ final class InterruptorVirtualDialog extends JDialog {
             srv.ponerRespuesta(o.ref, EstadoLocal.Respuesta.NORMAL);
             srv.ponerSincronismo(o.ref, false);
             srv.ponerCalidadInvalida(o.ref, false);
+            srv.ponerFallaApertura(o.ref, false);
+            srv.ponerFallaCierre(o.ref, false);
+            srv.ponerResorteDescargado(o.ref, false);
+            srv.ponerSf6(o.ref, EstadoLocal.Sf6.NORMAL);
+            chkCalidad.setSelected(false);
         }));
-        p.add(Box.createVerticalStrut(8));
+        p.add(Box.createVerticalStrut(6));
         p.add(alineado(btnReset));
         p.add(Box.createVerticalGlue());
         return p;
@@ -316,6 +382,10 @@ final class InterruptorVirtualDialog extends JDialog {
             }
             cbRespuesta.setSelectedItem(srv.respuestaDe(o.ref));
             chkSincronismo.setSelected(srv.sincronismoEnFalla(o.ref));
+            chkFallaApertura.setSelected(srv.fallaApertura(o.ref));
+            chkFallaCierre.setSelected(srv.fallaCierre(o.ref));
+            chkResorte.setSelected(srv.resorteDescargado(o.ref));
+            cbSf6.setSelectedItem(srv.sf6De(o.ref));
         } finally {
             actualizando = false;
         }

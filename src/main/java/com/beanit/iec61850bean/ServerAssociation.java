@@ -1372,7 +1372,7 @@ final class ServerAssociation {
     if (m.contains("Beh=") || m.contains("Test=true")) return 8;
     if (m.contains("enclavamiento")) return 10;
     if (m.contains("sincronismo")) return 11;
-    if (m.contains("Blk")) return 9;
+    if (m.contains("Blk") || m.contains("bloqueo de proceso")) return 9;
     if (m.contains("status-only") || m.contains("no admite Select")) return 1;
     if (m.contains("seleccionar")) return 18;
     return 0;
