@@ -87,6 +87,10 @@ public class IEDNavigatorApp extends JFrame {
     private DefaultTreeModel treeModel;
     private Map<String, DefaultMutableTreeNode> nodeMap = new HashMap<>();
     private JTextArea logArea;
+    /** Registro del rediseño: niveles, filtros, ×N (PanelRegistro). */
+    private PanelRegistro registro;
+    private JSplitPane splitDerecha;
+    private int divisorAntesDeColapsar = -1;
     /** Paneles que el menu Ver muestra u oculta, y las pestañas que Herramientas selecciona. */
     private JScrollPane treeScroll, logScroll;
     private JTabbedPane rightTabbedPane;
@@ -421,20 +425,16 @@ public class IEDNavigatorApp extends JFrame {
         logArea.setBackground(new Color(0xF7F9FB));
         logArea.setForeground(new Color(0x37474F));
         logArea.setMargin(new Insets(4, 8, 4, 8));
+        registro = new PanelRegistro(this::exportarRegistro, this::alColapsarRegistro);
 
         // Menú contextual del Log: reemplaza al botón "Limpiar Log" que estaba en la barra
         // superior, donde quedaba lejos del contenido sobre el que actúa.
         JPopupMenu logMenu = new JPopupMenu();
         JMenuItem miClearLog = new JMenuItem(I18n.t("toolbar.clearlog"));
-        miClearLog.addActionListener(e -> logArea.setText(""));
+        miClearLog.addActionListener(e -> registro.limpiar());
         logMenu.add(miClearLog);
         JMenuItem miCopyLog = new JMenuItem(I18n.t("log.menu.copy"));
-        miCopyLog.addActionListener(e -> {
-            String sel = logArea.getSelectedText();
-            String txt = (sel != null && !sel.isEmpty()) ? sel : logArea.getText();
-            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
-                .setContents(new java.awt.datatransfer.StringSelection(txt), null);
-        });
+        miCopyLog.addActionListener(e -> registro.copiar());
         logMenu.add(miCopyLog);
         // Acceso al registro en disco de esta sesión (ver SessionLog).
         if (sessionLog != null) {
@@ -452,7 +452,7 @@ public class IEDNavigatorApp extends JFrame {
             });
             logMenu.add(miOpenLogDir);
         }
-        logArea.setComponentPopupMenu(logMenu);
+        registro.areaTexto().setComponentPopupMenu(logMenu);
 
         logScroll = new JScrollPane(logArea);
         logScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.log")));
@@ -522,10 +522,20 @@ public class IEDNavigatorApp extends JFrame {
         treeScroll.setBorder(BorderFactory.createEmptyBorder());
         logScroll.setBorder(BorderFactory.createEmptyBorder());
         panelArbol = tarjeta(null, crearPanelArbol());
-        tarjetaRegistro = tarjeta(I18n.t("log.title"), logScroll);
+        tarjetaRegistro = tarjeta(null, registro);
         JPanel tarjetaPestanias = tarjeta(null, rightTabbedPane);
 
         JSplitPane derecha = separador(JSplitPane.VERTICAL_SPLIT, tarjetaPestanias, tarjetaRegistro);
+        splitDerecha = derecha;
+        // Al cambiar el tamaño de la ventana, el registro colapsado sigue colapsado
+        derecha.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) {
+                if (registro != null && registro.colapsado()) SwingUtilities.invokeLater(() -> ajustarColapso());
+            }
+        });
+        // Minimos chicos: si no, el registro no se puede colapsar ni la pestaña achicar
+        tarjetaPestanias.setMinimumSize(new Dimension(200, 120));
+        tarjetaRegistro.setMinimumSize(new Dimension(200, 40));
         derecha.setResizeWeight(0.78);
         derecha.setDividerLocation(560);
         JSplitPane mainSplit = separador(JSplitPane.HORIZONTAL_SPLIT, panelArbol, derecha);
@@ -697,6 +707,7 @@ public class IEDNavigatorApp extends JFrame {
             t.add(l, BorderLayout.NORTH);
         }
         contenido.setOpaque(true);
+        contenido.setBackground(superficie());
         t.add(contenido, BorderLayout.CENTER);
         return t;
     }
@@ -1140,11 +1151,32 @@ public class IEDNavigatorApp extends JFrame {
         escribirExportacion(destino, sb.toString());
     }
 
+    /** Divisor para que del registro colapsado quede solo el encabezado. */
+    private void ajustarColapso() {
+        int alto = splitDerecha.getHeight() - registro.altoEncabezado() - splitDerecha.getDividerSize() - 4;
+        splitDerecha.setDividerLocation(Math.max(0, alto));
+    }
+
+    /** El registro colapsado deja solo su encabezado; al expandirlo vuelve a su alto anterior. */
+    private void alColapsarRegistro(boolean colapsado) {
+        if (splitDerecha == null) return;
+        // Colapsado, el espacio que sobra al agrandar la ventana va a las pestañas
+        splitDerecha.setResizeWeight(colapsado ? 1.0 : 0.78);
+        if (colapsado) {
+            divisorAntesDeColapsar = splitDerecha.getDividerLocation();
+            ajustarColapso();
+        } else if (divisorAntesDeColapsar > 0) {
+            splitDerecha.setDividerLocation(divisorAntesDeColapsar);
+        } else {
+            splitDerecha.setDividerLocation(0.78);
+        }
+    }
+
     /** Archivo > Exportar registro: el panel de registro a un archivo de texto. */
     private void exportarRegistro() {
         File destino = elegirDestino("registro_" + marcaArchivo() + ".txt");
         if (destino == null) return;
-        escribirExportacion(destino, logArea.getText());
+        escribirExportacion(destino, registro.getTexto());
     }
 
     private File elegirDestino(String nombre) {
@@ -4502,11 +4534,7 @@ public class IEDNavigatorApp extends JFrame {
         // Primero a disco: el archivo es el registro autoritativo y debe quedar completo
         // aunque el EDT esté ocupado o la aplicación termine de forma abrupta.
         if (sessionLog != null) sessionLog.write(message);
-        SwingUtilities.invokeLater(() -> {
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
-            logArea.append("[" + sdf.format(new Date()) + "] " + message + "\n");
-            logArea.setCaretPosition(logArea.getDocument().getLength());
-        });
+        SwingUtilities.invokeLater(() -> registro.agregar(message));
     }
 
 

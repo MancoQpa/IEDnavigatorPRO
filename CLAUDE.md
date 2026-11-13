@@ -91,6 +91,31 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     after 2026-10-27; JNA stays, because pcap4j needs it.
 - **Dependencies bundled in `lib/`**: JARs are committed to the repo alongside Maven; build scripts reference both.
 
+## Main window layout (redesign of 2026-11)
+
+UI only; no IEC 61850 logic changed. Colors and fonts live in `Estilo` (system fonts: Segoe UI and
+Consolas; accent #1F5FBF; dark title bar). The window is:
+
+- Menu bar: Archivo (open, recent, export monitor/log, get/save CID), Simulación (start/stop F5,
+  server/client mode, port), Ver, Herramientas (Compare SCL, GOOSE map and Data Model open in
+  their own non-modal `JDialog`, created once and hidden on close; HTML report; Preferences with
+  language and theme, applied on restart), Ayuda.
+- `BarraContexto`: IED, "model · vendor · cfg", SCL file button, Server | Client, status pill with a
+  gear that shows the real connection fields (port, host, timeout, polling: the same objects the
+  old Server/Client panels created, now not laid out), main button (F5). It reads the window state
+  from a 400 ms Swing Timer (`refrescarContexto`). The library does not report connected clients.
+- Left card: the model tree. `ModelTreeBuilder` merges a DO's FC variants into one node
+  (`NodeInfo.variantes`; control looks for the CO one), `ArbolCeldaRenderer` draws the rows
+  (neutral LD/LN/DO/DA badges, FC only on attributes, SCL or dictionary description loaded in the
+  background), `BuscadorArbol` filters (debounced, path index, lightweight copy model; the real
+  tree is untouched; `original(node)` maps back). Double-click on a leaf, "+ Monitor", Enter and the
+  context menu add to the monitor; read/edit stay in the context menu.
+- Right: five tabs (Monitor, Reports, GOOSE, Ajustes = Setting Groups above + SP below, Datasets)
+  and, below, `PanelRegistro` (levels guessed from the text, filters, ×N grouping, collapsible).
+  The session log file (`SessionLog`) is unchanged.
+- Monitor: `MonitorCeldaRenderer`; column 1 holds the `MonitorItem` (path, FC, change times);
+  quality comes from the DO's `q`; changed rows fade from amber in 1.5 s.
+
 ## Key IEC 61850 Concepts in Code
 
 - **SCL files** (ICD/CID/SCD): XML configuration files describing IED data models. Parsed by iec61850bean's `SclParser`.
