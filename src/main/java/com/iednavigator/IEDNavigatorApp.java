@@ -93,6 +93,16 @@ public class IEDNavigatorApp extends JFrame {
     /** Nombre del IED que muestra la ventana (para el titulo). */
     private String iedEnPantalla = "";
     private String hostEnPantalla = "";
+    /** "modelo · fabricante · cfg" del IED en pantalla (barra de contexto). */
+    private String subEnPantalla = "";
+    private BarraContexto barraContexto;
+    /** Arbol o estado vacio ("no hay SCL" / "sin conexion"). */
+    private JPanel panelArbol;
+    private final CardLayout cardsArbol = new CardLayout();
+    private final JLabel vacioTitulo = new JLabel();
+    private final JLabel vacioTexto = new JLabel();
+    private final JButton vacioBoton = new JButton();
+    private JPanel tarjetaRegistro;
     private static final String URL_DOCUMENTACION = "https://mancoqpa.github.io/IEDnavigatorPRO/";
     private static final java.util.prefs.Preferences PREFS_UI =
             java.util.prefs.Preferences.userRoot().node("com/iednavigator");
@@ -317,13 +327,10 @@ public class IEDNavigatorApp extends JFrame {
         // Panel principal
         JPanel mainPanel = new JPanel(new BorderLayout(0, 0));
 
-        // === TOOLBAR PROFESIONAL ===
-        JToolBar toolbar = createToolbar();
-        mainPanel.add(toolbar, BorderLayout.NORTH);
-
         // === Panel de contenido ===
         JPanel contentPanel = new JPanel(new BorderLayout(5, 5));
-        contentPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        contentPanel.setBackground(fondoVentana());
 
         // === Panel Superior: Modo + Status + Connection Info ===
         JPanel topPanel = new JPanel(new BorderLayout(10, 0));
@@ -379,7 +386,7 @@ public class IEDNavigatorApp extends JFrame {
         iedDisplayPanel.add(lblIedDisplay, BorderLayout.CENTER);
         topPanel.add(iedDisplayPanel, BorderLayout.EAST);
 
-        contentPanel.add(topPanel, BorderLayout.NORTH);
+        // El modo, el estado y el IED pasan a la barra de contexto (topPanel queda sin mostrar).
 
         // === Panel Central: Cards (Server/Client) + Tree ===
         JPanel centerPanel = new JPanel(new BorderLayout(5, 5));
@@ -393,7 +400,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Panel izquierdo (cards + log)
         JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
-        leftPanel.add(cardPanel, BorderLayout.NORTH);
+        // Los paneles Servidor/Cliente no se muestran: sus campos van al engranaje de la barra.
 
         // Log
         logArea = new JTextArea(8, 30);
@@ -439,7 +446,6 @@ public class IEDNavigatorApp extends JFrame {
         logScroll = new JScrollPane(logArea);
         logScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.log")));
         logScroll.setToolTipText(I18n.t("border.log.tip"));
-        leftPanel.add(logScroll, BorderLayout.CENTER);
 
         // Tree del modelo con soporte Drag
         rootNode = new DefaultMutableTreeNode(I18n.t("tree.root"));
@@ -497,20 +503,29 @@ public class IEDNavigatorApp extends JFrame {
         rightTabbedPane.setMinimumSize(new Dimension(400, 200));
         leftPanel.setMinimumSize(new Dimension(250, 200));
 
-        JSplitPane rightSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treeScroll, rightTabbedPane);
-        rightSplit.setDividerLocation(350);
-        rightSplit.setResizeWeight(0.4);
-        rightSplit.setOneTouchExpandable(true);  // Flechitas para expandir/colapsar
+        // Rediseño: el arbol a la izquierda a toda la altura; a la derecha las pestañas y,
+        // debajo, el registro. Cada bloque es una tarjeta blanca sobre el fondo gris.
+        treeScroll.setBorder(BorderFactory.createEmptyBorder());
+        logScroll.setBorder(BorderFactory.createEmptyBorder());
+        panelArbol = tarjeta(I18n.t("tree.title"), crearCartasArbol());
+        tarjetaRegistro = tarjeta(I18n.t("log.title"), logScroll);
+        JPanel tarjetaPestanias = tarjeta(null, rightTabbedPane);
 
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, rightSplit);
-        mainSplit.setDividerLocation(310);
-        mainSplit.setResizeWeight(0.2);
-        mainSplit.setOneTouchExpandable(true);  // Flechitas para expandir/colapsar
-
+        JSplitPane derecha = separador(JSplitPane.VERTICAL_SPLIT, tarjetaPestanias, tarjetaRegistro);
+        derecha.setResizeWeight(0.78);
+        derecha.setDividerLocation(560);
+        JSplitPane mainSplit = separador(JSplitPane.HORIZONTAL_SPLIT, panelArbol, derecha);
+        mainSplit.setResizeWeight(0.3);
+        mainSplit.setDividerLocation(380);
+        centerPanel.setOpaque(false);
         centerPanel.add(mainSplit, BorderLayout.CENTER);
 
         contentPanel.add(centerPanel, BorderLayout.CENTER);
         mainPanel.add(contentPanel, BorderLayout.CENTER);
+        barraContexto = new BarraContexto(estadoParaBarra(), accionesDeBarra());
+        mainPanel.add(barraContexto, BorderLayout.NORTH);
+        // La barra y el estado vacio leen el estado de la ventana: un reloj liviano los refresca.
+        new javax.swing.Timer(400, e -> refrescarContexto()).start();
 
         // Barra de estado inferior
         JPanel statusBar = createStatusBar();
@@ -579,10 +594,10 @@ public class IEDNavigatorApp extends JFrame {
         JMenu menuView = new JMenu(I18n.t("menu.view"));
         JCheckBoxMenuItem miArbol = new JCheckBoxMenuItem(I18n.t("menu.view.tree"), true);
         miArbol.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_1, ctrl));
-        miArbol.addActionListener(e -> mostrarPanel(treeScroll, miArbol.isSelected()));
+        miArbol.addActionListener(e -> mostrarPanel(panelArbol, miArbol.isSelected()));
         JCheckBoxMenuItem miRegistro = new JCheckBoxMenuItem(I18n.t("menu.view.log"), true);
         miRegistro.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_2, ctrl));
-        miRegistro.addActionListener(e -> mostrarPanel(logScroll, miRegistro.isSelected()));
+        miRegistro.addActionListener(e -> mostrarPanel(tarjetaRegistro, miRegistro.isSelected()));
         menuView.add(miArbol);
         menuView.add(miRegistro);
         menuView.addSeparator();
@@ -632,6 +647,220 @@ public class IEDNavigatorApp extends JFrame {
         else if (currentMode == AppMode.CLIENT && hostEnPantalla != null && !hostEnPantalla.isEmpty()) partes.add(hostEnPantalla);
         partes.add(Version.etiqueta());
         setTitle("IED Navigator PRO \u2014 " + String.join(" \u00b7 ", partes));
+    }
+
+    // ── Barra de contexto y distribucion (rediseño, etapa 2) ─────────────────
+
+    private static Color fondoVentana() {
+        return Estilo.temaOscuro() ? UIManager.getColor("Panel.background").darker() : Estilo.FONDO;
+    }
+
+    private static Color superficie() {
+        return Estilo.temaOscuro() ? UIManager.getColor("Panel.background") : Estilo.SUPERFICIE;
+    }
+
+    /** Tarjeta: fondo blanco, borde gris redondeado (10 px) y un titulo opcional arriba. */
+    private static JPanel tarjeta(String titulo, JComponent contenido) {
+        JPanel t = new JPanel(new BorderLayout()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(superficie());
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                g2.setColor(Estilo.BORDE);
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                g2.dispose();
+            }
+        };
+        t.setOpaque(false);
+        t.setBorder(BorderFactory.createEmptyBorder(1, 1, 1, 1));
+        if (titulo != null) {
+            JLabel l = new JLabel(titulo);
+            l.setFont(Estilo.ui(Font.BOLD, 13));
+            l.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0xEEF0F3)),
+                    BorderFactory.createEmptyBorder(10, 14, 8, 14)));
+            t.add(l, BorderLayout.NORTH);
+        }
+        contenido.setOpaque(true);
+        t.add(contenido, BorderLayout.CENTER);
+        return t;
+    }
+
+    /** Separador entre tarjetas: 12 px del color del fondo, sin borde. */
+    private static JSplitPane separador(int orientacion, Component a, Component b) {
+        JSplitPane sp = new JSplitPane(orientacion, a, b);
+        sp.setBorder(null);
+        sp.setDividerSize(12);
+        sp.setOpaque(false);
+        sp.setContinuousLayout(true);
+        if (sp.getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI) {
+            javax.swing.plaf.basic.BasicSplitPaneDivider d =
+                    ((javax.swing.plaf.basic.BasicSplitPaneUI) sp.getUI()).getDivider();
+            d.setBorder(null);
+            d.setBackground(fondoVentana());
+        }
+        return sp;
+    }
+
+    /** El arbol, o el estado vacio cuando no hay modelo que mostrar. */
+    private JPanel crearCartasArbol() {
+        JPanel cartas = new JPanel(cardsArbol);
+        cartas.setBackground(superficie());
+        cartas.add(treeScroll, "arbol");
+
+        JPanel vacio = new JPanel(new GridBagLayout());
+        vacio.setBackground(superficie());
+        JPanel caja = new JPanel();
+        caja.setOpaque(false);
+        caja.setLayout(new BoxLayout(caja, BoxLayout.Y_AXIS));
+        vacioTitulo.setFont(Estilo.ui(Font.BOLD, 15));
+        vacioTexto.setFont(Estilo.ui(Font.PLAIN, 13));
+        vacioTexto.setForeground(Estilo.TEXTO_2);
+        vacioBoton.putClientProperty("FlatLaf.style", "arc:8; borderWidth:0; focusWidth:0; innerFocusWidth:0;"
+                + " background:#1F5FBF; hoverBackground:#174A96; foreground:#FFFFFF; margin:8,18,8,18");
+        vacioBoton.setFont(Estilo.ui(Font.BOLD, 13));
+        vacioBoton.addActionListener(e -> {
+            if (currentMode == AppMode.SERVER) abrirScl(); else iniciarODetener();
+        });
+        for (JComponent c : new JComponent[]{vacioTitulo, vacioTexto, vacioBoton}) c.setAlignmentX(0.5f);
+        caja.add(vacioTitulo);
+        caja.add(Box.createVerticalStrut(6));
+        caja.add(vacioTexto);
+        caja.add(Box.createVerticalStrut(16));
+        caja.add(vacioBoton);
+        vacio.add(caja);
+        cartas.add(vacio, "vacio");
+        return cartas;
+    }
+
+    /** Refresco de la barra de contexto y del estado vacio (reloj de 400 ms). */
+    private void refrescarContexto() {
+        if (barraContexto != null) barraContexto.refrescar();
+        if (panelArbol == null) return;
+        boolean hayModelo = rootNode != null && rootNode.getChildCount() > 0;
+        if (!hayModelo) {
+            boolean srv = currentMode == AppMode.SERVER;
+            vacioTitulo.setText(I18n.t(srv ? "vacio.srv.title" : "vacio.cli.title"));
+            vacioTexto.setText("<html><div style='text-align:center;width:250px'>"
+                    + I18n.t(srv ? "vacio.srv.text" : "vacio.cli.text") + "</div></html>");
+            vacioBoton.setText(I18n.t(srv ? "menu.file.open" : "ctx.btn.connect"));
+            vacioBoton.setEnabled(srv || (btnConnect != null && btnConnect.isEnabled()));
+        }
+        cardsArbol.show((Container) ((BorderLayout) panelArbol.getLayout())
+                .getLayoutComponent(BorderLayout.CENTER), hayModelo ? "arbol" : "vacio");
+    }
+
+    /** "modelo · fabricante · cfg x" desde el texto de la placa ("IED: .. | Fabricante: .."). */
+    private static String subtituloDe(String info) {
+        if (info == null || !info.contains("IED:")) return "";
+        String modelo = campoPlaca(info, "Modelo:");
+        String tipo = campoPlaca(info, "Tipo:");
+        String fab = campoPlaca(info, "Fabricante:");
+        String cfg = campoPlaca(info, "cfg:");
+        java.util.List<String> l = new java.util.ArrayList<>();
+        String equipo = !modelo.isEmpty() ? modelo : tipo;
+        if (!equipo.isEmpty() && !equipo.equals("?")) l.add(equipo);
+        if (!fab.isEmpty() && !fab.equals("?")) l.add(fab);
+        if (!cfg.isEmpty()) l.add("cfg " + cfg);
+        return String.join(" \u00b7 ", l);
+    }
+
+    private static String campoPlaca(String info, String clave) {
+        int a = info.indexOf(clave);
+        if (a < 0) return "";
+        a += clave.length();
+        int b = info.length();
+        for (String fin : new String[]{"|", "cfg:"}) {
+            int k = info.indexOf(fin, a);
+            if (k >= 0 && k < b) b = k;
+        }
+        return info.substring(a, b).trim();
+    }
+
+    private BarraContexto.Estado estadoParaBarra() {
+        return new BarraContexto.Estado() {
+            public boolean modoServidor() { return currentMode == AppMode.SERVER; }
+            public boolean servidorCorriendo() { return isServerRunning; }
+            public boolean conectado() { return isConnected; }
+            public boolean conectando() {
+                return !isConnected && statusIndicator != null
+                        && COLOR_CONNECTING.equals(statusIndicator.getBackground());
+            }
+            public String error() {
+                String t = lblStatus == null ? null : lblStatus.getText();
+                String pre = I18n.t("err.title");
+                return (t != null && t.startsWith(pre)) ? t.substring(pre.length()).replaceFirst("^[:\\s]+", "") : null;
+            }
+            public String puertoServidor() { return tfServerPort == null ? "" : tfServerPort.getText().trim(); }
+            public String destinoCliente() {
+                if (tfHost == null) return "";
+                return tfHost.getText().trim() + ":" + tfClientPort.getText().trim();
+            }
+            public String ied() { return iedEnPantalla; }
+            public String subtitulo() { return subEnPantalla; }
+            public String archivoScl() { return loadedSclFile == null ? null : loadedSclFile.getName(); }
+            public boolean accionHabilitada() {
+                JButton b = currentMode == AppMode.SERVER ? btnStartStop : btnConnect;
+                return b != null && b.isEnabled();
+            }
+        };
+    }
+
+    private BarraContexto.Acciones accionesDeBarra() {
+        return new BarraContexto.Acciones() {
+            public void abrirScl() { IEDNavigatorApp.this.abrirScl(); }
+            public void elegirModo(boolean servidor) {
+                if (servidor) { if (!rbServer.isSelected()) rbServer.doClick(); }
+                else { if (!rbClient.isSelected()) rbClient.doClick(); }
+                refrescarContexto();
+            }
+            public void accionPrincipal() { iniciarODetener(); }
+            public JComponent panelConexion() { return IEDNavigatorApp.this.panelConexion(); }
+        };
+    }
+
+    /**
+     * Lo que antes estaba en los paneles Servidor y Cliente, ahora detras del engranaje de la
+     * pildora. Son los mismos campos (no copias): el resto del programa los sigue leyendo.
+     */
+    private JComponent panelConexion() {
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(3, 4, 3, 4);
+        g.anchor = GridBagConstraints.WEST;
+        g.gridy = 0;
+        if (currentMode == AppMode.SERVER) {
+            g.gridx = 0; p.add(new JLabel(I18n.t("lbl.port")), g);
+            g.gridx = 1; p.add(tfServerPort, g);
+            g.gridx = 0; g.gridy++; g.gridwidth = 2;
+            JLabel hint = new JLabel(I18n.t("lbl.porthint"));
+            hint.setForeground(Estilo.TEXTO_2);
+            hint.setFont(Estilo.ui(Font.PLAIN, 11));
+            p.add(hint, g);
+            g.gridy++;
+            JPanel b = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+            b.setOpaque(false);
+            b.add(btnCheckPort);
+            b.add(btnReleasePort);
+            p.add(b, g);
+        } else {
+            g.gridx = 0; p.add(new JLabel(I18n.t("lbl.host")), g);
+            g.gridx = 1; p.add(tfHost, g);
+            g.gridx = 0; g.gridy++; p.add(new JLabel(I18n.t("lbl.port")), g);
+            g.gridx = 1; p.add(tfClientPort, g);
+            g.gridx = 0; g.gridy++; p.add(new JLabel(I18n.t("lbl.timeout")), g);
+            g.gridx = 1; p.add(spinnerTimeout, g);
+            g.gridx = 0; g.gridy++; p.add(cbPolling, g);
+            g.gridx = 1;
+            JPanel iv = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+            iv.setOpaque(false);
+            iv.add(new JLabel(I18n.t("lbl.interval")));
+            iv.add(spinnerInterval);
+            p.add(iv, g);
+            g.gridx = 0; g.gridy++; g.gridwidth = 2; p.add(cbLeerTodo, g);
+        }
+        return p;
     }
 
     /** Archivo > Abrir: en modo servidor carga el SCL a simular; en cliente, el de los GoCB. */
@@ -3665,7 +3894,9 @@ public class IEDNavigatorApp extends JFrame {
             String n = (b > 0 ? infoText.substring(a, b) : infoText.substring(a)).trim();
             if (!n.equals("?")) iedEnPantalla = n;
         }
+        subEnPantalla = subtituloDe(infoText);
         actualizarTitulo();
+        if (barraContexto != null) barraContexto.refrescar();
         if (infoText == null || infoText.isBlank()) {
             lblIedDisplay.setText("  " + I18n.t("status.nodevice") + "  ");
             lblIedDisplay.setForeground(new Color(120, 120, 140));
