@@ -111,6 +111,9 @@ public class IEDNavigatorApp extends JFrame {
     private final JLabel lblRuta = new JLabel(" ");
     private final JLabel lblCuentaNodos = new JLabel();
     private ArbolCeldaRenderer rendererArbol;
+    /** Herramientas que salieron de las pestañas: su panel y la ventana que lo muestra. */
+    private final Map<String, JComponent> panelesHerramienta = new HashMap<>();
+    private final Map<String, JDialog> ventanasHerramienta = new HashMap<>();
     private static final String URL_DOCUMENTACION = "https://mancoqpa.github.io/IEDnavigatorPRO/";
     private static final java.util.prefs.Preferences PREFS_UI =
             java.util.prefs.Preferences.userRoot().node("com/iednavigator");
@@ -488,21 +491,21 @@ public class IEDNavigatorApp extends JFrame {
         goosePanel = new GoosePanel(createGooseContext());
         rightTabbedPane.addTab(I18n.t("tab.goose"), goosePanel.createPanel());
         // rightTabbedPane.addTab("SV (SMV)", createSampledValuesPanel()); // SIN SMV
-        rightTabbedPane.addTab(I18n.t("tab.sg"),
+        // Rediseño: cinco pestañas. "Ajustes" junta Setting Groups (el grupo activo y sus
+        // valores, arriba) y los ajustes sin grupo (SP, abajo).
+        rightTabbedPane.addTab(I18n.t("tab.ajustes"), panelAjustes(
             new SettingGroupsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
-                backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.sp"),
+                backgroundExecutor, this::navigateToFcdaInModel).createPanel(),
             new ProtectionSettingsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
-                backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.dataset"),
+                backgroundExecutor, this::navigateToFcdaInModel).createPanel()));
+        rightTabbedPane.addTab(I18n.t("tab.datasets"),
             new DatasetPanel(this, this::log, panelModelSupplier, panelClientSupplier,
                 backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.datamodel"),
+        // Data Model, Comparar SCL y Mapa GOOSE: ventanas propias desde Herramientas.
+        panelesHerramienta.put("tab.datamodel",
             new DataModelPanel(this, this::log, panelModelSupplier, iconCache).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.sclcmp"),
-            new SclComparePanel(this, this::log).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.goosemap"),
-            new GooseMapPanel(this, this::log).createPanel());
+        panelesHerramienta.put("tab.sclcmp", new SclComparePanel(this, this::log).createPanel());
+        panelesHerramienta.put("tab.goosemap", new GooseMapPanel(this, this::log).createPanel());
         rightTabbedPane.setTabPlacement(JTabbedPane.TOP);
 
         // Check for native library availability
@@ -620,9 +623,9 @@ public class IEDNavigatorApp extends JFrame {
 
         // ── Herramientas ────────────────────────────────────────────────────
         JMenu menuTools = new JMenu(I18n.t("menu.tools"));
-        menuTools.add(item(I18n.t("menu.tools.sclcmp"), KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrl), e -> irAPestania("tab.sclcmp")));
-        menuTools.add(item(I18n.t("menu.tools.goosemap"), KeyStroke.getKeyStroke(KeyEvent.VK_G, ctrl), e -> irAPestania("tab.goosemap")));
-        menuTools.add(item(I18n.t("menu.tools.datamodel"), KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl), e -> irAPestania("tab.datamodel")));
+        menuTools.add(item(I18n.t("menu.tools.sclcmp"), KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrl), e -> abrirHerramienta("tab.sclcmp")));
+        menuTools.add(item(I18n.t("menu.tools.goosemap"), KeyStroke.getKeyStroke(KeyEvent.VK_G, ctrl), e -> abrirHerramienta("tab.goosemap")));
+        menuTools.add(item(I18n.t("menu.tools.datamodel"), KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl), e -> abrirHerramienta("tab.datamodel")));
         menuTools.addSeparator();
         menuTools.add(item(I18n.t("menu.tools.htmlreport"), null, e -> generateModelReport()));
         menuTools.addSeparator();
@@ -1242,6 +1245,53 @@ public class IEDNavigatorApp extends JFrame {
         if (rightTabbedPane == null) return;
         int i = rightTabbedPane.indexOfTab(I18n.t(claveTitulo));
         if (i >= 0) rightTabbedPane.setSelectedIndex(i);
+    }
+
+    /**
+     * Herramientas > Comparar SCL / Mapa GOOSE / Data Model: una ventana propia, no modal, que
+     * se reutiliza (al cerrarla se oculta y conserva lo que tenia).
+     */
+    private void abrirHerramienta(String clave) {
+        JDialog d = ventanasHerramienta.get(clave);
+        if (d == null) {
+            JComponent panel = panelesHerramienta.get(clave);
+            if (panel == null) return;
+            String menu = "tab.datamodel".equals(clave) ? "menu.tools.datamodel"
+                    : "tab.sclcmp".equals(clave) ? "menu.tools.sclcmp" : "menu.tools.goosemap";
+            d = new JDialog(this, I18n.t(menu).replace("…", "").replace("...", "").trim(), false);
+            d.setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+            JPanel fondo = new JPanel(new BorderLayout());
+            fondo.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            fondo.add(panel, BorderLayout.CENTER);
+            d.setContentPane(fondo);
+            d.setSize(Math.min(1100, getWidth() - 80), Math.min(760, getHeight() - 80));
+            d.setLocationRelativeTo(this);
+            ventanasHerramienta.put(clave, d);
+        }
+        d.setVisible(true);
+        d.toFront();
+    }
+
+    /** Pestaña Ajustes: el grupo de ajustes activo arriba y los ajustes sin grupo (SP) abajo. */
+    private JComponent panelAjustes(JComponent grupos, JComponent sp) {
+        JPanel arriba = new JPanel(new BorderLayout());
+        arriba.add(tituloSeccion(I18n.t("ajustes.sg")), BorderLayout.NORTH);
+        arriba.add(grupos, BorderLayout.CENTER);
+        JPanel abajo = new JPanel(new BorderLayout());
+        abajo.add(tituloSeccion(I18n.t("ajustes.sp")), BorderLayout.NORTH);
+        abajo.add(sp, BorderLayout.CENTER);
+        JSplitPane sep = new JSplitPane(JSplitPane.VERTICAL_SPLIT, arriba, abajo);
+        sep.setResizeWeight(0.5);
+        sep.setBorder(null);
+        sep.setContinuousLayout(true);
+        return sep;
+    }
+
+    private static JLabel tituloSeccion(String texto) {
+        JLabel l = new JLabel(texto);
+        l.setFont(Estilo.ui(Font.BOLD, 13));
+        l.setBorder(BorderFactory.createEmptyBorder(10, 10, 2, 10));
+        return l;
     }
 
     /** Herramientas > Preferencias: idioma y tema, que se aplican al reiniciar. */
@@ -4461,12 +4511,13 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("Component.innerFocusWidth", 1);
 
         // Pestañas: subrayado de color en la activa, separadores sutiles
-        UIManager.put("TabbedPane.tabSelectionHeight", 3);
-        UIManager.put("TabbedPane.selectedBackground", Color.WHITE);
+        UIManager.put("TabbedPane.selectedBackground", Estilo.SUPERFICIE);
+        UIManager.put("TabbedPane.background", Estilo.SUPERFICIE);
+        UIManager.put("TabbedPane.contentAreaColor", Estilo.BORDE);
         UIManager.put("TabbedPane.underlineColor", accent);
-        UIManager.put("TabbedPane.inactiveUnderlineColor", new Color(0x90CAF9));
-        UIManager.put("TabbedPane.hoverColor", new Color(0xE3F2FD));
-        UIManager.put("TabbedPane.showTabSeparators", true);
+        UIManager.put("TabbedPane.inactiveUnderlineColor", accent);
+        UIManager.put("TabbedPane.hoverColor", Estilo.ACENTO_SUAVE);
+        UIManager.put("TabbedPane.showTabSeparators", false);
         UIManager.put("TabbedPane.tabSeparatorsFullHeight", false);
 
         // Scrollbars finas con hover
@@ -4544,7 +4595,9 @@ public class IEDNavigatorApp extends JFrame {
         // Pestaña activa: texto en azul + negrita para reforzar el subrayado
         UIManager.put("TabbedPane.selectedForeground", accent);
         UIManager.put("TabbedPane.font", Estilo.ui(Font.PLAIN, 13));
-        UIManager.put("TabbedPane.tabHeight", 30);
+        UIManager.put("TabbedPane.tabHeight", 40);
+        UIManager.put("TabbedPane.tabInsets", new Insets(4, 12, 4, 12));
+        UIManager.put("TabbedPane.tabSelectionHeight", 2);
 
         // Selección de tabla/árbol en azul suave con texto negro (no invierte color)
         UIManager.put("Table.selectionBackground", new Color(0xCFE5F7));
@@ -4589,7 +4642,8 @@ public class IEDNavigatorApp extends JFrame {
                     "TabbedPane.selectedBackground", "TabbedPane.hoverColor", "TabbedPane.inactiveUnderlineColor",
                     "Table.selectionBackground", "Table.selectionForeground", "Tree.selectionBackground",
                     "Tree.selectionForeground", "List.selectionBackground", "List.selectionForeground",
-                    "SplitPaneDivider.gripColor", "TextField.placeholderForeground"}) {
+                    "SplitPaneDivider.gripColor", "TextField.placeholderForeground",
+                    "TabbedPane.background", "TabbedPane.contentAreaColor"}) {
                 UIManager.put(k, null);
             }
         }
