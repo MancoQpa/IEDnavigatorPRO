@@ -469,6 +469,8 @@ public class IEDNavigatorApp extends JFrame {
         modelTree.setCellRenderer(rendererArbol);
         modelTree.setDragEnabled(true);
         modelTree.setRowHeight(28);
+        ModelTreeBuilder.agruparDo = PREFS_UI.getBoolean(PREF_AGRUPAR, true);
+        rendererArbol.mostrarDescripciones = PREFS_UI.getBoolean(PREF_DESCRIPCIONES, true);
         modelTree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         modelTree.setLargeModel(true);
         treeScroll = new JScrollPane(modelTree);
@@ -554,16 +556,32 @@ public class IEDNavigatorApp extends JFrame {
         // Barra de estado inferior
         JPanel statusBar = createStatusBar();
         mainPanel.add(statusBar, BorderLayout.SOUTH);
+        // Preferencias de Ver guardadas: registro visible y densidad
+        if (!PREFS_UI.getBoolean(PREF_REGISTRO, true)) mostrarPanel(tarjetaRegistro, false);
+        aplicarDensidad();
 
         setContentPane(mainPanel);
     }
+
+    // Menus que cambian con el modo (rediseño 2026-11, segunda vuelta)
+    private JMenu menuModo;
+    private JMenuItem miIniciarDetener;
+    private JCheckBoxMenuItem miRegistroVisible;
+    /** Simulacion › Modo test del IED: llega con la union con main (alternarModoTest); por ahora oculto. */
+    private JCheckBoxMenuItem miModoTest;
+    /** Herramientas › Interruptor virtual: llega con la union con main; por ahora oculto. */
+    private JMenuItem miInterruptorVirtual;
+
+    // Preferencias de Ver, guardadas como el idioma (Preferences de com/iednavigator)
+    private static final String PREF_REGISTRO = "view.log", PREF_AGRUPAR = "view.groupdo",
+            PREF_DESCRIPCIONES = "view.descriptions", PREF_COMPACTA = "view.compact";
 
     private JMenuBar createMenuBar() {
         JMenuBar menuBar = new JMenuBar();
         int ctrl = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
 
         // ── Archivo ─────────────────────────────────────────────────────────
-        JMenu menuFile = new JMenu(I18n.t("menu.file"));
+        JMenu menuFile = menu("menu.file");
         menuFile.add(item(I18n.t("menu.file.open"), KeyStroke.getKeyStroke(KeyEvent.VK_O, ctrl), e -> abrirScl()));
         JMenu menuRecent = new JMenu(I18n.t("menu.file.recent"));
         menuRecent.addMenuListener(new javax.swing.event.MenuListener() {
@@ -576,16 +594,24 @@ public class IEDNavigatorApp extends JFrame {
         menuFile.add(item(I18n.t("menu.file.exportmonitor"), KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrl), e -> exportarMonitor()));
         menuFile.add(item(I18n.t("menu.file.exportlog"), null, e -> exportarRegistro()));
         menuFile.addSeparator();
-        menuFile.add(item(I18n.t("menu.tools.getcid"), null, e -> obtenerCidDelIed()));
-        menuFile.add(item(I18n.t("menu.tools.savecid"), null, e -> guardarCid()));
-        menuFile.addSeparator();
         menuFile.add(item(I18n.t("menu.file.exit"), null, e -> System.exit(0)));
         menuBar.add(menuFile);
 
-        // ── Simulacion ──────────────────────────────────────────────────────
-        JMenu menuSim = new JMenu(I18n.t("menu.sim"));
-        menuSim.add(item(I18n.t("menu.sim.startstop"), KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), e -> iniciarODetener()));
-        menuSim.addSeparator();
+        // ── Simulacion (Servidor) / Conexion (Cliente) ──────────────────────
+        // El titulo y los items cambian con el modo: actualizarMenuModo().
+        menuModo = new JMenu();
+        miIniciarDetener = item("", KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), e -> iniciarODetener());
+        miModoTest = new JCheckBoxMenuItem(I18n.t("modo.boton"));
+        miModoTest.setVisible(false);
+        JMenuItem miPuerto = item(I18n.t("menu.sim.port"), null, e -> configurarPuerto());
+        JMenuItem miCheck = item(I18n.t("menu.sim.checkport"), null, e -> checkPort());
+        JMenuItem miRelease = item(I18n.t("menu.sim.releaseport"), null, e -> releasePort());
+        JCheckBoxMenuItem miPolling = new JCheckBoxMenuItem(I18n.t("cb.polling"));
+        miPolling.addActionListener(e -> cbPolling.doClick());
+        JMenuItem miIntervalo = item(I18n.t("menu.conn.interval"), null, e -> pedirNumero(spinnerInterval, "menu.conn.interval", "lbl.interval"));
+        JCheckBoxMenuItem miLeerTodo = new JCheckBoxMenuItem(I18n.t("cb.leertodo"));
+        miLeerTodo.addActionListener(e -> cbLeerTodo.doClick());
+        JMenuItem miTimeout = item(I18n.t("menu.conn.timeout"), null, e -> pedirNumero(spinnerTimeout, "menu.conn.timeout", "lbl.timeout"));
         ButtonGroup grupoModo = new ButtonGroup();
         JRadioButtonMenuItem miServidor = new JRadioButtonMenuItem(I18n.t("menu.sim.server"));
         JRadioButtonMenuItem miCliente = new JRadioButtonMenuItem(I18n.t("menu.sim.client"));
@@ -593,65 +619,188 @@ public class IEDNavigatorApp extends JFrame {
         miCliente.addActionListener(e -> { if (!rbClient.isSelected()) rbClient.doClick(); });
         grupoModo.add(miServidor);
         grupoModo.add(miCliente);
-        menuSim.add(miServidor);
-        menuSim.add(miCliente);
-        menuSim.addSeparator();
-        menuSim.add(item(I18n.t("menu.sim.port"), null, e -> configurarPuerto()));
-        JMenuItem miCheck = item(I18n.t("menu.sim.checkport"), null, e -> checkPort());
-        JMenuItem miRelease = item(I18n.t("menu.sim.releaseport"), null, e -> releasePort());
-        menuSim.add(miCheck);
-        menuSim.add(miRelease);
-        menuSim.addMenuListener(new javax.swing.event.MenuListener() {
+        JSeparator sepServidor = new JSeparator(), sepCliente = new JSeparator();
+        menuModo.add(miIniciarDetener);
+        menuModo.add(miModoTest);
+        menuModo.add(sepServidor);
+        menuModo.add(miPuerto);
+        menuModo.add(miCheck);
+        menuModo.add(miRelease);
+        menuModo.add(sepCliente);
+        menuModo.add(miPolling);
+        menuModo.add(miIntervalo);
+        menuModo.add(miLeerTodo);
+        menuModo.add(miTimeout);
+        menuModo.addSeparator();
+        menuModo.add(miServidor);
+        menuModo.add(miCliente);
+        menuModo.addMenuListener(new javax.swing.event.MenuListener() {
             @Override public void menuSelected(javax.swing.event.MenuEvent e) {
                 boolean srv = currentMode == AppMode.SERVER;
+                actualizarMenuModo();
+                for (Component c : new Component[]{sepServidor, miPuerto, miCheck, miRelease}) c.setVisible(srv);
+                for (Component c : new Component[]{sepCliente, miPolling, miIntervalo, miLeerTodo, miTimeout}) c.setVisible(!srv);
                 miServidor.setSelected(srv);
                 miCliente.setSelected(!srv);
-                miCheck.setEnabled(srv);
-                miRelease.setEnabled(srv);
+                miIniciarDetener.setEnabled(srv ? btnStartStop.isEnabled() : btnConnect.isEnabled());
+                miPolling.setSelected(cbPolling.isSelected());
+                miPolling.setEnabled(cbPolling.isEnabled());
+                miLeerTodo.setSelected(cbLeerTodo.isSelected());
+                miLeerTodo.setEnabled(cbLeerTodo.isEnabled());
             }
             @Override public void menuDeselected(javax.swing.event.MenuEvent e) { }
             @Override public void menuCanceled(javax.swing.event.MenuEvent e) { }
         });
-        menuBar.add(menuSim);
+        actualizarMenuModo();
+        menuBar.add(menuModo);
 
         // ── Ver ─────────────────────────────────────────────────────────────
-        JMenu menuView = new JMenu(I18n.t("menu.view"));
+        JMenu menuView = menu("menu.view");
+        miRegistroVisible = new JCheckBoxMenuItem(I18n.t("menu.view.log"), PREFS_UI.getBoolean(PREF_REGISTRO, true));
+        miRegistroVisible.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L, ctrl));
+        miRegistroVisible.addActionListener(e -> {
+            PREFS_UI.putBoolean(PREF_REGISTRO, miRegistroVisible.isSelected());
+            mostrarPanel(tarjetaRegistro, miRegistroVisible.isSelected());
+        });
         JCheckBoxMenuItem miArbol = new JCheckBoxMenuItem(I18n.t("menu.view.tree"), true);
         miArbol.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_1, ctrl));
         miArbol.addActionListener(e -> mostrarPanel(panelArbol, miArbol.isSelected()));
-        JCheckBoxMenuItem miRegistro = new JCheckBoxMenuItem(I18n.t("menu.view.log"), true);
-        miRegistro.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_2, ctrl));
-        miRegistro.addActionListener(e -> mostrarPanel(tarjetaRegistro, miRegistro.isSelected()));
+        menuView.add(miRegistroVisible);
         menuView.add(miArbol);
-        menuView.add(miRegistro);
         menuView.addSeparator();
         menuView.add(item(I18n.t("menu.view.expand"), null, e -> expandirArbol()));
         menuView.add(item(I18n.t("menu.view.collapse"), null, e -> contraerArbol()));
+        JCheckBoxMenuItem miAgrupar = new JCheckBoxMenuItem(I18n.t("menu.view.groupdo"), ModelTreeBuilder.agruparDo);
+        miAgrupar.addActionListener(e -> {
+            ModelTreeBuilder.agruparDo = miAgrupar.isSelected();
+            PREFS_UI.putBoolean(PREF_AGRUPAR, miAgrupar.isSelected());
+            reconstruirArbol();
+        });
+        JCheckBoxMenuItem miDescripciones = new JCheckBoxMenuItem(I18n.t("menu.view.descriptions"),
+                PREFS_UI.getBoolean(PREF_DESCRIPCIONES, true));
+        miDescripciones.addActionListener(e -> {
+            PREFS_UI.putBoolean(PREF_DESCRIPCIONES, miDescripciones.isSelected());
+            rendererArbol.mostrarDescripciones = miDescripciones.isSelected();
+            modelTree.repaint();
+        });
+        menuView.add(miAgrupar);
+        menuView.add(miDescripciones);
         menuView.addSeparator();
+        JCheckBoxMenuItem miCompacta = new JCheckBoxMenuItem(I18n.t("menu.view.compact"), PREFS_UI.getBoolean(PREF_COMPACTA, true));
+        miCompacta.addActionListener(e -> {
+            PREFS_UI.putBoolean(PREF_COMPACTA, miCompacta.isSelected());
+            aplicarDensidad();
+        });
+        menuView.add(miCompacta);
         menuView.add(item(I18n.t("menu.view.theme"), null, e -> alternarTema()));
         menuBar.add(menuView);
 
         // ── Herramientas ────────────────────────────────────────────────────
-        JMenu menuTools = new JMenu(I18n.t("menu.tools"));
+        JMenu menuTools = menu("menu.tools");
+        menuTools.add(item(I18n.t("menu.tools.getcid"), null, e -> obtenerCidDelIed()));
+        menuTools.add(item(I18n.t("menu.tools.savecid"), null, e -> guardarCid()));
+        menuTools.add(item(I18n.t("menu.tools.htmlreport"), null, e -> generateModelReport()));
+        miInterruptorVirtual = new JMenuItem(I18n.t("menu.tools.interruptor"));
+        miInterruptorVirtual.setVisible(false);
+        menuTools.add(miInterruptorVirtual);
+        menuTools.addSeparator();
         menuTools.add(item(I18n.t("menu.tools.sclcmp"), KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrl), e -> abrirHerramienta("tab.sclcmp")));
         menuTools.add(item(I18n.t("menu.tools.goosemap"), KeyStroke.getKeyStroke(KeyEvent.VK_G, ctrl), e -> abrirHerramienta("tab.goosemap")));
         menuTools.add(item(I18n.t("menu.tools.datamodel"), KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl), e -> abrirHerramienta("tab.datamodel")));
         menuTools.addSeparator();
-        menuTools.add(item(I18n.t("menu.tools.htmlreport"), null, e -> generateModelReport()));
-        menuTools.addSeparator();
+        menuTools.add(menuIdioma());
         menuTools.add(item(I18n.t("menu.tools.prefs"), KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, ctrl), e -> mostrarPreferencias()));
         menuBar.add(menuTools);
 
         // ── Ayuda ───────────────────────────────────────────────────────────
-        JMenu menuHelp = new JMenu(I18n.t("menu.help"));
-        menuHelp.add(item(I18n.t("menu.help.docs"), KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0), e -> abrirDocumentacion()));
-        menuHelp.add(item(I18n.t("menu.help.keys"), null, e -> mostrarAtajos()));
-        menuHelp.add(item(I18n.t("menu.help.legend"), null, e -> showLegendDialog()));
-        menuHelp.addSeparator();
+        JMenu menuHelp = menu("menu.help");
         menuHelp.add(item(I18n.t("menu.help.about"), null, e -> showAboutDialog()));
+        menuHelp.add(item(I18n.t("menu.help.legend"), null, e -> showLegendDialog()));
+        menuHelp.add(item(I18n.t("menu.help.keys"), null, e -> mostrarAtajos()));
+        menuHelp.addSeparator();
+        menuHelp.add(item(I18n.t("menu.help.docs"), KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0), e -> abrirDocumentacion()));
         menuBar.add(menuHelp);
 
         return menuBar;
+    }
+
+    /** Menu de primer nivel con su mnemonico (la letra va en el bundle: menu.x.mn). */
+    private static JMenu menu(String clave) {
+        JMenu m = new JMenu(I18n.t(clave));
+        ponerMnemonico(m, clave);
+        return m;
+    }
+
+    private static void ponerMnemonico(JMenu m, String clave) {
+        String mn = I18n.t(clave + ".mn");
+        if (mn != null && mn.length() == 1) m.setMnemonic(Character.toUpperCase(mn.charAt(0)));
+    }
+
+    /**
+     * Simulacion (Servidor) o Conexion (Cliente): el titulo del menu y la etiqueta de F5
+     * siguen al modo y al estado. Se llama al cambiar de modo y al abrir el menu.
+     */
+    private void actualizarMenuModo() {
+        if (menuModo == null) return;
+        boolean srv = currentMode == AppMode.SERVER;
+        String clave = srv ? "menu.sim" : "menu.conn";
+        menuModo.setText(I18n.t(clave));
+        ponerMnemonico(menuModo, clave);
+        boolean activo = srv ? isServerRunning : isConnected;
+        miIniciarDetener.setText(I18n.t(srv ? (activo ? "ctx.btn.stop" : "ctx.btn.start")
+                                            : (activo ? "ctx.btn.disconnect" : "ctx.btn.connect")));
+    }
+
+    /** Herramientas › Idioma: los nombres en su propio idioma; se aplica al reiniciar. */
+    private JMenu menuIdioma() {
+        JMenu menuLang = new JMenu(I18n.t("menu.lang"));
+        ButtonGroup grupo = new ButtonGroup();
+        String[][] langs = { {"es", "Español"}, {"en", "English"}, {"pt", "Português"}, {"zh", "中文 (简体)"} };
+        String actual = I18n.currentTag();
+        for (String[] lg : langs) {
+            final String tag = lg[0];
+            JRadioButtonMenuItem mi = new JRadioButtonMenuItem(lg[1], actual.startsWith(tag));
+            mi.addActionListener(e -> {
+                if (I18n.currentTag().startsWith(tag)) return;
+                I18n.setLocaleAndSave(tag);
+                JOptionPane.showMessageDialog(this, I18n.t("lang.restart"),
+                        I18n.t("menu.lang"), JOptionPane.INFORMATION_MESSAGE);
+            });
+            grupo.add(mi);
+            menuLang.add(mi);
+        }
+        return menuLang;
+    }
+
+    /** Conexion › Intervalo de polling / Timeout: el mismo spinner del panel, en un dialogo. */
+    private void pedirNumero(JSpinner origen, String claveTitulo, String claveEtiqueta) {
+        SpinnerNumberModel mo = (SpinnerNumberModel) origen.getModel();
+        JSpinner sp = new JSpinner(new SpinnerNumberModel(((Number) mo.getValue()).intValue(),
+                (int) (Integer) mo.getMinimum(), (int) (Integer) mo.getMaximum(), mo.getStepSize().intValue()));
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        p.add(new JLabel(I18n.t(claveEtiqueta)));
+        p.add(sp);
+        int r = JOptionPane.showConfirmDialog(this, p, I18n.t(claveTitulo).replace("…", "").trim(),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (r == JOptionPane.OK_OPTION) origen.setValue(sp.getValue());
+    }
+
+    /** Ver › Agrupar DO por FC: rearma el arbol del modelo que se esta viendo. */
+    private void reconstruirArbol() {
+        ServerModel model = null;
+        if (currentMode == AppMode.SERVER && server != null) model = server.getServerModel();
+        else if (currentMode == AppMode.CLIENT && client != null && isConnected) model = client.getServerModel();
+        if (model != null) buildTree(model);
+    }
+
+    /**
+     * Ver › Densidad compacta: alto de las filas del arbol y del monitor, en un solo lugar.
+     * Las medidas finales del documento (20/24 y 24/28) llegan con el arbol y el monitor nuevos.
+     */
+    private void aplicarDensidad() {
+        boolean compacta = PREFS_UI.getBoolean(PREF_COMPACTA, true);
+        if (modelTree != null) modelTree.setRowHeight(compacta ? 28 : 32);
+        if (monitorTable != null) monitorTable.setRowHeight(compacta ? 34 : 38);
     }
 
     private static JMenuItem item(String texto, KeyStroke atajo, java.awt.event.ActionListener accion) {
@@ -1376,8 +1525,8 @@ public class IEDNavigatorApp extends JFrame {
             {"Ctrl+O", I18n.t("menu.file.open")},
             {"Ctrl+E", I18n.t("menu.file.exportmonitor")},
             {"F5", I18n.t("menu.sim.startstop")},
+            {"Ctrl+L", I18n.t("menu.view.log")},
             {"Ctrl+1", I18n.t("menu.view.tree")},
-            {"Ctrl+2", I18n.t("menu.view.log")},
             {"Ctrl+D", I18n.t("menu.tools.sclcmp")},
             {"Ctrl+G", I18n.t("menu.tools.goosemap")},
             {"Ctrl+M", I18n.t("menu.tools.datamodel")},
@@ -4332,10 +4481,12 @@ public class IEDNavigatorApp extends JFrame {
             public void switchUiToServerMode() {
                 currentMode = AppMode.SERVER;
                 cardLayout.show(cardPanel, "SERVER");
+                actualizarMenuModo();
             }
             public void switchUiToClientMode() {
                 currentMode = AppMode.CLIENT;
                 cardLayout.show(cardPanel, "CLIENT");
+                actualizarMenuModo();
             }
             public void onConnected(String host, int port, String localIp) {}
             public void onDisconnected() {}

@@ -39,6 +39,12 @@ class ModelTreeBuilder {
      * @param logger       Consumer<String> para logging
      * @param enumFormatter BiFunction (ModelNode, rawValue) → formattedValue
      */
+    /**
+     * Ver › Agrupar DO por FC. Apagado, el arbol vuelve a tener un DO por cada FC, como antes
+     * del rediseño: es la red de seguridad si el agrupado confunde algo.
+     */
+    static volatile boolean agruparDo = true;
+
     static void buildTree(
             ServerModel model,
             DefaultMutableTreeNode rootNode,
@@ -181,7 +187,7 @@ class ModelTreeBuilder {
         // Un DO aparece una sola vez aunque la libreria lo tenga una vez por FC (Beh [ST],
         // Beh [SV]...): sus atributos de todos los FC cuelgan del mismo nodo y el FC se ve
         // junto a cada atributo. Rediseño de 2026-11.
-        if (modelNode instanceof LogicalNode) {
+        if (agruparDo && modelNode instanceof LogicalNode) {
             Map<String, List<ModelNode>> porNombre = new LinkedHashMap<>();
             List<ModelNode> otros = new ArrayList<>();
             for (ModelNode child : children) {

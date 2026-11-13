@@ -37,6 +37,8 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
     private final JLabel nombre = new JLabel();
     private final Insignia fc = new Insignia(Estilo.mono(Font.PLAIN, 10)).alto(16);
     private final JLabel desc = new JLabel();
+    /** Ver › Mostrar descripciones. */
+    boolean mostrarDescripciones = true;
     private final JLabel valor = new JLabel();
     final Insignia monitor = new Insignia(Estilo.ui(Font.BOLD, 12)).alto(22);
     private final Map<String, String> descripciones = new HashMap<>();
@@ -98,7 +100,7 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
             valor.setText(info.value);
             valor.setVisible(true);
         }
-        if (!esDa) {
+        if (!esDa && mostrarDescripciones) {
             String d = descripcion(info, tree);
             if (d != null && !d.isEmpty()) {
                 desc.setText(d);

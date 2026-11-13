@@ -1,5 +1,6 @@
 package com.iednavigator;
 
+import com.formdev.flatlaf.util.FontUtils;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.GraphicsEnvironment;
@@ -37,14 +38,19 @@ public final class Estilo {
     private static final Set<String> FAMILIAS = new HashSet<>(Arrays.asList(
             GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames()));
 
-    /** Sans de la interfaz: Segoe UI en Windows, la logica Dialog si no esta. */
+    /**
+     * Sans de la interfaz: Segoe UI en Windows, la logica Dialog si no esta.
+     *
+     * Compuesta (FontUtils de FlatLaf): una fuente fisica creada con new Font() no tiene
+     * respaldo, y en chino los textos salian como cuadrados porque Segoe UI no trae CJK.
+     */
     public static Font ui(int estilo, float tam) {
-        return new Font(primera("Segoe UI", "Inter", Font.DIALOG), estilo, Math.round(tam));
+        return FontUtils.getCompositeFont(primera("Segoe UI", "Inter", Font.DIALOG), estilo, Math.round(tam));
     }
 
-    /** Monoespaciada: Consolas en Windows, la logica Monospaced si no esta. */
+    /** Monoespaciada: Consolas en Windows, la logica Monospaced si no esta. Compuesta, como ui(). */
     public static Font mono(int estilo, float tam) {
-        return new Font(primera("Consolas", "JetBrains Mono", Font.MONOSPACED), estilo, Math.round(tam));
+        return FontUtils.getCompositeFont(primera("Consolas", "JetBrains Mono", Font.MONOSPACED), estilo, Math.round(tam));
     }
 
     private static String primera(String... familias) {
