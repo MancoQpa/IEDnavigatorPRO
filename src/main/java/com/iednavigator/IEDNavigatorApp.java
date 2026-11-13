@@ -87,6 +87,15 @@ public class IEDNavigatorApp extends JFrame {
     private DefaultTreeModel treeModel;
     private Map<String, DefaultMutableTreeNode> nodeMap = new HashMap<>();
     private JTextArea logArea;
+    /** Paneles que el menu Ver muestra u oculta, y las pestañas que Herramientas selecciona. */
+    private JScrollPane treeScroll, logScroll;
+    private JTabbedPane rightTabbedPane;
+    /** Nombre del IED que muestra la ventana (para el titulo). */
+    private String iedEnPantalla = "";
+    private String hostEnPantalla = "";
+    private static final String URL_DOCUMENTACION = "https://mancoqpa.github.io/IEDnavigatorPRO/";
+    private static final java.util.prefs.Preferences PREFS_UI =
+            java.util.prefs.Preferences.userRoot().node("com/iednavigator");
     /** Registro de la sesión en disco; null si no se pudo abrir (ver SessionLog). */
     private SessionLog sessionLog;
 
@@ -289,7 +298,7 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private void initUI() {
-        setTitle(I18n.t("app.title") + " - " + Version.etiqueta());
+        actualizarTitulo();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 800);
         setLocationRelativeTo(null);
@@ -389,7 +398,7 @@ public class IEDNavigatorApp extends JFrame {
         // Log
         logArea = new JTextArea(8, 30);
         logArea.setEditable(false);
-        logArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        logArea.setFont(Estilo.mono(Font.PLAIN, 12));
         // Estilo consola: fondo levemente diferenciado (solo cosmético)
         logArea.setBackground(new Color(0xF7F9FB));
         logArea.setForeground(new Color(0x37474F));
@@ -427,7 +436,7 @@ public class IEDNavigatorApp extends JFrame {
         }
         logArea.setComponentPopupMenu(logMenu);
 
-        JScrollPane logScroll = new JScrollPane(logArea);
+        logScroll = new JScrollPane(logArea);
         logScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.log")));
         logScroll.setToolTipText(I18n.t("border.log.tip"));
         leftPanel.add(logScroll, BorderLayout.CENTER);
@@ -442,12 +451,12 @@ public class IEDNavigatorApp extends JFrame {
         modelTree.setRowHeight(20);  // Altura consistente para iconos
         modelTree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         modelTree.setLargeModel(true);
-        JScrollPane treeScroll = new JScrollPane(modelTree);
+        treeScroll = new JScrollPane(modelTree);
         treeScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         treeScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.datamodel")));
 
         // Panel derecho con tabs: Activity Monitor, Reports, GOOSE, Setting Groups, Dataset, Data Model
-        JTabbedPane rightTabbedPane = new JTabbedPane();
+        rightTabbedPane = new JTabbedPane();
         rightTabbedPane.addTab(I18n.t("tab.monitor"), createMonitorPanel());
         Supplier<ServerModel> panelModelSupplier = () -> {
             if (currentMode == AppMode.SERVER && server != null) return server.getServerModel();
@@ -512,69 +521,384 @@ public class IEDNavigatorApp extends JFrame {
 
     private JMenuBar createMenuBar() {
         JMenuBar menuBar = new JMenuBar();
+        int ctrl = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
 
-        // Menu Archivo
+        // ── Archivo ─────────────────────────────────────────────────────────
         JMenu menuFile = new JMenu(I18n.t("menu.file"));
-        JMenuItem miLoadScl = new JMenuItem(I18n.t("menu.file.loadscl"));
-        miLoadScl.addActionListener(e -> {
-            if (currentMode == AppMode.SERVER) {
-                selectSclFile();
-            } else {
-                // En modo cliente, permitir cargar SCL para GoCBs
-                loadSclForGoCBs();
-            }
+        menuFile.add(item(I18n.t("menu.file.open"), KeyStroke.getKeyStroke(KeyEvent.VK_O, ctrl), e -> abrirScl()));
+        JMenu menuRecent = new JMenu(I18n.t("menu.file.recent"));
+        menuRecent.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { llenarRecientes(menuRecent); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) { }
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) { }
         });
-        menuFile.add(miLoadScl);
+        menuFile.add(menuRecent);
         menuFile.addSeparator();
-        JMenuItem miExit = new JMenuItem(I18n.t("menu.file.exit"));
-        miExit.addActionListener(e -> System.exit(0));
-        menuFile.add(miExit);
+        menuFile.add(item(I18n.t("menu.file.exportmonitor"), KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrl), e -> exportarMonitor()));
+        menuFile.add(item(I18n.t("menu.file.exportlog"), null, e -> exportarRegistro()));
+        menuFile.addSeparator();
+        menuFile.add(item(I18n.t("menu.tools.getcid"), null, e -> obtenerCidDelIed()));
+        menuFile.add(item(I18n.t("menu.tools.savecid"), null, e -> guardarCid()));
+        menuFile.addSeparator();
+        menuFile.add(item(I18n.t("menu.file.exit"), null, e -> System.exit(0)));
         menuBar.add(menuFile);
 
-        // Menu Herramientas
+        // ── Simulacion ──────────────────────────────────────────────────────
+        JMenu menuSim = new JMenu(I18n.t("menu.sim"));
+        menuSim.add(item(I18n.t("menu.sim.startstop"), KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), e -> iniciarODetener()));
+        menuSim.addSeparator();
+        ButtonGroup grupoModo = new ButtonGroup();
+        JRadioButtonMenuItem miServidor = new JRadioButtonMenuItem(I18n.t("menu.sim.server"));
+        JRadioButtonMenuItem miCliente = new JRadioButtonMenuItem(I18n.t("menu.sim.client"));
+        miServidor.addActionListener(e -> { if (!rbServer.isSelected()) rbServer.doClick(); });
+        miCliente.addActionListener(e -> { if (!rbClient.isSelected()) rbClient.doClick(); });
+        grupoModo.add(miServidor);
+        grupoModo.add(miCliente);
+        menuSim.add(miServidor);
+        menuSim.add(miCliente);
+        menuSim.addSeparator();
+        menuSim.add(item(I18n.t("menu.sim.port"), null, e -> configurarPuerto()));
+        JMenuItem miCheck = item(I18n.t("menu.sim.checkport"), null, e -> checkPort());
+        JMenuItem miRelease = item(I18n.t("menu.sim.releaseport"), null, e -> releasePort());
+        menuSim.add(miCheck);
+        menuSim.add(miRelease);
+        menuSim.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) {
+                boolean srv = currentMode == AppMode.SERVER;
+                miServidor.setSelected(srv);
+                miCliente.setSelected(!srv);
+                miCheck.setEnabled(srv);
+                miRelease.setEnabled(srv);
+            }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) { }
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) { }
+        });
+        menuBar.add(menuSim);
+
+        // ── Ver ─────────────────────────────────────────────────────────────
+        JMenu menuView = new JMenu(I18n.t("menu.view"));
+        JCheckBoxMenuItem miArbol = new JCheckBoxMenuItem(I18n.t("menu.view.tree"), true);
+        miArbol.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_1, ctrl));
+        miArbol.addActionListener(e -> mostrarPanel(treeScroll, miArbol.isSelected()));
+        JCheckBoxMenuItem miRegistro = new JCheckBoxMenuItem(I18n.t("menu.view.log"), true);
+        miRegistro.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_2, ctrl));
+        miRegistro.addActionListener(e -> mostrarPanel(logScroll, miRegistro.isSelected()));
+        menuView.add(miArbol);
+        menuView.add(miRegistro);
+        menuView.addSeparator();
+        menuView.add(item(I18n.t("menu.view.expand"), null, e -> expandirArbol()));
+        menuView.add(item(I18n.t("menu.view.collapse"), null, e -> contraerArbol()));
+        menuView.addSeparator();
+        menuView.add(item(I18n.t("menu.view.theme"), null, e -> alternarTema()));
+        menuBar.add(menuView);
+
+        // ── Herramientas ────────────────────────────────────────────────────
         JMenu menuTools = new JMenu(I18n.t("menu.tools"));
-        JMenuItem miGetCid = new JMenuItem(I18n.t("menu.tools.getcid"));
-        miGetCid.addActionListener(e -> obtenerCidDelIed());
-        menuTools.add(miGetCid);
-        JMenuItem miSaveCid = new JMenuItem(I18n.t("menu.tools.savecid"));
-        miSaveCid.addActionListener(e -> guardarCid());
-        menuTools.add(miSaveCid);
+        menuTools.add(item(I18n.t("menu.tools.sclcmp"), KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrl), e -> irAPestania("tab.sclcmp")));
+        menuTools.add(item(I18n.t("menu.tools.goosemap"), KeyStroke.getKeyStroke(KeyEvent.VK_G, ctrl), e -> irAPestania("tab.goosemap")));
+        menuTools.add(item(I18n.t("menu.tools.datamodel"), KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl), e -> irAPestania("tab.datamodel")));
         menuTools.addSeparator();
-        JMenuItem miHtmlReport = new JMenuItem(I18n.t("menu.tools.htmlreport"));
-        miHtmlReport.addActionListener(e -> generateModelReport());
-        menuTools.add(miHtmlReport);
+        menuTools.add(item(I18n.t("menu.tools.htmlreport"), null, e -> generateModelReport()));
+        menuTools.addSeparator();
+        menuTools.add(item(I18n.t("menu.tools.prefs"), KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, ctrl), e -> mostrarPreferencias()));
         menuBar.add(menuTools);
 
-        // Menu Ayuda
+        // ── Ayuda ───────────────────────────────────────────────────────────
         JMenu menuHelp = new JMenu(I18n.t("menu.help"));
-        JMenuItem miAbout = new JMenuItem(I18n.t("menu.help.about"));
-        miAbout.addActionListener(e -> showAboutDialog());
-        menuHelp.add(miAbout);
-        JMenuItem miLegend = new JMenuItem(I18n.t("menu.help.legend"));
-        miLegend.addActionListener(e -> showLegendDialog());
-        menuHelp.add(miLegend);
+        menuHelp.add(item(I18n.t("menu.help.docs"), KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0), e -> abrirDocumentacion()));
+        menuHelp.add(item(I18n.t("menu.help.keys"), null, e -> mostrarAtajos()));
+        menuHelp.add(item(I18n.t("menu.help.legend"), null, e -> showLegendDialog()));
+        menuHelp.addSeparator();
+        menuHelp.add(item(I18n.t("menu.help.about"), null, e -> showAboutDialog()));
         menuBar.add(menuHelp);
 
-        // Menú de idioma (Idioma / Language / 语言). Los nombres van en su propio idioma.
-        JMenu menuLang = new JMenu(I18n.t("menu.lang"));
-        ButtonGroup langGroup = new ButtonGroup();
-        String[][] langs = { {"es", "Español"}, {"zh", "中文 (简体)"}, {"en", "English"}, {"pt", "Português"} };
-        String currentTag = I18n.currentTag();
-        for (String[] lg : langs) {
-            final String tag = lg[0];
-            JRadioButtonMenuItem mi = new JRadioButtonMenuItem(lg[1]);
-            if (currentTag.startsWith(tag)) mi.setSelected(true);
-            mi.addActionListener(e -> {
-                I18n.setLocaleAndSave(tag);
-                JOptionPane.showMessageDialog(this, I18n.t("lang.restart"),
-                        I18n.t("menu.lang"), JOptionPane.INFORMATION_MESSAGE);
-            });
-            langGroup.add(mi);
-            menuLang.add(mi);
-        }
-        menuBar.add(menuLang);
-
         return menuBar;
+    }
+
+    private static JMenuItem item(String texto, KeyStroke atajo, java.awt.event.ActionListener accion) {
+        JMenuItem mi = new JMenuItem(texto);
+        if (atajo != null) mi.setAccelerator(atajo);
+        mi.addActionListener(accion);
+        return mi;
+    }
+
+    // ── Acciones de los menus ──────────────────────────────────────────────
+
+    /** Titulo: "IED Navigator PRO — IED · archivo · version" (lo que haya de cada cosa). */
+    private void actualizarTitulo() {
+        java.util.List<String> partes = new java.util.ArrayList<>();
+        if (iedEnPantalla != null && !iedEnPantalla.isEmpty()) partes.add(iedEnPantalla);
+        if (currentMode == AppMode.SERVER && loadedSclFile != null) partes.add(loadedSclFile.getName());
+        else if (currentMode == AppMode.CLIENT && hostEnPantalla != null && !hostEnPantalla.isEmpty()) partes.add(hostEnPantalla);
+        partes.add(Version.etiqueta());
+        setTitle("IED Navigator PRO \u2014 " + String.join(" \u00b7 ", partes));
+    }
+
+    /** Archivo > Abrir: en modo servidor carga el SCL a simular; en cliente, el de los GoCB. */
+    private void abrirScl() {
+        if (currentMode == AppMode.SERVER) selectSclFile();
+        else loadSclForGoCBs();
+    }
+
+    private static final int MAX_RECIENTES = 8;
+
+    private java.util.List<String> recientes() {
+        java.util.List<String> l = new java.util.ArrayList<>();
+        for (int i = 0; i < MAX_RECIENTES; i++) {
+            String r = PREFS_UI.get("recent." + i, null);
+            if (r != null && !r.isEmpty()) l.add(r);
+        }
+        return l;
+    }
+
+    private void guardarRecientes(java.util.List<String> l) {
+        for (int i = 0; i < MAX_RECIENTES; i++) {
+            if (i < l.size()) PREFS_UI.put("recent." + i, l.get(i));
+            else PREFS_UI.remove("recent." + i);
+        }
+    }
+
+    /** Se eligio un SCL: va primero en la lista de recientes y al titulo. */
+    private void agregarReciente(File f) {
+        java.util.List<String> l = recientes();
+        String ruta = f.getAbsolutePath();
+        l.remove(ruta);
+        l.add(0, ruta);
+        while (l.size() > MAX_RECIENTES) l.remove(l.size() - 1);
+        guardarRecientes(l);
+        SwingUtilities.invokeLater(this::actualizarTitulo);
+    }
+
+    private void llenarRecientes(JMenu menu) {
+        menu.removeAll();
+        java.util.List<String> l = recientes();
+        if (l.isEmpty()) {
+            JMenuItem vacio = new JMenuItem(I18n.t("menu.file.recent.empty"));
+            vacio.setEnabled(false);
+            menu.add(vacio);
+            return;
+        }
+        boolean servidor = currentMode == AppMode.SERVER;
+        for (String ruta : l) {
+            File f = new File(ruta);
+            JMenuItem mi = new JMenuItem(f.getName());
+            mi.setToolTipText(servidor ? ruta : I18n.t("menu.file.recent.server"));
+            mi.setEnabled(servidor);
+            mi.addActionListener(e -> {
+                if (!f.isFile()) {
+                    JOptionPane.showMessageDialog(this, I18n.t("menu.file.recent.missing", ruta),
+                            I18n.t("menu.file.recent"), JOptionPane.WARNING_MESSAGE);
+                    java.util.List<String> n = recientes();
+                    n.remove(ruta);
+                    guardarRecientes(n);
+                    return;
+                }
+                connectionManager.cargarSclArchivo(f);
+            });
+            menu.add(mi);
+        }
+        menu.addSeparator();
+        JMenuItem borrar = new JMenuItem(I18n.t("menu.file.recent.clear"));
+        borrar.addActionListener(e -> guardarRecientes(new java.util.ArrayList<>()));
+        menu.add(borrar);
+    }
+
+    /** Archivo > Exportar monitor: la tabla del monitor tal como se ve, en CSV (separador ;). */
+    private void exportarMonitor() {
+        if (monitorTableModel == null || monitorTableModel.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this, I18n.t("export.monitor.empty"),
+                    I18n.t("menu.file.exportmonitor"), JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        File destino = elegirDestino("monitor_" + marcaArchivo() + ".csv");
+        if (destino == null) return;
+        StringBuilder sb = new StringBuilder();
+        int cols = monitorTableModel.getColumnCount();
+        for (int c = 0; c < cols; c++) sb.append(c > 0 ? ";" : "").append(campoCsv(monitorTableModel.getColumnName(c)));
+        sb.append("\r\n");
+        for (int r = 0; r < monitorTableModel.getRowCount(); r++) {
+            for (int c = 0; c < cols; c++) {
+                Object v = monitorTableModel.getValueAt(r, c);
+                sb.append(c > 0 ? ";" : "").append(campoCsv(v == null ? "" : v.toString()));
+            }
+            sb.append("\r\n");
+        }
+        escribirExportacion(destino, sb.toString());
+    }
+
+    /** Archivo > Exportar registro: el panel de registro a un archivo de texto. */
+    private void exportarRegistro() {
+        File destino = elegirDestino("registro_" + marcaArchivo() + ".txt");
+        if (destino == null) return;
+        escribirExportacion(destino, logArea.getText());
+    }
+
+    private File elegirDestino(String nombre) {
+        JFileChooser fc = new JFileChooser();
+        fc.setSelectedFile(new File(nombre));
+        return fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION ? fc.getSelectedFile() : null;
+    }
+
+    private void escribirExportacion(File destino, String texto) {
+        try {
+            // BOM para que Excel abra bien los acentos del CSV
+            java.nio.file.Files.write(destino.toPath(),
+                    ("\uFEFF" + texto).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            log(I18n.t("export.ok", destino.getAbsolutePath()));
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, I18n.t("export.fail", ex.getMessage()),
+                    I18n.t("err.title"), JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private static String campoCsv(String v) {
+        if (v.contains(";") || v.contains("\"") || v.contains("\n")) return "\"" + v.replace("\"", "\"\"") + "\"";
+        return v;
+    }
+
+    private static String marcaArchivo() {
+        return new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+    }
+
+    /** Simulacion > Iniciar / Detener (F5): el servidor en modo servidor, la conexion en cliente. */
+    private void iniciarODetener() {
+        if (currentMode == AppMode.SERVER) {
+            if (btnStartStop.isEnabled()) toggleServer();
+        } else {
+            if (btnConnect.isEnabled()) toggleConnection();
+        }
+    }
+
+    /** Simulacion > Configurar puerto: el del servidor simulado, o el del IED en modo cliente. */
+    private void configurarPuerto() {
+        boolean srv = currentMode == AppMode.SERVER;
+        JTextField campo = srv ? tfServerPort : tfClientPort;
+        String nuevo = (String) JOptionPane.showInputDialog(this,
+                I18n.t(srv ? "port.dlg.server" : "port.dlg.client"), I18n.t("port.dlg.title"),
+                JOptionPane.PLAIN_MESSAGE, null, null, campo.getText().trim());
+        if (nuevo == null) return;
+        nuevo = nuevo.trim();
+        try {
+            int p = Integer.parseInt(nuevo);
+            if (p < 1 || p > 65535) throw new NumberFormatException();
+            campo.setText(String.valueOf(p));
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, I18n.t("port.dlg.invalid", nuevo),
+                    I18n.t("port.dlg.title"), JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    /** Ver > Arbol / Registro: muestra u oculta el panel; el divisor se acomoda solo. */
+    private void mostrarPanel(JComponent panel, boolean visible) {
+        if (panel == null) return;
+        panel.setVisible(visible);
+        Container padre = panel.getParent();
+        if (padre instanceof JSplitPane) ((JSplitPane) padre).resetToPreferredSizes();
+        if (padre != null) { padre.revalidate(); padre.repaint(); }
+    }
+
+    /**
+     * Ver > Expandir todo: hasta los LN de cada LD. Abrir los DO y sus atributos en un modelo
+     * de cien mil nodos deja la ventana trabada varios segundos y no se puede leer.
+     */
+    private void expandirArbol() {
+        if (modelTree == null) return;
+        modelTree.expandRow(0);
+        DefaultMutableTreeNode raiz = (DefaultMutableTreeNode) treeModel.getRoot();
+        for (int i = 0; i < raiz.getChildCount(); i++) {
+            DefaultMutableTreeNode ld = (DefaultMutableTreeNode) raiz.getChildAt(i);
+            modelTree.expandPath(new TreePath(ld.getPath()));
+        }
+    }
+
+    /** Ver > Contraer todo: deja visible solo la raiz y los LD. */
+    private void contraerArbol() {
+        if (modelTree == null) return;
+        for (int r = modelTree.getRowCount() - 1; r > 0; r--) modelTree.collapseRow(r);
+        modelTree.expandRow(0);
+    }
+
+    /** Ver > Tema claro / oscuro: se guarda y se aplica al reiniciar (como el idioma). */
+    private void alternarTema() {
+        boolean oscuro = !Estilo.temaOscuro();
+        Estilo.guardarTemaOscuro(oscuro);
+        JOptionPane.showMessageDialog(this, I18n.t("prefs.restart"),
+                I18n.t("menu.view.theme"), JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /** Herramientas: Comparar SCL, Mapa GOOSE y Data Model (por ahora, sus pestañas). */
+    private void irAPestania(String claveTitulo) {
+        if (rightTabbedPane == null) return;
+        int i = rightTabbedPane.indexOfTab(I18n.t(claveTitulo));
+        if (i >= 0) rightTabbedPane.setSelectedIndex(i);
+    }
+
+    /** Herramientas > Preferencias: idioma y tema, que se aplican al reiniciar. */
+    private void mostrarPreferencias() {
+        String[][] langs = { {"es", "Español"}, {"en", "English"}, {"pt", "Português"}, {"zh", "中文 (简体)"} };
+        JComboBox<String> cbIdioma = new JComboBox<>();
+        int sel = 0;
+        for (int k = 0; k < langs.length; k++) {
+            cbIdioma.addItem(langs[k][1]);
+            if (I18n.currentTag().startsWith(langs[k][0])) sel = k;
+        }
+        cbIdioma.setSelectedIndex(sel);
+        JComboBox<String> cbTema = new JComboBox<>(new String[]{I18n.t("prefs.theme.light"), I18n.t("prefs.theme.dark")});
+        cbTema.setSelectedIndex(Estilo.temaOscuro() ? 1 : 0);
+
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(4, 4, 4, 4);
+        g.anchor = GridBagConstraints.WEST;
+        g.gridx = 0; g.gridy = 0; p.add(new JLabel(I18n.t("prefs.lang")), g);
+        g.gridx = 1; p.add(cbIdioma, g);
+        g.gridx = 0; g.gridy = 1; p.add(new JLabel(I18n.t("prefs.theme")), g);
+        g.gridx = 1; p.add(cbTema, g);
+        g.gridx = 0; g.gridy = 2; g.gridwidth = 2;
+        JLabel nota = new JLabel(I18n.t("prefs.restart"));
+        nota.setForeground(Estilo.TEXTO_2);
+        p.add(nota, g);
+
+        int r = JOptionPane.showConfirmDialog(this, p, I18n.t("prefs.title"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (r != JOptionPane.OK_OPTION) return;
+        String tag = langs[cbIdioma.getSelectedIndex()][0];
+        if (!I18n.currentTag().startsWith(tag)) I18n.setLocaleAndSave(tag);
+        Estilo.guardarTemaOscuro(cbTema.getSelectedIndex() == 1);
+    }
+
+    /** Ayuda > Documentacion (F1): la pagina del proyecto. */
+    private void abrirDocumentacion() {
+        try {
+            Desktop.getDesktop().browse(new java.net.URI(URL_DOCUMENTACION));
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, URL_DOCUMENTACION, I18n.t("menu.help.docs"),
+                    JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    /** Ayuda > Atajos de teclado: la tabla de atajos de los menus. */
+    private void mostrarAtajos() {
+        String[][] filas = {
+            {"Ctrl+O", I18n.t("menu.file.open")},
+            {"Ctrl+E", I18n.t("menu.file.exportmonitor")},
+            {"F5", I18n.t("menu.sim.startstop")},
+            {"Ctrl+1", I18n.t("menu.view.tree")},
+            {"Ctrl+2", I18n.t("menu.view.log")},
+            {"Ctrl+D", I18n.t("menu.tools.sclcmp")},
+            {"Ctrl+G", I18n.t("menu.tools.goosemap")},
+            {"Ctrl+M", I18n.t("menu.tools.datamodel")},
+            {"Ctrl+,", I18n.t("menu.tools.prefs")},
+            {"F1", I18n.t("menu.help.docs")},
+        };
+        JTable t = new JTable(filas, new String[]{I18n.t("keys.col.key"), I18n.t("keys.col.action")}) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        t.getColumnModel().getColumn(0).setMaxWidth(90);
+        t.setFont(Estilo.ui(Font.PLAIN, 13));
+        JScrollPane sp = new JScrollPane(t);
+        sp.setPreferredSize(new Dimension(420, 260));
+        JOptionPane.showMessageDialog(this, sp, I18n.t("menu.help.keys"), JOptionPane.PLAIN_MESSAGE);
     }
 
     private void generateModelReport() {
@@ -3332,6 +3656,16 @@ public class IEDNavigatorApp extends JFrame {
      *    " " (vacio cuando se desconecta)
      */
     private void updateIedDisplay(String infoText) {
+        iedEnPantalla = "";
+        if (infoText != null && infoText.contains("IED:")) {
+            int a = infoText.indexOf("IED:") + 4;
+            int b = infoText.indexOf("|", a);
+            int c = infoText.indexOf("cfg:", a);
+            if (b < 0) b = c; else if (c >= 0) b = Math.min(b, c);
+            String n = (b > 0 ? infoText.substring(a, b) : infoText.substring(a)).trim();
+            if (!n.equals("?")) iedEnPantalla = n;
+        }
+        actualizarTitulo();
         if (infoText == null || infoText.isBlank()) {
             lblIedDisplay.setText("  " + I18n.t("status.nodevice") + "  ");
             lblIedDisplay.setForeground(new Color(120, 120, 140));
@@ -3376,6 +3710,8 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private void updateConnectionInfo(String host, int port) {
+        hostEnPantalla = (host == null || host.isEmpty() || port == 0) ? "" : host + ":" + port;
+        actualizarTitulo();
         if (host == null || host.isEmpty() || port == 0) {
             lblConnectionInfo.setText(I18n.t("status.noconn"));
             lblConnectionInfo.setForeground(Color.GRAY);
@@ -3441,6 +3777,7 @@ public class IEDNavigatorApp extends JFrame {
             public void setServerRunning(boolean v) { isServerRunning = v; }
             public File getLoadedSclFile() { return loadedSclFile; }
             public void setLoadedSclFile(File f) { loadedSclFile = f; }
+            public void sclElegido(File f) { agregarReciente(f); }
             public String getLoadedIedName() { return loadedIedName; }
             public void setLoadedIedName(String n) { loadedIedName = n; }
             public String[] getLoadedIedNameplate() { return loadedIedNameplate; }
@@ -3671,6 +4008,7 @@ public class IEDNavigatorApp extends JFrame {
      * Para revertir cualquier ajuste basta con comentar la línea correspondiente.
      */
     private static void applyUiPolish() {
+        boolean oscuro = Estilo.temaOscuro();
         // ── 1. Estilo global ──────────────────────────────────────────────
         // Esquinas redondeadas
         UIManager.put("Button.arc", 10);
@@ -3681,9 +4019,9 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("Popup.dropShadowPainted", true);
 
         // Color de acento (azul eléctrico) — foco, selección, subrayados
-        Color accent = new Color(0x1976D2);
+        Color accent = Estilo.ACENTO;
         UIManager.put("Component.accentColor", accent);
-        UIManager.put("Component.focusColor", new Color(0x1976D2));
+        UIManager.put("Component.focusColor", accent);
         UIManager.put("Component.focusWidth", 1);
         UIManager.put("Component.innerFocusWidth", 1);
 
@@ -3704,7 +4042,7 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("ScrollBar.hoverThumbWithTrack", true);
 
         // ── 2. Tablas y árbol ─────────────────────────────────────────────
-        UIManager.put("Table.alternateRowColor", new Color(0xF5F8FC));
+        if (!oscuro) UIManager.put("Table.alternateRowColor", new Color(0xF5F8FC));
         UIManager.put("Table.rowHeight", 22);
         UIManager.put("Table.showHorizontalLines", false);
         UIManager.put("Table.showVerticalLines", false);
@@ -3714,7 +4052,7 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("TableHeader.height", 26);
         UIManager.put("TableHeader.showTrailingVerticalLine", true);
         UIManager.put("TableHeader.separatorColor", new Color(0xDDDDDD));
-        UIManager.put("TableHeader.font", new Font("Dialog", Font.BOLD, 12));
+        UIManager.put("TableHeader.font", Estilo.ui(Font.BOLD, 12));
 
         UIManager.put("Tree.rowHeight", 22);
         UIManager.put("Tree.selectionArc", 8);
@@ -3724,7 +4062,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // ── 3. Detalles de pulido ─────────────────────────────────────────
         // Fuente base con buen rendering en Windows
-        UIManager.put("defaultFont", new Font("Dialog", Font.PLAIN, 13));
+        UIManager.put("defaultFont", Estilo.ui(Font.PLAIN, 13));
         // TitledBorders más sutiles
         UIManager.put("TitledBorder.titleColor", new Color(0x546E7A));
         // Toolbars con algo de aire
@@ -3738,13 +4076,23 @@ public class IEDNavigatorApp extends JFrame {
 
         // ── 4. Maquillaje extra (segunda ronda) ───────────────────────────
         // Menú superior: ítem activo con subrayado azul en vez de bloque gris
-        UIManager.put("MenuBar.underlineSelectionColor", accent);
-        UIManager.put("MenuBar.underlineSelectionBackground", new Color(0xE3F2FD));
-        UIManager.put("MenuBar.underlineSelectionHeight", 3);
-        UIManager.put("MenuItem.selectionType", "underline");
-        UIManager.put("MenuItem.underlineSelectionColor", accent);
         UIManager.put("MenuItem.selectionArc", 6);
+        UIManager.put("MenuBar.itemMargins", new Insets(4, 10, 4, 10));
         UIManager.put("PopupMenu.borderCornerRadius", 8);
+        UIManager.put("MenuItem.acceleratorFont", Estilo.mono(Font.PLAIN, 11));
+        UIManager.put("MenuItem.minimumWidth", 280);
+        if (!oscuro) {
+            UIManager.put("MenuBar.background", Estilo.SUPERFICIE);
+            UIManager.put("MenuBar.hoverBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("MenuBar.selectionBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("MenuBar.selectionForeground", accent);
+            UIManager.put("MenuItem.selectionBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("MenuItem.selectionForeground", Estilo.TEXTO);
+            UIManager.put("Menu.selectionBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("Menu.selectionForeground", Estilo.TEXTO);
+            UIManager.put("MenuItem.acceleratorForeground", Estilo.TEXTO_2);
+            UIManager.put("MenuItem.acceleratorSelectionForeground", Estilo.TEXTO_2);
+        }
 
         // Botones: hover celeste y borde que se "enciende" al pasar el mouse
         UIManager.put("Button.hoverBackground", new Color(0xE3F2FD));
@@ -3755,7 +4103,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Pestaña activa: texto en azul + negrita para reforzar el subrayado
         UIManager.put("TabbedPane.selectedForeground", accent);
-        UIManager.put("TabbedPane.font", new Font("Dialog", Font.PLAIN, 13));
+        UIManager.put("TabbedPane.font", Estilo.ui(Font.PLAIN, 13));
         UIManager.put("TabbedPane.tabHeight", 30);
 
         // Selección de tabla/árbol en azul suave con texto negro (no invierte color)
@@ -3777,23 +4125,43 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("SplitPaneDivider.gripColor", new Color(0xB0BEC5));
 
         // TitledBorder con fuente más chica y semibold (look de sección)
-        UIManager.put("TitledBorder.font", new Font("Dialog", Font.BOLD, 12));
+        UIManager.put("TitledBorder.font", Estilo.ui(Font.BOLD, 12));
 
         // ── 5. Barra de título moderna (decoraciones FlatLaf, estilo VS Code) ──
         // Menú embebido en la barra de título + fondo unificado con la ventana
-        UIManager.put("TitlePane.unifiedBackground", true);
-        UIManager.put("TitlePane.menuBarEmbedded", true);
+        UIManager.put("TitlePane.unifiedBackground", false);
+        UIManager.put("TitlePane.menuBarEmbedded", false);
         UIManager.put("TitlePane.titleMargins", new Insets(4, 8, 4, 8));
-        UIManager.put("TitlePane.font", new Font("Dialog", Font.BOLD, 13));
-        UIManager.put("TitlePane.foreground", new Color(0x37474F));
+        UIManager.put("TitlePane.font", Estilo.ui(Font.PLAIN, 12));
+        UIManager.put("TitlePane.background", Estilo.BARRA_TITULO);
+        UIManager.put("TitlePane.inactiveBackground", Estilo.BARRA_TITULO);
+        UIManager.put("TitlePane.foreground", Color.WHITE);
+        UIManager.put("TitlePane.inactiveForeground", Estilo.BARRA_TITULO_TEXTO_2);
+        UIManager.put("TitlePane.buttonHoverBackground", new Color(0x2C3E5E));
+        UIManager.put("TitlePane.buttonPressedBackground", new Color(0x3A4F75));
+        UIManager.put("TitlePane.embeddedForeground", Estilo.BARRA_TITULO_TEXTO_2);
         // Para revertir a la barra de título clásica de Windows: comentar las
         // dos líneas setDefaultLookAndFeelDecorated(true) en main().
+
+        if (oscuro) {
+            for (String k : new String[]{"ScrollBar.track", "Table.selectionInactiveBackground",
+                    "Table.selectionInactiveForeground", "TableHeader.separatorColor", "TitledBorder.titleColor",
+                    "Component.borderColor", "Separator.foreground", "ToolTip.background",
+                    "Button.hoverBackground", "Button.pressedBackground", "Button.borderColor",
+                    "TabbedPane.selectedBackground", "TabbedPane.hoverColor", "TabbedPane.inactiveUnderlineColor",
+                    "Table.selectionBackground", "Table.selectionForeground", "Tree.selectionBackground",
+                    "Tree.selectionForeground", "List.selectionBackground", "List.selectionForeground",
+                    "SplitPaneDivider.gripColor", "TextField.placeholderForeground"}) {
+                UIManager.put(k, null);
+            }
+        }
     }
 
     public static void main(String[] args) {
         // Look and Feel
         try {
-            UIManager.setLookAndFeel("com.formdev.flatlaf.FlatLightLaf");
+            UIManager.setLookAndFeel(Estilo.temaOscuro()
+                    ? "com.formdev.flatlaf.FlatDarkLaf" : "com.formdev.flatlaf.FlatLightLaf");
             applyUiPolish();
             // Decoraciones de ventana FlatLaf (barra de título moderna integrada)
             JFrame.setDefaultLookAndFeelDecorated(true);

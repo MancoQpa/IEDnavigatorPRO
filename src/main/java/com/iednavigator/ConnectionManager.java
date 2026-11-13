@@ -22,6 +22,8 @@ class ConnectionManager {
 
     interface Context {
         void log(String msg);
+        /** Se eligio un SCL para cargar (lista de recientes, titulo de la ventana). */
+        default void sclElegido(File f) { }
         void updateStatus(boolean active, String msg);
         Component parentWindow();
         ExecutorService backgroundExecutor();
@@ -698,9 +700,16 @@ class ConnectionManager {
             }
         });
 
+        File ultimo = ctx.getLoadedSclFile();
+        if (ultimo != null && ultimo.getParentFile() != null) fc.setCurrentDirectory(ultimo.getParentFile());
         if (fc.showOpenDialog(ctx.parentWindow()) == JFileChooser.APPROVE_OPTION) {
-            File file = fc.getSelectedFile();
+            cargarSclArchivo(fc.getSelectedFile());
+        }
+    }
 
+    /** Carga un SCL ya elegido: desde el selector o desde Archivo > Recientes. */
+    void cargarSclArchivo(File file) {
+        {
             // Con la simulación activa, cargar otro SCL reemplazaba el árbol, la placa y la
             // cabecera, pero el servidor seguía sirviendo el modelo anterior: el 2026-10-19 se
             // cargó un ABB sobre la simulación de un 7SL87 y durante dos días la pantalla
@@ -728,6 +737,7 @@ class ConnectionManager {
 
             final File anterior = ctx.getLoadedSclFile();
             ctx.setLoadedSclFile(file);
+            ctx.sclElegido(file);
             ctx.setLblFileName(file.getName());
             ctx.updateStatus(false, I18n.t("status.analyzingscl"));
             ctx.setStatusIndicatorConnecting();
