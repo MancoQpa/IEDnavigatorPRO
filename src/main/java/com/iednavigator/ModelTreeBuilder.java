@@ -178,6 +178,35 @@ class ModelTreeBuilder {
         Collection<ModelNode> children = modelNode.getChildren();
         if (children == null) return;
 
+        // Un DO aparece una sola vez aunque la libreria lo tenga una vez por FC (Beh [ST],
+        // Beh [SV]...): sus atributos de todos los FC cuelgan del mismo nodo y el FC se ve
+        // junto a cada atributo. Rediseño de 2026-11.
+        if (modelNode instanceof LogicalNode) {
+            Map<String, List<ModelNode>> porNombre = new LinkedHashMap<>();
+            List<ModelNode> otros = new ArrayList<>();
+            for (ModelNode child : children) {
+                if (child instanceof FcDataObject) {
+                    porNombre.computeIfAbsent(child.getName(), k -> new ArrayList<>()).add(child);
+                } else {
+                    otros.add(child);
+                }
+            }
+            for (List<ModelNode> variantes : porNombre.values()) {
+                ModelNode principal = variantes.get(0);
+                for (ModelNode v : variantes) {
+                    if (((FcModelNode) v).getFc() == Fc.ST) { principal = v; break; }
+                }
+                DefaultMutableTreeNode doNode = createTreeNode(principal, "DO", enumFormatter);
+                NodeInfo info = (NodeInfo) doNode.getUserObject();
+                info.fc = null;
+                info.variantes = variantes;
+                parent.add(doNode);
+                nodeMap.put(principal.getReference().toString(), doNode);
+                for (ModelNode v : variantes) buildTreeRecursive(doNode, v, nodeMap, enumFormatter);
+            }
+            children = otros;
+        }
+
         for (ModelNode child : children) {
             String prefix = getNodePrefix(child);
             DefaultMutableTreeNode childNode = createTreeNode(child, prefix, enumFormatter);

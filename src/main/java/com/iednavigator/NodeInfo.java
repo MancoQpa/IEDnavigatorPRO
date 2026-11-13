@@ -20,6 +20,12 @@ class NodeInfo {
     ModelNode node;
     SclGoCB gocb;        // Para nodos GoCB
     boolean isGocbContainer; // True si es el contenedor "GOOSE"
+    /**
+     * Para un DO: sus variantes por FC (Pos [ST], Pos [CO], Pos [CF]...). El arbol muestra el
+     * DO una sola vez (rediseño de 2026-11); node apunta a la variante principal (ST si hay) y
+     * aca estan todas, para quien necesite una en particular (el mando busca la de CO).
+     */
+    java.util.List<ModelNode> variantes;
 
     @Override
     public String toString() {

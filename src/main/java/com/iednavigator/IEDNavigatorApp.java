@@ -103,6 +103,14 @@ public class IEDNavigatorApp extends JFrame {
     private final JLabel vacioTexto = new JLabel();
     private final JButton vacioBoton = new JButton();
     private JPanel tarjetaRegistro;
+    /** Arbol: cartas (arbol / vacio), busqueda, ruta del seleccionado y contador. */
+    private JPanel cartasArbol;
+    private BuscadorArbol buscador;
+    private final JTextField campoBusqueda = new JTextField();
+    private final JLabel lblCoincidencias = new JLabel();
+    private final JLabel lblRuta = new JLabel(" ");
+    private final JLabel lblCuentaNodos = new JLabel();
+    private ArbolCeldaRenderer rendererArbol;
     private static final String URL_DOCUMENTACION = "https://mancoqpa.github.io/IEDnavigatorPRO/";
     private static final java.util.prefs.Preferences PREFS_UI =
             java.util.prefs.Preferences.userRoot().node("com/iednavigator");
@@ -451,10 +459,13 @@ public class IEDNavigatorApp extends JFrame {
         rootNode = new DefaultMutableTreeNode(I18n.t("tree.root"));
         treeModel = new DefaultTreeModel(rootNode);
         modelTree = new JTree(treeModel);
-        modelTree.setRootVisible(true);
-        modelTree.setCellRenderer(new ModelTreeCellRenderer(iconCache, watchlist)); // F18: usa clase externa
+        // Rediseño: sin raiz visible (los LD arriba) y filas nuevas (ArbolCeldaRenderer)
+        modelTree.setRootVisible(false);
+        modelTree.setShowsRootHandles(true);
+        rendererArbol = new ArbolCeldaRenderer(watchlist, () -> loadedSclFile);
+        modelTree.setCellRenderer(rendererArbol);
         modelTree.setDragEnabled(true);
-        modelTree.setRowHeight(20);  // Altura consistente para iconos
+        modelTree.setRowHeight(28);
         modelTree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         modelTree.setLargeModel(true);
         treeScroll = new JScrollPane(modelTree);
@@ -507,7 +518,7 @@ public class IEDNavigatorApp extends JFrame {
         // debajo, el registro. Cada bloque es una tarjeta blanca sobre el fondo gris.
         treeScroll.setBorder(BorderFactory.createEmptyBorder());
         logScroll.setBorder(BorderFactory.createEmptyBorder());
-        panelArbol = tarjeta(I18n.t("tree.title"), crearCartasArbol());
+        panelArbol = tarjeta(null, crearPanelArbol());
         tarjetaRegistro = tarjeta(I18n.t("log.title"), logScroll);
         JPanel tarjetaPestanias = tarjeta(null, rightTabbedPane);
 
@@ -747,8 +758,179 @@ public class IEDNavigatorApp extends JFrame {
             vacioBoton.setText(I18n.t(srv ? "menu.file.open" : "ctx.btn.connect"));
             vacioBoton.setEnabled(srv || (btnConnect != null && btnConnect.isEnabled()));
         }
-        cardsArbol.show((Container) ((BorderLayout) panelArbol.getLayout())
-                .getLayoutComponent(BorderLayout.CENTER), hayModelo ? "arbol" : "vacio");
+        cardsArbol.show(cartasArbol, hayModelo ? "arbol" : "vacio");
+        campoBusqueda.setEnabled(hayModelo);
+        lblCuentaNodos.setText(hayModelo ? cuentaNodos() : "");
+        if (hayModelo && buscador != null && !buscador.filtrando()) {
+            TreePath raiz = new TreePath(rootNode);
+            if (!modelTree.isExpanded(raiz)) modelTree.expandPath(raiz);
+        }
+        // Con la busqueda activa el arbol muestra copias: se repinta para ver los valores al dia
+        if (buscador != null && buscador.filtrando()) modelTree.repaint();
+    }
+
+    /** "109.629 nodos" a partir del texto de la raiz que deja ModelTreeBuilder. */
+    private String cuentaNodos() {
+        String t = String.valueOf(rootNode.getUserObject());
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d[\\d.,]*)").matcher(t);
+        return m.find() ? I18n.t("tree.nodes", m.group(1)) : "";
+    }
+
+    /**
+     * Tarjeta del arbol: encabezado "Modelo de datos" + contador, busqueda (Ctrl+F), ruta del
+     * nodo seleccionado, el arbol (o el estado vacio) y la pista de como monitorear.
+     */
+    private JPanel crearPanelArbol() {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setOpaque(false);
+
+        JPanel arriba = new JPanel();
+        arriba.setOpaque(false);
+        arriba.setLayout(new BoxLayout(arriba, BoxLayout.Y_AXIS));
+
+        JPanel enc = new JPanel(new BorderLayout());
+        enc.setOpaque(false);
+        enc.setBorder(BorderFactory.createEmptyBorder(12, 14, 8, 14));
+        JLabel titulo = new JLabel(I18n.t("tree.title"));
+        titulo.setFont(Estilo.ui(Font.BOLD, 13));
+        lblCuentaNodos.setFont(Estilo.ui(Font.PLAIN, 12));
+        lblCuentaNodos.setForeground(Estilo.TEXTO_2);
+        enc.add(titulo, BorderLayout.WEST);
+        enc.add(lblCuentaNodos, BorderLayout.EAST);
+        enc.setAlignmentX(0f);
+        arriba.add(enc);
+
+        JPanel busq = new JPanel(new BorderLayout());
+        busq.setOpaque(false);
+        busq.setBorder(BorderFactory.createEmptyBorder(0, 14, 8, 14));
+        campoBusqueda.putClientProperty("JTextField.placeholderText", I18n.t("tree.search.placeholder"));
+        campoBusqueda.putClientProperty("JTextField.showClearButton", true);
+        campoBusqueda.putClientProperty("JTextField.leadingIcon", new IconoLupa());
+        JLabel atajo = new JLabel("Ctrl F ");
+        atajo.setFont(Estilo.mono(Font.PLAIN, 11));
+        atajo.setForeground(Estilo.TEXTO_2);
+        campoBusqueda.putClientProperty("JTextField.trailingComponent", atajo);
+        campoBusqueda.setFont(Estilo.ui(Font.PLAIN, 13));
+        busq.add(campoBusqueda, BorderLayout.CENTER);
+        lblCoincidencias.setFont(Estilo.ui(Font.PLAIN, 11));
+        lblCoincidencias.setForeground(Estilo.TEXTO_2);
+        lblCoincidencias.setBorder(BorderFactory.createEmptyBorder(4, 2, 0, 0));
+        busq.add(lblCoincidencias, BorderLayout.SOUTH);
+        busq.setAlignmentX(0f);
+        arriba.add(busq);
+
+        lblRuta.setFont(Estilo.mono(Font.PLAIN, 12));
+        lblRuta.setForeground(Estilo.TEXTO_2);
+        lblRuta.setOpaque(true);
+        lblRuta.setBackground(Estilo.temaOscuro() ? superficie() : new Color(0xF7F8FA));
+        lblRuta.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 1, 0, new Color(0xEEF0F3)),
+                BorderFactory.createEmptyBorder(6, 14, 6, 14)));
+        lblRuta.setAlignmentX(0f);
+        lblRuta.setMaximumSize(new Dimension(Integer.MAX_VALUE, lblRuta.getPreferredSize().height + 14));
+        arriba.add(lblRuta);
+        p.add(arriba, BorderLayout.NORTH);
+
+        cartasArbol = crearCartasArbol();
+        p.add(cartasArbol, BorderLayout.CENTER);
+
+        JLabel pista = new JLabel(I18n.t("tree.hint"));
+        pista.setFont(Estilo.ui(Font.PLAIN, 12));
+        pista.setForeground(Estilo.TEXTO_2);
+        pista.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0xEEF0F3)),
+                BorderFactory.createEmptyBorder(7, 14, 7, 14)));
+        p.add(pista, BorderLayout.SOUTH);
+
+        buscador = new BuscadorArbol(modelTree, treeModel, campoBusqueda, t -> {
+            lblCoincidencias.setText(t);
+            lblCoincidencias.setVisible(!t.isEmpty());
+        });
+        lblCoincidencias.setVisible(false);
+        campoBusqueda.addKeyListener(new KeyAdapter() {
+            @Override public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ESCAPE) buscador.limpiar();
+                else if (e.getKeyCode() == KeyEvent.VK_DOWN || e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    modelTree.requestFocusInWindow();
+                    if (modelTree.getSelectionCount() == 0 && modelTree.getRowCount() > 0) modelTree.setSelectionRow(0);
+                }
+            }
+        });
+
+        // Ruta del seleccionado: LD › LN › DO › DA
+        modelTree.addTreeSelectionListener(e -> {
+            TreePath tp = modelTree.getSelectionPath();
+            if (tp == null) { lblRuta.setText(" "); return; }
+            java.util.List<String> partes = new java.util.ArrayList<>();
+            for (Object o : tp.getPath()) {
+                Object uo = ((DefaultMutableTreeNode) o).getUserObject();
+                if (uo instanceof NodeInfo && ((NodeInfo) uo).name != null) partes.add(((NodeInfo) uo).name);
+            }
+            if (partes.isEmpty()) { lblRuta.setText(" "); return; }
+            String ultimo = partes.remove(partes.size() - 1);
+            StringBuilder sb = new StringBuilder("<html>");
+            for (String x : partes) sb.append(escaparHtml(x)).append(" &rsaquo; ");
+            sb.append("<span style='color:#1B1F24'>").append(escaparHtml(ultimo)).append("</span></html>");
+            lblRuta.setText(sb.toString());
+        });
+
+        // Ctrl+F: a la busqueda. Enter en el arbol: al monitor.
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()), "buscarArbol");
+        getRootPane().getActionMap().put("buscarArbol", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) {
+                campoBusqueda.requestFocusInWindow();
+                campoBusqueda.selectAll();
+            }
+        });
+        modelTree.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "monitorear");
+        modelTree.getActionMap().put("monitorear", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { monitorearSeleccion(); }
+        });
+        return p;
+    }
+
+    private static String escaparHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /** Agrega al monitor lo seleccionado en el arbol (Enter, doble clic, + Monitor, menu). */
+    private void monitorearSeleccion() {
+        TreePath[] paths = modelTree.getSelectionPaths();
+        if (paths == null) return;
+        for (TreePath tp : paths) addNodeToMonitor((DefaultMutableTreeNode) tp.getLastPathComponent());
+    }
+
+    /** true si el clic cayo sobre el "+ Monitor" de la fila seleccionada. */
+    private boolean clicEnMonitor(MouseEvent e) {
+        TreePath tp = modelTree.getPathForLocation(e.getX(), e.getY());
+        if (tp == null || !modelTree.isPathSelected(tp)) return false;
+        Rectangle r = modelTree.getPathBounds(tp);
+        if (r == null) return false;
+        int row = modelTree.getRowForPath(tp);
+        Component c = rendererArbol.getTreeCellRendererComponent(modelTree, tp.getLastPathComponent(), true,
+                modelTree.isExpanded(tp), modelTree.getModel().isLeaf(tp.getLastPathComponent()), row, true);
+        if (!rendererArbol.monitor.isVisible()) return false;
+        c.setSize(r.width, r.height);
+        c.doLayout();
+        Rectangle b = rendererArbol.monitor.getBounds();
+        b.translate(r.x, r.y);
+        return b.contains(e.getPoint());
+    }
+
+    /** Lupa del campo de busqueda (dibujada: sin archivos de imagen). */
+    private static final class IconoLupa implements Icon {
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(Estilo.TEXTO_2);
+            g2.setStroke(new BasicStroke(1.7f));
+            g2.drawOval(x + 1, y + 1, 10, 10);
+            g2.drawLine(x + 10, y + 10, x + 14, y + 14);
+            g2.dispose();
+        }
+        @Override public int getIconWidth() { return 16; }
+        @Override public int getIconHeight() { return 16; }
     }
 
     /** "modelo · fabricante · cfg x" desde el texto de la placa ("IED: .. | Fabricante: .."). */
@@ -2002,7 +2184,9 @@ public class IEDNavigatorApp extends JFrame {
     // --- SECTION: MONITOR OPERATIONS (F12: delegado a MonitorManager.java) ---
     private MonitorManager monitorManager;
 
-    private void addNodeToMonitor(DefaultMutableTreeNode node)  { monitorManager.addNodeToMonitor(node); }
+    private void addNodeToMonitor(DefaultMutableTreeNode node)  {
+        monitorManager.addNodeToMonitor(buscador != null ? buscador.original(node) : node);
+    }
     private void removeSelectedFromMonitor()                    { monitorManager.removeSelectedFromMonitor(); }
     private void refreshMonitorTable()                          { monitorManager.refreshMonitorTable(); }
     private void applyMonitorFilter()                           { monitorManager.applyMonitorFilter(); }
@@ -2052,18 +2236,24 @@ public class IEDNavigatorApp extends JFrame {
         modelTree.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    if (currentMode == AppMode.CLIENT && isConnected) {
-                        readSelectedNode();
-                    } else if (currentMode == AppMode.SERVER && isServerRunning) {
-                        // En modo servidor, doble click abre editor de valor
-                        setSelectedNodeCustomValue();
+                // Rediseño: doble clic sobre un atributo lo agrega al monitor. En un LD, LN o DO
+                // abre o cierra la rama (si no, un DO volcaba todos sus atributos). Leer y editar
+                // el valor siguen en el menu del clic derecho.
+                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+                    TreePath tp = modelTree.getPathForLocation(e.getX(), e.getY());
+                    if (tp != null && modelTree.getModel().isLeaf(tp.getLastPathComponent())) {
+                        addNodeToMonitor((DefaultMutableTreeNode) tp.getLastPathComponent());
                     }
                 }
             }
 
             @Override
             public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e) && clicEnMonitor(e)) {
+                    monitorearSeleccion();
+                    e.consume();
+                    return;
+                }
                 handleTreePopup(e);
             }
 
@@ -2200,6 +2390,12 @@ public class IEDNavigatorApp extends JFrame {
         Object userObj = treeNode.getUserObject();
         if (!(userObj instanceof NodeInfo)) return;
         NodeInfo info = (NodeInfo) userObj;
+
+        JMenuItem miMonitorear = new JMenuItem(I18n.t("ctx.addmonitor"));
+        miMonitorear.setFont(miMonitorear.getFont().deriveFont(Font.BOLD));
+        miMonitorear.addActionListener(e -> monitorearSeleccion());
+        serverPopupMenu.add(miMonitorear);
+        serverPopupMenu.addSeparator();
 
         // Detect data type
         boolean isBoolean = (info.node instanceof BdaBoolean)
@@ -2357,6 +2553,7 @@ public class IEDNavigatorApp extends JFrame {
 
     // F22: tree navigation — delegado a ModelTreeBuilder.java
     private void navigateToFcdaInModel(String fcdaName) {
+        if (buscador != null && buscador.filtrando()) buscador.limpiar();
         ModelTreeBuilder.navigateToFcdaInModel(modelTree, fcdaName, this::log, this::logGoose);
     }
 
@@ -2622,6 +2819,13 @@ public class IEDNavigatorApp extends JFrame {
         // Caso 1: el nodo ES el Oper (FC=CO, nombre="Oper")
         if (fcNode.getFc() == Fc.CO && "Oper".equals(fcNode.getName())) {
             return fcNode;
+        }
+
+        // Caso 1b: DO unificado (rediseño) cuya variante principal no es la de CO
+        if (info.variantes != null) {
+            for (ModelNode v : info.variantes) {
+                if (v instanceof FcModelNode && ((FcModelNode) v).getFc() == Fc.CO) { fcNode = (FcModelNode) v; break; }
+            }
         }
 
         // Caso 2: FcDataObject con FC=CO → buscar hijo llamado "Oper"
@@ -4286,7 +4490,6 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("TableHeader.font", Estilo.ui(Font.BOLD, 12));
 
         UIManager.put("Tree.rowHeight", 22);
-        UIManager.put("Tree.selectionArc", 8);
         UIManager.put("Tree.wideSelection", true);
         UIManager.put("Tree.paintLines", false);
         UIManager.put("List.selectionArc", 8);
@@ -4323,6 +4526,12 @@ public class IEDNavigatorApp extends JFrame {
             UIManager.put("Menu.selectionForeground", Estilo.TEXTO);
             UIManager.put("MenuItem.acceleratorForeground", Estilo.TEXTO_2);
             UIManager.put("MenuItem.acceleratorSelectionForeground", Estilo.TEXTO_2);
+            // Seleccion del arbol en celeste suave, con o sin foco (antes gris sin foco)
+            UIManager.put("Tree.selectionBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("Tree.selectionInactiveBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("Tree.selectionForeground", Estilo.TEXTO);
+            UIManager.put("Tree.selectionInactiveForeground", Estilo.TEXTO);
+            UIManager.put("Tree.selectionArc", 0);
         }
 
         // Botones: hover celeste y borde que se "enciende" al pasar el mouse
@@ -4340,8 +4549,6 @@ public class IEDNavigatorApp extends JFrame {
         // Selección de tabla/árbol en azul suave con texto negro (no invierte color)
         UIManager.put("Table.selectionBackground", new Color(0xCFE5F7));
         UIManager.put("Table.selectionForeground", Color.BLACK);
-        UIManager.put("Tree.selectionBackground", new Color(0xCFE5F7));
-        UIManager.put("Tree.selectionForeground", Color.BLACK);
         UIManager.put("List.selectionBackground", new Color(0xCFE5F7));
         UIManager.put("List.selectionForeground", Color.BLACK);
 
