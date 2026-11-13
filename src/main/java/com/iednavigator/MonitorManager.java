@@ -87,20 +87,31 @@ class MonitorManager {
         return ref.replace(".", "/");
     }
 
+    /**
+     * Quita las señales marcadas con la casilla; si no hay ninguna marcada, las seleccionadas.
+     * Antes tomaba la fila visible como fila del modelo: con un filtro activo podia quitar
+     * otra señal.
+     */
     void removeSelectedFromMonitor() {
-        int[] rows = ctx.getMonitorTable().getSelectedRows();
-        if (rows.length == 0) return;
+        JTable t = ctx.getMonitorTable();
+        DefaultTableModel m = ctx.getMonitorTableModel();
+        List<Integer> filas = new ArrayList<>();
+        for (int r = 0; r < m.getRowCount(); r++) {
+            if (Boolean.TRUE.equals(m.getValueAt(r, MonitorCeldaRenderer.COL_SEL))) filas.add(r);
+        }
+        if (filas.isEmpty()) {
+            for (int v : t.getSelectedRows()) filas.add(t.convertRowIndexToModel(v));
+        }
+        if (filas.isEmpty()) return;
 
         List<String> keysToRemove = new ArrayList<>();
-        List<MonitorItem> itemsList = new ArrayList<>(ctx.getMonitorItems().values());
-
-        for (int row : rows) {
-            if (row >= 0 && row < itemsList.size()) {
-                MonitorItem item = itemsList.get(row);
+        for (int r : filas) {
+            Object o = m.getValueAt(r, MonitorCeldaRenderer.COL_SENAL);
+            if (o instanceof MonitorItem) {
+                MonitorItem item = (MonitorItem) o;
                 keysToRemove.add(item.reference + "$" + item.fc);
             }
         }
-
         for (String key : keysToRemove) {
             ctx.getMonitorItems().remove(key);
             ctx.getWatchlist().remove(key);
@@ -111,22 +122,61 @@ class MonitorManager {
         ctx.getModelTree().repaint();
     }
 
-    void refreshMonitorTable() {
-        ctx.getMonitorTableModel().setRowCount(0);
-        for (MonitorItem item : ctx.getMonitorItems().values()) {
-            String status = "";
-            if (item.lastChangeTime > 0) {
-                long ago = System.currentTimeMillis() - item.lastChangeTime;
-                if (ago < 5000) status = "CHANGED";
-            }
-            ctx.getMonitorTableModel().addRow(new Object[]{
-                item.name, item.fc, item.type, item.value, status
-            });
+    /** Cantidad de señales marcadas o seleccionadas (para habilitar Quitar). */
+    int cantidadParaQuitar() {
+        DefaultTableModel m = ctx.getMonitorTableModel();
+        int n = 0;
+        for (int r = 0; r < m.getRowCount(); r++) {
+            if (Boolean.TRUE.equals(m.getValueAt(r, MonitorCeldaRenderer.COL_SEL))) n++;
         }
-        if (ctx.getMonitorCountLabel() != null) {
-            ctx.getMonitorCountLabel().setText(" " + I18n.t("monitor.items", ctx.getMonitorItems().size()));
+        return n > 0 ? n : ctx.getMonitorTable().getSelectedRowCount();
+    }
+
+    void refreshMonitorTable() {
+        DefaultTableModel m = ctx.getMonitorTableModel();
+        m.setRowCount(0);
+        for (MonitorItem item : ctx.getMonitorItems().values()) {
+            item.value = item.value == null ? "" : item.value;
+            m.addRow(new Object[]{Boolean.FALSE, item, item.type, item.value, calidadDe(item), hora(item.ultimoCambio)});
         }
         applyMonitorFilter();
+    }
+
+    private static final java.text.SimpleDateFormat HORA = new java.text.SimpleDateFormat("HH:mm:ss.SSS");
+
+    static String hora(long ms) {
+        synchronized (HORA) { return ms <= 0 ? "" : HORA.format(new Date(ms)); }
+    }
+
+    /**
+     * Calidad de la señal: la del q del mismo DO (y FC), o la propia si es el q. Vacio para lo
+     * que no la tiene (ajustes, descripcion...).
+     */
+    static String calidadDe(MonitorItem item) {
+        if (item == null || item.node == null) return "";
+        ModelNode n = item.node;
+        BdaQuality q = null;
+        if (n instanceof BdaQuality) {
+            q = (BdaQuality) n;
+        } else {
+            ModelNode base = n instanceof BasicDataAttribute ? n.getParent() : n;
+            for (int i = 0; i < 3 && base != null && q == null; i++) {
+                ModelNode c = base.getChild("q");
+                if (c instanceof BdaQuality) q = (BdaQuality) c;
+                else base = base.getParent();
+            }
+        }
+        if (q == null) return "";
+        try {
+            switch (q.getValidity()) {
+                case GOOD: return "good";
+                case INVALID: return "invalid";
+                case QUESTIONABLE: return "questionable";
+                default: return "reserved";
+            }
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /** Aplica filtro de FC y nombre. Actualiza el contador con visibles/total. */
@@ -136,22 +186,22 @@ class MonitorManager {
 
         JComboBox<String> fcBox = ctx.getMonitorFcFilter();
         JTextField nameBox = ctx.getMonitorNameFilter();
+        String fc   = fcBox   != null ? (String) fcBox.getSelectedItem()      : null;
+        String name = nameBox != null ? nameBox.getText().trim().toLowerCase() : "";
+        boolean fcAll = fc == null || fc.equals(I18n.t("filter.all"));
 
-        String fc   = fcBox   != null ? (String) fcBox.getSelectedItem()           : I18n.t("filter.all");
-        String name = nameBox != null ? nameBox.getText().trim().toLowerCase()      : "";
-
-        boolean fcAll   = fc == null || fc.equals(I18n.t("filter.all"));
-        boolean nameAll = name.isEmpty();
-
-        if (fcAll && nameAll) {
+        if (fcAll && name.isEmpty()) {
             sorter.setRowFilter(null);
         } else {
-            final String fcFinal = fc;
-            List<RowFilter<Object, Object>> filters = Arrays.asList(
-                fcAll   ? null : RowFilter.regexFilter("(?i)^" + fcFinal + "$", 1),
-                nameAll ? null : RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(name), 0)
-            ).stream().filter(f -> f != null).collect(Collectors.toList());
-            sorter.setRowFilter(RowFilter.andFilter(filters));
+            sorter.setRowFilter(new RowFilter<DefaultTableModel, Integer>() {
+                @Override public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> e) {
+                    Object o = e.getValue(MonitorCeldaRenderer.COL_SENAL);
+                    if (!(o instanceof MonitorItem)) return true;
+                    MonitorItem it = (MonitorItem) o;
+                    if (!fcAll && !fc.equalsIgnoreCase(it.fc)) return false;
+                    return name.isEmpty() || (it.reference != null && it.reference.toLowerCase().contains(name));
+                }
+            });
         }
 
         JLabel lbl = ctx.getMonitorCountLabel();
@@ -159,8 +209,8 @@ class MonitorManager {
             int visible = ctx.getMonitorTable().getRowCount();
             int total   = ctx.getMonitorItems().size();
             lbl.setText(visible == total
-                ? " " + I18n.t("monitor.items", total)
-                : " " + I18n.t("monitor.items.visible", total, visible));
+                ? I18n.t("monitor.signals", total)
+                : I18n.t("monitor.signals.visible", visible, total));
         }
     }
 
@@ -236,10 +286,9 @@ class MonitorManager {
                     if (!newVal.equals(item.value)) {
                         item.oldValue = item.value;
                         item.value = newVal;
-                        item.lastChangeTime = System.currentTimeMillis();
-                        ctx.getMonitorTableModel().setValueAt(newVal,    row, 3);
-                        ctx.getMonitorTableModel().setValueAt("CHANGED", row, 4);
+                        marcarCambio(item, row);
                     }
+                    ctx.getMonitorTableModel().setValueAt(calidadDe(item), row, MonitorCeldaRenderer.COL_CALIDAD);
                 }
             } catch (Exception ignore) {}
             row++;
@@ -260,25 +309,25 @@ class MonitorManager {
                 if (!newVal.equals(item.value)) {
                     item.oldValue = item.value;
                     item.value = newVal;
-                    item.lastChangeTime = System.currentTimeMillis();
-
-                    ctx.getMonitorTableModel().setValueAt(item.name,  row, 0);
-                    ctx.getMonitorTableModel().setValueAt(item.fc,    row, 1);
-                    ctx.getMonitorTableModel().setValueAt(item.type,  row, 2);
-                    ctx.getMonitorTableModel().setValueAt(newVal,     row, 3);
-                    ctx.getMonitorTableModel().setValueAt("CHANGED",  row, 4);
-
+                    marcarCambio(item, row);
                     ctx.log(I18n.t("log.value.changed", item.name, newVal));
-                } else {
-                    long ago = System.currentTimeMillis() - item.lastChangeTime;
-                    if (ago > 3000 && item.lastChangeTime > 0) {
-                        ctx.getMonitorTableModel().setValueAt("", row, 4);
-                    }
                 }
+                ctx.getMonitorTableModel().setValueAt(calidadDe(item), row, MonitorCeldaRenderer.COL_CALIDAD);
             }
             row++;
         }
         ctx.getMonitorTable().repaint();
+    }
+
+    /** Valor nuevo: hora del cambio y resaltado ambar que se desvanece (MonitorCeldaRenderer). */
+    private void marcarCambio(MonitorItem item, int row) {
+        long ahora = System.currentTimeMillis();
+        item.lastChangeTime = ahora;
+        item.ultimoCambio = ahora;
+        item.resaltarDesde = ahora;
+        DefaultTableModel m = ctx.getMonitorTableModel();
+        m.setValueAt(item.value, row, MonitorCeldaRenderer.COL_VALOR);
+        m.setValueAt(hora(ahora), row, MonitorCeldaRenderer.COL_HORA);
     }
 
     // F24: moved from IEDNavigatorApp.java

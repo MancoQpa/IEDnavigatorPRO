@@ -1127,15 +1127,15 @@ public class IEDNavigatorApp extends JFrame {
         File destino = elegirDestino("monitor_" + marcaArchivo() + ".csv");
         if (destino == null) return;
         StringBuilder sb = new StringBuilder();
-        int cols = monitorTableModel.getColumnCount();
-        for (int c = 0; c < cols; c++) sb.append(c > 0 ? ";" : "").append(campoCsv(monitorTableModel.getColumnName(c)));
-        sb.append("\r\n");
-        for (int r = 0; r < monitorTableModel.getRowCount(); r++) {
-            for (int c = 0; c < cols; c++) {
-                Object v = monitorTableModel.getValueAt(r, c);
-                sb.append(c > 0 ? ";" : "").append(campoCsv(v == null ? "" : v.toString()));
-            }
-            sb.append("\r\n");
+        sb.append(campoCsv(I18n.t("mon.col.signal"))).append(";FC;").append(campoCsv(I18n.t("col.type"))).append(';')
+          .append(campoCsv(I18n.t("col.value"))).append(';').append(campoCsv(I18n.t("mon.col.quality"))).append(';')
+          .append(campoCsv(I18n.t("mon.col.changed"))).append("\r\n");
+        for (MonitorItem it : monitorItems.values()) {
+            sb.append(campoCsv(it.reference)).append(';').append(campoCsv(it.fc)).append(';')
+              .append(campoCsv(it.type == null ? "" : it.type)).append(';')
+              .append(campoCsv(it.value == null ? "" : it.value)).append(';')
+              .append(campoCsv(MonitorManager.calidadDe(it))).append(';')
+              .append(campoCsv(MonitorManager.hora(it.ultimoCambio))).append("\r\n");
         }
         escribirExportacion(destino, sb.toString());
     }
@@ -2056,114 +2056,142 @@ public class IEDNavigatorApp extends JFrame {
 
     // ─── SECTION: MONITOR PANEL ──────────────────────────────────────────────────────
     private JPanel createMonitorPanel() {
-        JPanel panel = new JPanel(new BorderLayout(5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder(I18n.t("border.monitor")));
+        JPanel panel = new JPanel(new BorderLayout(0, 0));
+        panel.setOpaque(false);
         panel.setMinimumSize(new Dimension(300, 200));
 
-        // Tabla con mas columnas como IEDScout
-        String[] columns = {I18n.t("col.name"), "FC", I18n.t("col.type"), I18n.t("col.value"), I18n.t("col.status")};
+        // Columnas del rediseño. La columna Señal guarda el MonitorItem (ruta, FC, cambios).
+        String[] columns = {"", I18n.t("mon.col.signal"), I18n.t("col.type"), I18n.t("col.value"),
+                I18n.t("mon.col.quality"), I18n.t("mon.col.changed")};
         monitorTableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+            @Override public boolean isCellEditable(int row, int column) {
+                return column == MonitorCeldaRenderer.COL_SEL;
+            }
+            @Override public Class<?> getColumnClass(int c) {
+                return c == MonitorCeldaRenderer.COL_SEL ? Boolean.class : Object.class;
             }
         };
         monitorTable = new JTable(monitorTableModel);
         monitorTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        monitorTable.setRowHeight(22);
-        monitorTable.setShowGrid(true);
-        monitorTable.setGridColor(new Color(220, 220, 220));
-
-        // Configurar anchos de columna
-        monitorTable.getColumnModel().getColumn(0).setPreferredWidth(180);  // Nombre
-        monitorTable.getColumnModel().getColumn(1).setPreferredWidth(35);   // FC
-        monitorTable.getColumnModel().getColumn(2).setPreferredWidth(70);   // Tipo
-        monitorTable.getColumnModel().getColumn(3).setPreferredWidth(100);  // Valor
-        monitorTable.getColumnModel().getColumn(4).setPreferredWidth(60);   // Estado
-
-        // Renderer para colorear valores
-        monitorTable.setDefaultRenderer(Object.class, new MonitorTableRenderer());
+        monitorTable.setRowHeight(34);
+        monitorTable.setShowGrid(false);
+        monitorTable.setShowHorizontalLines(true);
+        monitorTable.setGridColor(new Color(0xEEF0F3));
+        monitorTable.setIntercellSpacing(new Dimension(0, 1));
+        MonitorCeldaRenderer celdas = new MonitorCeldaRenderer();
+        for (int c = 0; c < columns.length; c++) monitorTable.getColumnModel().getColumn(c).setCellRenderer(celdas);
+        javax.swing.table.TableColumnModel cm = monitorTable.getColumnModel();
+        cm.getColumn(0).setPreferredWidth(32);
+        cm.getColumn(0).setMaxWidth(36);
+        cm.getColumn(1).setPreferredWidth(300);
+        cm.getColumn(2).setPreferredWidth(90);
+        cm.getColumn(3).setPreferredWidth(130);
+        cm.getColumn(4).setPreferredWidth(110);
+        cm.getColumn(5).setPreferredWidth(120);
+        javax.swing.table.JTableHeader th = monitorTable.getTableHeader();
+        th.setFont(Estilo.ui(Font.BOLD, 12));
+        th.setForeground(Estilo.TEXTO_2);
+        ((javax.swing.table.DefaultTableCellRenderer) th.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.LEFT);
 
         // Sorter para filtrado
         monitorSorter = new TableRowSorter<>(monitorTableModel);
         monitorTable.setRowSorter(monitorSorter);
 
-        // El drop se configura en setupDragAndDrop()
+        // Toda la tabla recibe lo que se suelta (setupDragAndDrop); la franja de abajo es una pista
         monitorTable.setFillsViewportHeight(true);
-
         JScrollPane tableScroll = new JScrollPane(monitorTable);
-        tableScroll.getViewport().setBackground(Color.WHITE);
+        tableScroll.setBorder(BorderFactory.createEmptyBorder());
+        tableScroll.getViewport().setBackground(superficie());
 
-        // Panel de area de drop visual
-        JPanel dropHintPanel = new JPanel(new BorderLayout());
-        dropHintPanel.setBackground(new Color(245, 250, 255));
-        dropHintPanel.setBorder(BorderFactory.createDashedBorder(
-            new Color(100, 150, 200), 2, 5, 3, true));
-        JLabel lblDropHint = new JLabel(I18n.t("monitor.drophint"));
-        lblDropHint.setForeground(new Color(100, 150, 200));
+        JLabel lblDropHint = new JLabel(I18n.t("monitor.drophint2"));
+        lblDropHint.setForeground(Estilo.TEXTO_2);
+        lblDropHint.setFont(Estilo.ui(Font.PLAIN, 13));
         lblDropHint.setHorizontalAlignment(SwingConstants.CENTER);
-        dropHintPanel.add(lblDropHint, BorderLayout.CENTER);
-        dropHintPanel.setPreferredSize(new Dimension(250, 60));
+        lblDropHint.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createEmptyBorder(10, 16, 14, 16),
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createDashedBorder(Estilo.BORDE_CAMPO, 1.5f, 5, 3, true),
+                        BorderFactory.createEmptyBorder(12, 12, 12, 12))));
 
-        // Header fila 1: conteo + botones
-        JPanel headerRow1 = new JPanel(new BorderLayout());
-        JLabel lblCount = new JLabel(" " + I18n.t("monitor.items", 0));
-        lblCount.setFont(lblCount.getFont().deriveFont(Font.BOLD));
-        headerRow1.add(lblCount, BorderLayout.WEST);
+        // Encabezado: "Monitor" + contador | filtro · FC · Quitar · Limpiar…
+        JPanel enc = new JPanel(new BorderLayout(10, 0));
+        enc.setOpaque(false);
+        enc.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
+        JPanel izq = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        izq.setOpaque(false);
+        JLabel titulo = new JLabel(I18n.t("tab.monitor"));
+        titulo.setFont(Estilo.ui(Font.BOLD, 15));
+        JLabel lblCount = new JLabel(I18n.t("monitor.signals", 0));
+        lblCount.setFont(Estilo.ui(Font.BOLD, 12));
+        lblCount.setForeground(new Color(0x3F4752));
+        lblCount.setOpaque(true);
+        lblCount.setBackground(new Color(0xEEF0F3));
+        lblCount.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+        izq.add(titulo);
+        izq.add(lblCount);
+        enc.add(izq, BorderLayout.WEST);
 
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 2));
-        JButton btnRemove = new JButton(I18n.t("btn.remove"));
-        btnRemove.setMargin(new Insets(2, 8, 2, 8));
-        btnRemove.addActionListener(e -> removeSelectedFromMonitor());
-        btnPanel.add(btnRemove);
-        JButton btnClear = new JButton(I18n.t("btn.clear"));
-        btnClear.setMargin(new Insets(2, 8, 2, 8));
-        btnClear.addActionListener(e -> clearMonitor());
-        btnPanel.add(btnClear);
-        headerRow1.add(btnPanel, BorderLayout.EAST);
-
-        // Header fila 2: filtros
-        JPanel headerRow2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        headerRow2.add(new JLabel("FC:"));
-        monitorFcFilter = new JComboBox<>(new String[]{
-            I18n.t("filter.all"), "ST", "MX", "CF", "DC", "SP", "SV", "BL", "CO", "SE", "SG", "EX", "RP", "BR", "OR"
-        });
-        monitorFcFilter.setPreferredSize(new Dimension(70, 22));
-        monitorFcFilter.addActionListener(e -> applyMonitorFilter());
-        headerRow2.add(monitorFcFilter);
-        headerRow2.add(new JLabel("  " + I18n.t("col.name") + ":"));
-        monitorNameFilter = new javax.swing.JTextField(14);
+        JPanel der = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        der.setOpaque(false);
+        monitorNameFilter = new javax.swing.JTextField(16);
+        monitorNameFilter.putClientProperty("JTextField.placeholderText", I18n.t("mon.filter.placeholder"));
+        monitorNameFilter.putClientProperty("JTextField.showClearButton", true);
+        monitorNameFilter.putClientProperty("JTextField.leadingIcon", new IconoLupa());
         monitorNameFilter.setToolTipText(I18n.t("monitor.namefilter.tip"));
         monitorNameFilter.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
             public void removeUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
             public void changedUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
         });
-        headerRow2.add(monitorNameFilter);
-        JButton btnClearFilter = new JButton("✕");
-        btnClearFilter.setMargin(new Insets(1, 4, 1, 4));
-        btnClearFilter.setToolTipText(I18n.t("monitor.clearfilter.tip"));
-        btnClearFilter.addActionListener(e -> {
-            monitorFcFilter.setSelectedIndex(0);
-            monitorNameFilter.setText("");
+        der.add(monitorNameFilter);
+        der.add(new JLabel("FC"));
+        monitorFcFilter = new JComboBox<>(new String[]{
+            I18n.t("filter.all"), "ST", "MX", "CF", "DC", "SP", "SV", "BL", "CO", "SE", "SG", "EX", "RP", "BR", "OR"
         });
-        headerRow2.add(btnClearFilter);
+        monitorFcFilter.addActionListener(e -> applyMonitorFilter());
+        der.add(monitorFcFilter);
+        JButton btnRemove = new JButton(I18n.t("btn.remove"));
+        btnRemove.setEnabled(false);
+        btnRemove.addActionListener(e -> { removeSelectedFromMonitor(); btnRemove.setEnabled(false); });
+        der.add(btnRemove);
+        JButton btnClear = new JButton(I18n.t("mon.clear"));
+        btnClear.addActionListener(e -> {
+            int n = monitorItems.size();
+            if (n == 0) return;
+            int r = JOptionPane.showConfirmDialog(this, I18n.t("mon.clear.confirm", String.valueOf(n)),
+                    I18n.t("mon.clear.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (r == JOptionPane.OK_OPTION) clearMonitor();
+        });
+        der.add(btnClear);
+        enc.add(der, BorderLayout.EAST);
 
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.add(headerRow1, BorderLayout.NORTH);
-        headerPanel.add(headerRow2, BorderLayout.SOUTH);
+        // Quitar: deshabilitado sin nada marcado ni seleccionado
+        Runnable habilitarQuitar = () -> btnRemove.setEnabled(monitorManager != null && monitorManager.cantidadParaQuitar() > 0);
+        monitorTable.getSelectionModel().addListSelectionListener(e -> habilitarQuitar.run());
+        monitorTableModel.addTableModelListener(e -> SwingUtilities.invokeLater(habilitarQuitar));
 
-        // Combinar todo
-        JPanel contentPanel = new JPanel(new BorderLayout());
-        contentPanel.add(tableScroll, BorderLayout.CENTER);
-        contentPanel.add(dropHintPanel, BorderLayout.SOUTH);
+        // Resaltado que se desvanece: se repinta mientras alguna fila esta en el ambar
+        new javax.swing.Timer(60, e -> {
+            long ahora = System.currentTimeMillis();
+            for (MonitorItem it : monitorItems.values()) {
+                if (it.resaltarDesde > 0 && ahora - it.resaltarDesde < MonitorCeldaRenderer.DESVANECER_MS + 120) {
+                    monitorTable.repaint();
+                    break;
+                }
+            }
+        }).start();
 
-        panel.add(headerPanel, BorderLayout.NORTH);
-        panel.add(contentPanel, BorderLayout.CENTER);
+        JPanel cuerpo = new JPanel(new BorderLayout());
+        cuerpo.setOpaque(false);
+        cuerpo.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 16));
+        cuerpo.add(tableScroll, BorderLayout.CENTER);
+        cuerpo.add(lblDropHint, BorderLayout.SOUTH);
+
+        panel.add(enc, BorderLayout.NORTH);
+        panel.add(cuerpo, BorderLayout.CENTER);
 
         // Guardar referencia al label de conteo para actualizar
         monitorCountLabel = lblCount;
-
         return panel;
     }
 
