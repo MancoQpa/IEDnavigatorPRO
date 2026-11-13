@@ -253,7 +253,8 @@ final class PanelRegistro extends JPanel {
         StyledDocument d = texto.getStyledDocument();
         try {
             d.insertString(d.getLength(), e.hora + "  ", estHora);
-            String n = e.nivel == Nivel.INFO ? "INFO" : e.nivel == Nivel.AVISO ? "AVISO" : "ERROR";
+            // Mismo ancho para los tres niveles: asi los mensajes arrancan todos en la misma columna
+            String n = e.nivel == Nivel.INFO ? "INFO " : e.nivel == Nivel.AVISO ? "AVISO" : "ERROR";
             d.insertString(d.getLength(), " " + n + " ", estNivel[e.nivel.ordinal()]);
             d.insertString(d.getLength(), "  " + e.mensaje, estMensaje);
             if (e.cuenta > 1) d.insertString(d.getLength(), "   ×" + e.cuenta + " ", estCuenta);

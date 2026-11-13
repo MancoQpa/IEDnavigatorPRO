@@ -105,16 +105,29 @@ final class MonitorCeldaRenderer implements TableCellRenderer {
                 break;
             case COL_VALOR:
                 texto.setFont(Estilo.mono(Font.BOLD, 12));
+                alinearBase(t);
                 break;
             case COL_HORA:
                 texto.setFont(Estilo.mono(Font.PLAIN, 12));
                 texto.setForeground(new Color(0x4A525D));
                 texto.setHorizontalAlignment(SwingConstants.RIGHT);
+                alinearBase(t);
                 break;
             default:
                 break;
         }
         return texto;
+    }
+
+    /**
+     * La monoespaciada centrada en la fila queda con la linea base 3-4 px mas arriba que la
+     * Segoe UI de Tipo: se baja con un margen superior igual a la diferencia de metricas.
+     */
+    private void alinearBase(JTable t) {
+        FontMetrics ui = t.getFontMetrics(Estilo.ui(Font.PLAIN, 13));
+        FontMetrics mono = texto.getFontMetrics(texto.getFont());
+        int dif = (ui.getAscent() - ui.getDescent()) - (mono.getAscent() - mono.getDescent());
+        texto.setBorder(BorderFactory.createEmptyBorder(Math.max(0, dif), 10, 0, 10));
     }
 
     String hora(long ms) {
