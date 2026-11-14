@@ -1803,6 +1803,28 @@ public class IEC61850Server implements ServerEventListener {
      * GOOSE que publican esos datos. Uno por uno: setValues() falla con un atributo que no está
      * en ningún DataSet, y eso no debe impedir publicar los demás.
      */
+    /** Publica con setValues() un booleano que ya fue escrito directo en el modelo. */
+    private boolean publicarBooleanoDirecto(ServerSap sap, BasicDataAttribute original) {
+        if (!(original instanceof BdaBoolean)) return false;
+        BdaBoolean b = (BdaBoolean) original;
+        boolean nuevo = b.getValue();
+        try {
+            synchronized (serverModel) {
+                b.setValue(!nuevo);
+                BdaBoolean copia = (BdaBoolean) b.copy();
+                copia.setValue(nuevo);
+                List<BasicDataAttribute> uno = new ArrayList<>();
+                uno.add(copia);
+                sap.setValues(uno);
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (b.getValue() != nuevo) b.setValue(nuevo);   // el modelo nunca queda con el valor viejo
+        }
+    }
+
     private void publicarCambiosDeMando(List<BasicDataAttribute> cambiados) {
         ServerSap sap = serverSap;
         if (sap == null) return;
@@ -1811,6 +1833,14 @@ public class IEC61850Server implements ServerEventListener {
             uno.add(b);
             try {
                 sap.setValues(uno);
+            } catch (NullPointerException sinCopia) {
+                // El motor de mando escribe algunos booleanos (Loc, LocKey, EnaOpn...) directo en el
+                // modelo y devuelve el atributo original; setValues() necesita una copia hecha con
+                // copy() y solo emite el reporte si la copia difiere del modelo. Se repone un
+                // instante el valor anterior y se publica el nuevo con una copia.
+                if (!publicarBooleanoDirecto(sap, b)) {
+                    System.out.println("[SERVER] setValues no pudo publicar " + b.getReference() + ": " + sinCopia);
+                }
             } catch (Exception e) {
                 System.out.println("[SERVER] setValues no pudo publicar " + b.getReference() + ": " + e);
             }
