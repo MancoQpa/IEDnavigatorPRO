@@ -90,7 +90,15 @@ public class IEDNavigatorApp extends JFrame {
     /** Registro del rediseño: niveles, filtros, ×N (PanelRegistro). */
     private PanelRegistro registro;
     private JSplitPane splitDerecha;
-    private int divisorAntesDeColapsar = -1;
+    /** Alto del registro abierto; se recuerda al cerrarlo. Al principio, 190 px. */
+    private int altoRegistro = -1;
+    private int tamDivisor;
+    /** Boton Registro de la fila de pestañas, con el badge de avisos y errores. */
+    private final BotonRegistro btnRegistro = new BotonRegistro();
+    /** Contador y Limpiar de la watchlist, en la barra del Monitor (solo en Cliente). */
+    private JPanel panelWatchlist;
+    private final JLabel lblWatchlistMonitor = new JLabel();
+    private final JLabel vacioPasos = new JLabel();
     /** Paneles que el menu Ver muestra u oculta, y las pestañas que Herramientas selecciona. */
     private JScrollPane treeScroll, logScroll;
     private JTabbedPane rightTabbedPane;
@@ -425,7 +433,9 @@ public class IEDNavigatorApp extends JFrame {
         logArea.setBackground(new Color(0xF7F9FB));
         logArea.setForeground(new Color(0x37474F));
         logArea.setMargin(new Insets(4, 8, 4, 8));
-        registro = new PanelRegistro(this::exportarRegistro, this::alColapsarRegistro);
+        registro = new PanelRegistro(this::exportarRegistro, () -> mostrarRegistro(false));
+        registro.alCambiarPendientes(this::actualizarBotonRegistro);
+        btnRegistro.addActionListener(e -> mostrarRegistro(!tarjetaRegistro.isVisible()));
 
         // Menú contextual del Log: reemplaza al botón "Limpiar Log" que estaba en la barra
         // superior, donde quedaba lejos del contenido sobre el que actúa.
@@ -509,6 +519,16 @@ public class IEDNavigatorApp extends JFrame {
         panelesHerramienta.put("tab.sclcmp", new SclComparePanel(this, this::log).createPanel());
         panelesHerramienta.put("tab.goosemap", new GooseMapPanel(this, this::log).createPanel());
         rightTabbedPane.setTabPlacement(JTabbedPane.TOP);
+        // Boton Registro al extremo derecho de la fila de pestañas
+        // (FlatLaf estira el componente final hasta el borde: va opaco y con el boton a la derecha)
+        JPanel finFila = new JPanel(new GridBagLayout());
+        finFila.setBackground(superficie());
+        finFila.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        GridBagConstraints gf = new GridBagConstraints();
+        gf.weightx = 1;
+        gf.anchor = GridBagConstraints.EAST;
+        finFila.add(btnRegistro, gf);
+        rightTabbedPane.putClientProperty("JTabbedPane.trailingComponent", finFila);
 
         // Check for native library availability
         checkNativeLibrary();
@@ -529,17 +549,19 @@ public class IEDNavigatorApp extends JFrame {
 
         JSplitPane derecha = separador(JSplitPane.VERTICAL_SPLIT, tarjetaPestanias, tarjetaRegistro);
         splitDerecha = derecha;
-        // Al cambiar el tamaño de la ventana, el registro colapsado sigue colapsado
-        derecha.addComponentListener(new ComponentAdapter() {
-            @Override public void componentResized(ComponentEvent e) {
-                if (registro != null && registro.colapsado()) SwingUtilities.invokeLater(() -> ajustarColapso());
-            }
-        });
-        // Minimos chicos: si no, el registro no se puede colapsar ni la pestaña achicar
+        // Minimos chicos: si no, ni el registro ni la pestaña se pueden achicar
         tarjetaPestanias.setMinimumSize(new Dimension(200, 120));
-        tarjetaRegistro.setMinimumSize(new Dimension(200, 40));
-        derecha.setResizeWeight(0.78);
-        derecha.setDividerLocation(560);
+        tarjetaRegistro.setMinimumSize(new Dimension(200, 60));
+        // Al agrandar la ventana crece la pestaña; el registro conserva su alto
+        derecha.setResizeWeight(1.0);
+        derecha.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) { ajustarAltoRegistro(); }
+        });
+        if (derecha.getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI) {
+            ((javax.swing.plaf.basic.BasicSplitPaneUI) derecha.getUI()).getDivider().addMouseListener(new MouseAdapter() {
+                @Override public void mouseReleased(MouseEvent e) { recordarAltoRegistro(); }
+            });
+        }
         JSplitPane mainSplit = separador(JSplitPane.HORIZONTAL_SPLIT, panelArbol, derecha);
         mainSplit.setResizeWeight(0.3);
         mainSplit.setDividerLocation(380);
@@ -557,8 +579,11 @@ public class IEDNavigatorApp extends JFrame {
         // contexto; el reloj y "Listo" no aportaban). Se arma igual porque lblIedInfo y
         // lblStatus se siguen escribiendo y la barra lee el error de lblStatus.
         createStatusBar();
-        // Preferencias de Ver guardadas: registro visible y densidad
-        if (!PREFS_UI.getBoolean(PREF_REGISTRO, true)) mostrarPanel(tarjetaRegistro, false);
+        // Preferencias de Ver guardadas: registro (oculto por defecto) y densidad
+        tamDivisor = splitDerecha.getDividerSize();
+        tarjetaRegistro.setVisible(false);
+        splitDerecha.setDividerSize(0);
+        if (PREFS_UI.getBoolean(PREF_REGISTRO, false)) SwingUtilities.invokeLater(() -> mostrarRegistro(true));
         aplicarDensidad();
 
         setContentPane(mainPanel);
@@ -657,12 +682,9 @@ public class IEDNavigatorApp extends JFrame {
 
         // ── Ver ─────────────────────────────────────────────────────────────
         JMenu menuView = menu("menu.view");
-        miRegistroVisible = new JCheckBoxMenuItem(I18n.t("menu.view.log"), PREFS_UI.getBoolean(PREF_REGISTRO, true));
+        miRegistroVisible = new JCheckBoxMenuItem(I18n.t("menu.view.log"), PREFS_UI.getBoolean(PREF_REGISTRO, false));
         miRegistroVisible.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L, ctrl));
-        miRegistroVisible.addActionListener(e -> {
-            PREFS_UI.putBoolean(PREF_REGISTRO, miRegistroVisible.isSelected());
-            mostrarPanel(tarjetaRegistro, miRegistroVisible.isSelected());
-        });
+        miRegistroVisible.addActionListener(e -> mostrarRegistro(miRegistroVisible.isSelected()));
         JCheckBoxMenuItem miArbol = new JCheckBoxMenuItem(I18n.t("menu.view.tree"), true);
         miArbol.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_1, ctrl));
         miArbol.addActionListener(e -> mostrarPanel(panelArbol, miArbol.isSelected()));
@@ -892,16 +914,20 @@ public class IEDNavigatorApp extends JFrame {
         vacioTitulo.setFont(Estilo.ui(Font.BOLD, 15));
         vacioTexto.setFont(Estilo.ui(Font.PLAIN, 13));
         vacioTexto.setForeground(Estilo.TEXTO_2);
+        vacioPasos.setFont(Estilo.ui(Font.PLAIN, 12));
+        vacioPasos.setForeground(Estilo.TEXTO_2);
         vacioBoton.putClientProperty("FlatLaf.style", "arc:8; borderWidth:0; focusWidth:0; innerFocusWidth:0;"
                 + " background:#1F5FBF; hoverBackground:#174A96; foreground:#FFFFFF; margin:8,18,8,18");
         vacioBoton.setFont(Estilo.ui(Font.BOLD, 13));
         vacioBoton.addActionListener(e -> {
             if (currentMode == AppMode.SERVER) abrirScl(); else iniciarODetener();
         });
-        for (JComponent c : new JComponent[]{vacioTitulo, vacioTexto, vacioBoton}) c.setAlignmentX(0.5f);
+        for (JComponent c : new JComponent[]{vacioTitulo, vacioTexto, vacioPasos, vacioBoton}) c.setAlignmentX(0.5f);
         caja.add(vacioTitulo);
         caja.add(Box.createVerticalStrut(6));
         caja.add(vacioTexto);
+        caja.add(Box.createVerticalStrut(8));
+        caja.add(vacioPasos);
         caja.add(Box.createVerticalStrut(16));
         caja.add(vacioBoton);
         vacio.add(caja);
@@ -912,6 +938,7 @@ public class IEDNavigatorApp extends JFrame {
     /** Refresco de la barra de contexto y del estado vacio (reloj de 400 ms). */
     private void refrescarContexto() {
         if (barraContexto != null) barraContexto.refrescar();
+        if (panelWatchlist != null) panelWatchlist.setVisible(currentMode == AppMode.CLIENT);
         if (panelArbol == null) return;
         boolean hayModelo = rootNode != null && rootNode.getChildCount() > 0;
         if (!hayModelo) {
@@ -919,6 +946,9 @@ public class IEDNavigatorApp extends JFrame {
             vacioTitulo.setText(I18n.t(srv ? "vacio.srv.title" : "vacio.cli.title"));
             vacioTexto.setText("<html><div style='text-align:center;width:250px'>"
                     + I18n.t(srv ? "vacio.srv.text" : "vacio.cli.text") + "</div></html>");
+            // server.usage trae <small> (era para el panel viejo): aca va a 12 px
+            vacioPasos.setText(srv ? I18n.t("server.usage").replace("<small>", "").replace("</small>", "") : "");
+            vacioPasos.setVisible(srv);
             vacioBoton.setText(I18n.t(srv ? "menu.file.open" : "ctx.btn.connect"));
             vacioBoton.setEnabled(srv || (btnConnect != null && btnConnect.isEnabled()));
         }
@@ -1264,25 +1294,50 @@ public class IEDNavigatorApp extends JFrame {
         escribirExportacion(destino, sb.toString());
     }
 
-    /** Divisor para que del registro colapsado quede solo el encabezado. */
-    private void ajustarColapso() {
-        int alto = splitDerecha.getHeight() - registro.altoEncabezado() - splitDerecha.getDividerSize() - 4;
-        splitDerecha.setDividerLocation(Math.max(0, alto));
+    /**
+     * Ver › Registro (Ctrl+L), el boton Registro y la ✕ del panel: el registro acoplado debajo
+     * de las pestañas, de unos 190 px (o el alto que tenia al cerrarlo), redimensionable.
+     * Al abrirlo, los avisos y errores pendientes se dan por vistos.
+     */
+    private void mostrarRegistro(boolean visible) {
+        if (tarjetaRegistro == null || splitDerecha == null) return;
+        tarjetaRegistro.setVisible(visible);
+        // Cerrado, sin divisor (si no, queda su agarre al pie de las pestañas)
+        splitDerecha.setDividerSize(visible ? tamDivisor : 0);
+        PREFS_UI.putBoolean(PREF_REGISTRO, visible);
+        if (miRegistroVisible != null) miRegistroVisible.setSelected(visible);
+        if (visible) {
+            registro.marcarVisto();
+            splitDerecha.validate();
+            ajustarAltoRegistro();
+            SwingUtilities.invokeLater(this::ajustarAltoRegistro);
+        }
+        splitDerecha.revalidate();
+        splitDerecha.repaint();
+        actualizarBotonRegistro();
     }
 
-    /** El registro colapsado deja solo su encabezado; al expandirlo vuelve a su alto anterior. */
-    private void alColapsarRegistro(boolean colapsado) {
-        if (splitDerecha == null) return;
-        // Colapsado, el espacio que sobra al agrandar la ventana va a las pestañas
-        splitDerecha.setResizeWeight(colapsado ? 1.0 : 0.78);
-        if (colapsado) {
-            divisorAntesDeColapsar = splitDerecha.getDividerLocation();
-            ajustarColapso();
-        } else if (divisorAntesDeColapsar > 0) {
-            splitDerecha.setDividerLocation(divisorAntesDeColapsar);
-        } else {
-            splitDerecha.setDividerLocation(0.78);
-        }
+    /**
+     * El registro abierto conserva su alto: al abrirlo y cada vez que cambia el tamaño de la
+     * ventana se vuelve a poner el divisor. Lo maneja la ventana y no el resizeWeight del split,
+     * que al mostrar el panel y redimensionar a la vez lo dejaba en el minimo. El alto solo
+     * cambia cuando el usuario arrastra el divisor (ver recordarAltoRegistro).
+     */
+    private void ajustarAltoRegistro() {
+        if (tarjetaRegistro == null || !tarjetaRegistro.isVisible() || splitDerecha.getHeight() <= 0) return;
+        if (altoRegistro <= 0) altoRegistro = com.formdev.flatlaf.util.UIScale.scale(190);
+        splitDerecha.setDividerLocation(Math.max(0, splitDerecha.getHeight() - altoRegistro - splitDerecha.getDividerSize()));
+    }
+
+    private void recordarAltoRegistro() {
+        if (tarjetaRegistro == null || !tarjetaRegistro.isVisible() || splitDerecha.getHeight() <= 0) return;
+        altoRegistro = splitDerecha.getHeight() - splitDerecha.getDividerLocation() - splitDerecha.getDividerSize();
+    }
+
+    private void actualizarBotonRegistro() {
+        if (registro == null) return;
+        btnRegistro.poner(registro.avisosNuevos(), registro.erroresNuevos(),
+                tarjetaRegistro != null && tarjetaRegistro.isVisible());
     }
 
     /** Archivo > Exportar registro: el panel de registro a un archivo de texto. */
@@ -2196,7 +2251,9 @@ public class IEDNavigatorApp extends JFrame {
     private void clearWatchlist() { monitorManager.clearWatchlist(); } // F24
 
     private void updateWatchlistLabel() {
-        lblWatchlistCount.setText(I18n.t("watchlist.count", watchlist.size()));
+        String t = I18n.t("watchlist.count", String.valueOf(watchlist.size()));
+        if (lblWatchlistCount != null) lblWatchlistCount.setText(t);
+        lblWatchlistMonitor.setText(t);
     }
 
     // ─── SECTION: MONITOR PANEL ──────────────────────────────────────────────────────
@@ -2274,6 +2331,22 @@ public class IEDNavigatorApp extends JFrame {
         lblCount.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
         izq.add(titulo);
         izq.add(lblCount);
+        // Watchlist del cliente (lo que lee el polling): contador y Limpiar
+        panelWatchlist = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        panelWatchlist.setOpaque(false);
+        lblWatchlistMonitor.setFont(Estilo.ui(Font.PLAIN, 12));
+        lblWatchlistMonitor.setForeground(Estilo.TEXTO_2);
+        lblWatchlistMonitor.setText(I18n.t("watchlist.count", String.valueOf(watchlist.size())));
+        JButton limpiarWatchlist = new JButton(I18n.t("btn.clear"));
+        limpiarWatchlist.putClientProperty("JButton.buttonType", "borderless");
+        limpiarWatchlist.setForeground(Estilo.ACENTO);
+        limpiarWatchlist.setFont(Estilo.ui(Font.PLAIN, 12));
+        limpiarWatchlist.setToolTipText(I18n.t("watchlist.clear.tip"));
+        limpiarWatchlist.addActionListener(e -> clearWatchlist());
+        panelWatchlist.add(lblWatchlistMonitor);
+        panelWatchlist.add(limpiarWatchlist);
+        panelWatchlist.setVisible(false);
+        izq.add(panelWatchlist);
         enc.add(izq, BorderLayout.WEST);
 
         JPanel der = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));

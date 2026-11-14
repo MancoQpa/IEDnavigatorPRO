@@ -267,7 +267,7 @@ final class BarraContexto extends JPanel {
                   + " background:#FFFFFF; hoverBackground:#F4F6F8; pressedBackground:#EEF0F3; foreground:#1B1F24"
                 : "arc:7; focusWidth:0; innerFocusWidth:0; borderWidth:0; margin:0,12,0,12;"
                   + " background:#1F5FBF; hoverBackground:#174A96; pressedBackground:#174A96;"
-                  + " foreground:#FFFFFF; disabledText:#E8EDF5");
+                  + " foreground:#FFFFFF; disabledBackground:#E4E7EC; disabledText:#5B6470");
         ((IconoPlay) btnAccion.getIcon()).detener = activo;
         repaint();
     }
@@ -341,7 +341,7 @@ final class BarraContexto extends JPanel {
             FontMetrics fm = g2.getFontMetrics(f);
             int w = fm.stringWidth("F5") + UIScale.scale(8), h = fm.getHeight();
             int x = getWidth() - UIScale.scale(12) - w, y = (getHeight() - h) / 2;
-            Color c = isEnabled() ? getForeground() : UIManager.getColor("Button.disabledText");
+            Color c = isEnabled() ? getForeground() : Estilo.TEXTO_2;
             g2.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 0xD9));
             g2.drawRoundRect(x, y, w - 1, h - 1, UIScale.scale(5), UIScale.scale(5));
             g2.setFont(f);
@@ -405,7 +405,7 @@ final class BarraContexto extends JPanel {
         @Override public void paintIcon(Component c, Graphics g, int x, int y) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(c.isEnabled() ? c.getForeground() : UIManager.getColor("Button.disabledText"));
+            g2.setColor(c.isEnabled() ? c.getForeground() : Estilo.TEXTO_2);
             int s = UIScale.scale(1);
             if (detener) {
                 g2.fillRect(x + 2 * s, y + 2 * s, 10 * s, 10 * s);

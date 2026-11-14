@@ -9,12 +9,15 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.Consumer;
 
 /**
- * Registro de la ventana (rediseño de 2026-11): encabezado colapsable con contadores por nivel
- * que sirven de filtro, Copiar y Exportar; cada linea es hora · nivel · mensaje, con ajuste de
- * linea; los mensajes consecutivos iguales se juntan con un contador "×N".
+ * Registro de la ventana (rediseño de 2026-11): panel acoplable, oculto por defecto, con
+ * encabezado de contadores por nivel que sirven de filtro, Copiar, Exportar y una ✕ para
+ * cerrarlo; cada linea es hora · nivel · mensaje, con ajuste de linea; los mensajes consecutivos
+ * iguales se juntan con un contador "×N" (solo en pantalla).
+ *
+ * Cuenta tambien los avisos y errores llegados desde que se miro por ultima vez (marcarVisto):
+ * es el badge del boton Registro de la fila de pestañas.
  *
  * El nivel no viene con el mensaje: los mensajes del programa son texto libre. Se deduce de
  * palabras como "error", "no se pudo" o "aviso"; es una aproximacion. El registro de sesion en
@@ -38,10 +41,10 @@ final class PanelRegistro extends JPanel {
     private final JTextPane texto = new JTextPane();
     private final JScrollPane scroll = new JScrollPane(texto);
     private final JToggleButton[] filtros = new JToggleButton[3];
-    private final JButton btnColapsar = new JButton();
     private final SimpleDateFormat formato = new SimpleDateFormat("HH:mm:ss");
-    private final Consumer<Boolean> alColapsar;
-    private boolean colapsado;
+    /** Avisos y errores llegados desde la ultima vez que se abrio el registro. */
+    private int avisosNuevos, erroresNuevos;
+    private Runnable alCambiarPendientes = () -> { };
     /** Donde empieza en el documento la ultima entrada mostrada (para actualizar su ×N). */
     private int inicioUltima = -1;
 
@@ -51,12 +54,11 @@ final class PanelRegistro extends JPanel {
     private final SimpleAttributeSet[] estNivel = new SimpleAttributeSet[3];
 
     /**
-     * @param exportar  accion de Exportar (elige archivo y escribe getTexto())
-     * @param alColapsar la ventana acomoda el divisor al colapsar (true) o expandir (false)
+     * @param exportar accion de Exportar (elige archivo y escribe getTexto())
+     * @param cerrar   la ✕ del encabezado: la ventana oculta el panel
      */
-    PanelRegistro(Runnable exportar, Consumer<Boolean> alColapsar) {
+    PanelRegistro(Runnable exportar, Runnable cerrar) {
         super(new BorderLayout());
-        this.alColapsar = alColapsar;
         setOpaque(false);
 
         // ── Encabezado ──────────────────────────────────────────────────────
@@ -64,15 +66,13 @@ final class PanelRegistro extends JPanel {
         enc.setOpaque(false);
         enc.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0xEEF0F3)),
-                BorderFactory.createEmptyBorder(6, 12, 6, 14)));
+                BorderFactory.createEmptyBorder(3, 10, 3, 6)));
         JPanel izq = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         izq.setOpaque(false);
-        btnColapsar.setText(I18n.t("log.title"));
-        btnColapsar.setFont(Estilo.ui(Font.BOLD, 13));
-        btnColapsar.setIcon(new Chevron());
-        btnColapsar.putClientProperty("JButton.buttonType", "borderless");
-        btnColapsar.addActionListener(e -> colapsar(!colapsado));
-        izq.add(btnColapsar);
+        JLabel titulo = new JLabel(I18n.t("log.title"));
+        titulo.setFont(Estilo.ui(Font.BOLD, 12));
+        titulo.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 2));
+        izq.add(titulo);
         String[] claves = {"log.level.info", "log.level.warn", "log.level.error"};
         Color[][] col = {
             {new Color(0xEAF1FB), new Color(0x174A96)},
@@ -115,8 +115,14 @@ final class PanelRegistro extends JPanel {
         copiar.addActionListener(e -> copiar());
         JButton exp = enlace(I18n.t("log.export"));
         exp.addActionListener(e -> exportar.run());
+        JButton cerrarBtn = new JButton(new Cruz());
+        cerrarBtn.putClientProperty("JButton.buttonType", "toolBarButton");
+        cerrarBtn.setToolTipText(I18n.t("log.close"));
+        cerrarBtn.getAccessibleContext().setAccessibleName(I18n.t("log.close"));
+        cerrarBtn.addActionListener(e -> cerrar.run());
         der.add(copiar);
         der.add(exp);
+        der.add(cerrarBtn);
         enc.add(der, BorderLayout.EAST);
         add(enc, BorderLayout.NORTH);
 
@@ -152,6 +158,7 @@ final class PanelRegistro extends JPanel {
         Entrada ult = entradas.isEmpty() ? null : entradas.get(entradas.size() - 1);
         if (ult != null && ult.mensaje.equals(m)) {
             ult.cuenta++;
+            contarNuevo(ult.nivel);
             if (visible(ult) && inicioUltima >= 0) {
                 try {
                     StyledDocument d = texto.getStyledDocument();
@@ -166,6 +173,7 @@ final class PanelRegistro extends JPanel {
         }
         Entrada e = new Entrada(formato.format(new Date()), nivelDe(m), m);
         entradas.add(e);
+        contarNuevo(e.nivel);
         if (entradas.size() > MAX_ENTRADAS) {
             entradas.subList(0, MAX_ENTRADAS / 8).clear();
             reconstruir();
@@ -198,22 +206,28 @@ final class PanelRegistro extends JPanel {
         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(t), null);
     }
 
-    boolean colapsado() { return colapsado; }
 
-    void colapsar(boolean c) {
-        colapsado = c;
-        scroll.setVisible(!c);
-        ((Chevron) btnColapsar.getIcon()).abajo = !c;
-        btnColapsar.repaint();
-        alColapsar.accept(c);
+    /** El registro se abrio: los avisos y errores que habia ya se vieron. */
+    void marcarVisto() {
+        avisosNuevos = 0;
+        erroresNuevos = 0;
+        alCambiarPendientes.run();
     }
 
-    /** Alto del encabezado (lo que queda visible colapsado). */
-    int altoEncabezado() {
-        return ((JComponent) getComponent(0)).getPreferredSize().height + getInsets().top + getInsets().bottom;
-    }
+    int avisosNuevos() { return avisosNuevos; }
+
+    int erroresNuevos() { return erroresNuevos; }
+
+    /** Avisa a la ventana cuando cambian los avisos/errores sin ver (para el badge). */
+    void alCambiarPendientes(Runnable r) { alCambiarPendientes = r == null ? () -> { } : r; }
 
     // ── Interno ─────────────────────────────────────────────────────────────
+
+    private void contarNuevo(Nivel n) {
+        if (n == Nivel.INFO || isShowing()) return;
+        if (n == Nivel.AVISO) avisosNuevos++; else erroresNuevos++;
+        alCambiarPendientes.run();
+    }
 
     static Nivel nivelDe(String m) {
         String s = m.toLowerCase(Locale.ROOT);
@@ -279,22 +293,23 @@ final class PanelRegistro extends JPanel {
         return b;
     }
 
+    /** La ✕ de cerrar, dibujada. */
+    private static final class Cruz implements Icon {
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(Estilo.TEXTO_2);
+            g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(x + 2, y + 2, x + 10, y + 10);
+            g2.drawLine(x + 10, y + 2, x + 2, y + 10);
+            g2.dispose();
+        }
+        @Override public int getIconWidth() { return 12; }
+        @Override public int getIconHeight() { return 12; }
+    }
+
     private static String hex(Color c) {
         return String.format("#%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
     }
 
-    private static final class Chevron implements Icon {
-        boolean abajo = true;
-        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(Estilo.TEXTO);
-            g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            if (abajo) g2.drawPolyline(new int[]{x + 2, x + 7, x + 12}, new int[]{y + 5, y + 10, y + 5}, 3);
-            else g2.drawPolyline(new int[]{x + 5, x + 10, x + 5}, new int[]{y + 2, y + 7, y + 12}, 3);
-            g2.dispose();
-        }
-        @Override public int getIconWidth() { return 14; }
-        @Override public int getIconHeight() { return 14; }
-    }
 }

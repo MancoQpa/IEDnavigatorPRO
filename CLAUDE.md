@@ -120,8 +120,14 @@ Consolas; accent #1F5FBF; dark title bar). The window is:
   tree is untouched; `original(node)` maps back). Double-click on a leaf, "+ Monitor", Enter and the
   context menu add to the monitor; read/edit stay in the context menu.
 - Right: five tabs (Monitor, Reports, GOOSE, Ajustes = Setting Groups above + SP below, Datasets)
-  and, below, `PanelRegistro` (levels guessed from the text, filters, ×N grouping, collapsible).
-  The session log file (`SessionLog`) is unchanged.
+  with a `BotonRegistro` at the right end of the tab row (FlatLaf `JTabbedPane.trailingComponent`;
+  badge = warnings/errors since the log was last opened, amber or red). `PanelRegistro` is hidden by
+  default (Ver › Registro, Ctrl+L, the button, its ✕); open, it is docked below the tabs at ~190 px.
+  The window keeps that height itself (`ajustarAltoRegistro` on resize; `recordarAltoRegistro` when
+  the user releases the divider): the split's resizeWeight alone left it at its minimum. Levels are
+  guessed from the text, filters, ×N grouping on screen only. `SessionLog` is unchanged.
+- Monitor bar: in Client mode it also shows the watchlist count and its Clear (what polling reads).
+- Empty tree: title, text, the `server.usage` steps (Server) and Load SCL / Connect.
 - Monitor: `MonitorCeldaRenderer`; column 1 holds the `MonitorItem` (path, FC, change times);
   quality comes from the DO's `q`; changed rows fade from amber in 1.5 s.
 
