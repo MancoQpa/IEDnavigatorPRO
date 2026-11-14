@@ -69,6 +69,10 @@ final class InterruptorVirtualDialog extends JDialog {
     private final JButton btnCablear = new JButton(I18n.t("vint.goose.cablear"));
     private final DefaultListModel<EnlaceItem> mdlEnlaces = new DefaultListModel<>();
     private final JList<EnlaceItem> lstEnlaces = new JList<>(mdlEnlaces);
+    /** Aparato de esta ventana ("Virtualizar aparato"), o null en la ventana general. */
+    private final String refFija;
+    /** En la ventana de un aparato: prefijos de referencia cuyos eventos van a su registro. */
+    private final java.util.List<String> prefijosPropios = new java.util.ArrayList<>();
     private final Timer refresco;
     private final IEC61850Server.ObservadorMando observador;
     /** true mientras se actualiza la pantalla desde el modelo: los cambios no son del usuario. */
@@ -102,9 +106,22 @@ final class InterruptorVirtualDialog extends JDialog {
     }
 
     InterruptorVirtualDialog(Frame owner, IEC61850Server srv, GoosePanel goose) {
-        super(owner, I18n.t("vint.titulo"), false);
+        this(owner, srv, goose, null);
+    }
+
+    /**
+     * @param refFija referencia del aparato ("LD/XCBR1.Pos") para una ventana propia de ese
+     *        aparato ("Virtualizar aparato" del arbol), o null para la ventana general con el
+     *        selector. La ventana de un aparato es independiente de la principal (sin dueño:
+     *        no queda siempre encima y se puede tener una por aparato, lado a lado) y su
+     *        registro muestra solo los eventos de ese aparato.
+     */
+    InterruptorVirtualDialog(Frame owner, IEC61850Server srv, GoosePanel goose, String refFija) {
+        super(refFija == null ? owner : null, I18n.t("vint.titulo"), false);
         this.srv = srv;
         this.goose = goose;
+        this.refFija = refFija;
+        if (refFija != null && owner != null) setIconImages(owner.getIconImages());
         this.bobinas = new BobinasGoose(srv);
         this.oyenteGoose = bobinas::recibir;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -144,8 +161,9 @@ final class InterruptorVirtualDialog extends JDialog {
         // ── Datos y eventos ─────────────────────────────────────────────────
         cargarAparatos();
         cbAparato.addActionListener(e -> refrescar());
-        observador = (origen, texto, aceptado) -> SwingUtilities.invokeLater(() ->
-                registrar(origen, texto, aceptado));
+        observador = (origen, texto, aceptado) -> SwingUtilities.invokeLater(() -> {
+            if (esPropio(texto)) registrar(origen, texto, aceptado);
+        });
         srv.agregarObservadorMando(observador);
         refresco = new Timer(400, e -> refrescar());
         refresco.start();
@@ -158,7 +176,22 @@ final class InterruptorVirtualDialog extends JDialog {
             }
         });
 
-        registrar(I18n.t("vint.origen.sistema"), I18n.t("vint.evt.abierto", String.valueOf(cbAparato.getItemCount())), true);
+        if (refFija == null) {
+            registrar(I18n.t("vint.origen.sistema"), I18n.t("vint.evt.abierto", String.valueOf(cbAparato.getItemCount())), true);
+        } else {
+            Item it = (Item) cbAparato.getSelectedItem();
+            if (it != null) {
+                setTitle(I18n.t("vint.titulo.aparato", it.o.nombre, it.o.ld));
+                String ln = it.o.ref.contains(".") ? it.o.ref.substring(0, it.o.ref.indexOf('.')) : it.o.ref;
+                prefijosPropios.add(ln);
+                for (String c : it.o.comandadoPor.split("[,;\\s]+")) {
+                    if (!c.isEmpty()) prefijosPropios.add(it.o.ld + "/" + c);
+                }
+            }
+            // Un solo aparato: el selector queda fijo
+            cbAparato.setEnabled(false);
+            registrar(I18n.t("vint.origen.sistema"), I18n.t("vint.evt.virtualizado", refFija), true);
+        }
         refrescar();
         pack();
         setMinimumSize(new Dimension(880, 820));
@@ -511,9 +544,27 @@ final class InterruptorVirtualDialog extends JDialog {
     private void cargarAparatos() {
         cbAparato.removeAllItems();
         for (EstadoLocal.Objeto o : srv.listarAparatos()) {
-            if (o.esAparato) cbAparato.addItem(new Item(o));
+            if (o.esAparato && (refFija == null || refFija.equals(o.ref))) cbAparato.addItem(new Item(o));
         }
     }
+
+    /**
+     * En la ventana de un aparato, true si el evento es suyo: nombra una referencia propia (el
+     * aparato o el CSWI que lo comanda), o no nombra ninguna (avisos generales, modo del IED).
+     */
+    private boolean esPropio(String texto) {
+        if (refFija == null || texto == null) return true;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[A-Za-z0-9_]+/[A-Za-z0-9_]+").matcher(texto);
+        boolean nombraAlguna = false;
+        while (m.find()) {
+            nombraAlguna = true;
+            for (String p : prefijosPropios) if (m.group().equals(p)) return true;
+        }
+        return !nombraAlguna;
+    }
+
+    /** La referencia del aparato de esta ventana, o null en la ventana general. */
+    String aparatoFijo() { return refFija; }
 
     /** Relee el aparato elegido del modelo y actualiza la pantalla (cada 400 ms). */
     private void refrescar() {
@@ -537,6 +588,9 @@ final class InterruptorVirtualDialog extends JDialog {
                 case "INTERMEDIO": lblEstado.setText(I18n.t("vint.est.intermedio")); lblEstado.setForeground(AMBAR); break;
                 default:           lblEstado.setText(I18n.t("vint.est.invalido"));   lblEstado.setForeground(GRIS);
             }
+            lblEstado.setIcon(IconFactory.createLargeBreakerIcon(
+                    "CERRADO".equals(est) ? "on" : "ABIERTO".equals(est) ? "off" : "intermediate"));
+            lblEstado.setIconTextGap(10);
             lblCalidad.setText(I18n.t("vint.calidad", o.calidad == null ? "-" : o.calidad));
             lblCtl.setText(I18n.t("vint.ctlmodel", String.valueOf(o.ctlModel), textoCtl(o.ctlModel)));
             lblComandado.setText(o.comandadoPor.isEmpty() ? " " : I18n.t("vint.comandado", o.comandadoPor));

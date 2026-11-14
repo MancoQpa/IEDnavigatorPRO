@@ -2846,6 +2846,14 @@ public class IEDNavigatorApp extends JFrame {
         miMonitorear.setFont(miMonitorear.getFont().deriveFont(Font.BOLD));
         miMonitorear.addActionListener(e -> monitorearSeleccion());
         serverPopupMenu.add(miMonitorear);
+        // Aparato de maniobra (XCBR, XSWI, o el CSWI que lo comanda): su ventana propia
+        com.iednavigator.mando.EstadoLocal.Objeto aparato = aparatoDe(info.node);
+        if (aparato != null) {
+            JMenuItem miVirtualizar = new JMenuItem(I18n.t("ctx.virtualizar", aparato.nombre));
+            miVirtualizar.setToolTipText(I18n.t("ctx.virtualizar.tip"));
+            miVirtualizar.addActionListener(e -> virtualizarAparato(aparato.ref));
+            serverPopupMenu.add(miVirtualizar);
+        }
         serverPopupMenu.addSeparator();
         // Modo (Mod) del IED, del LD o del LN, con el Beh derivado como en un relé
         if (info.node instanceof LogicalDevice || info.node instanceof LogicalNode) {
@@ -3093,6 +3101,53 @@ public class IEDNavigatorApp extends JFrame {
 
     /** Panel "Interruptor virtual" (uno solo abierto a la vez). Requiere un modelo en modo servidor. */
     private InterruptorVirtualDialog interruptorVirtual;
+    /** Ventanas de "Virtualizar aparato": una por aparato (clave: referencia de su Pos). */
+    private final Map<String, InterruptorVirtualDialog> ventanasAparato = new HashMap<>();
+
+    /**
+     * El aparato de maniobra al que pertenece un nodo del arbol: su LN (XCBR, XSWI), el CSWI
+     * que lo comanda, o cualquier cosa que cuelgue de ellos. null si el nodo no es de ninguno.
+     */
+    private com.iednavigator.mando.EstadoLocal.Objeto aparatoDe(ModelNode nodo) {
+        if (nodo == null || server == null || server.getServerModel() == null) return null;
+        if (!(nodo instanceof LogicalNode) && !(nodo instanceof FcModelNode)) return null;
+        String ref = nodo.getReference().toString();
+        String ln = ref.contains(".") ? ref.substring(0, ref.indexOf('.')) : ref;
+        for (com.iednavigator.mando.EstadoLocal.Objeto o : server.listarAparatos()) {
+            if (!o.esAparato) continue;
+            String lnAparato = o.ref.contains(".") ? o.ref.substring(0, o.ref.indexOf('.')) : o.ref;
+            if (ln.equals(lnAparato)) return o;
+            for (String c : o.comandadoPor.split("[,;\\s]+")) {
+                if (!c.isEmpty() && ln.equals(o.ld + "/" + c)) return o;
+            }
+        }
+        return null;
+    }
+
+    /** Clic derecho › Virtualizar aparato: una ventana propia e independiente para ese aparato. */
+    private void virtualizarAparato(String ref) {
+        if (currentMode != AppMode.SERVER || server == null || server.getServerModel() == null) {
+            JOptionPane.showMessageDialog(this, I18n.t("vint.requiere"), I18n.t("vint.titulo"),
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        InterruptorVirtualDialog v = ventanasAparato.get(ref);
+        if (v != null && v.isDisplayable()) {
+            v.setVisible(true);
+            v.toFront();
+            return;
+        }
+        v = new InterruptorVirtualDialog(this, server, goosePanel, ref);
+        ventanasAparato.put(ref, v);
+        v.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosed(WindowEvent e) { ventanasAparato.remove(ref); }
+        });
+        // En cascada, para que varias ventanas no queden exactamente encimadas
+        Point p = v.getLocation();
+        int k = ventanasAparato.size() - 1;
+        v.setLocation(p.x + 28 * k, p.y + 28 * k);
+        v.setVisible(true);
+    }
 
     private void abrirInterruptorVirtual() {
         if (currentMode != AppMode.SERVER || server == null || server.getServerModel() == null) {
