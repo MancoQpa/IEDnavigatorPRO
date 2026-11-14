@@ -100,10 +100,16 @@ Consolas; accent #1F5FBF; dark title bar). The window is:
   server/client mode, port), Ver, Herramientas (Compare SCL, GOOSE map and Data Model open in
   their own non-modal `JDialog`, created once and hidden on close; HTML report; Preferences with
   language and theme, applied on restart), Ayuda.
-- `BarraContexto`: IED, "model · vendor · cfg", SCL file button, Server | Client, status pill with a
-  gear that shows the real connection fields (port, host, timeout, polling: the same objects the
-  old Server/Client panels created, now not laid out), main button (F5). It reads the window state
-  from a 400 ms Swing Timer (`refrescarContexto`). The library does not report connected clients.
+- `BarraContexto`: one 48 px row. Left (grows): IED, "model · vendor · cfg", a fixed 220 px slot
+  (Server: SCL file button; Client: editable `host:port` that writes `tfHost`/`tfClientPort`) and a
+  hidden Test mode toggle (wired when main is merged). Right (fixed widths, computed from the
+  longest text of the four bundles so switching mode or language moves nothing): Server | Client,
+  status pill (server running shows `IP:port`), main button (F5; accent fill to start/connect,
+  outline to stop/disconnect). Port, timeout and polling are in the Simulación/Conexión menu; the
+  old Server/Client panel fields still exist, unlaid out, because the rest of the code reads them.
+  It reads the window state from a 400 ms Swing Timer (`refrescarContexto`). The library does not
+  report connected clients. No bottom status bar (it is built but not shown: `lblStatus` carries
+  the error the pill shows).
 - Left card: the model tree. `ModelTreeBuilder` merges a DO's FC variants into one node
   (`NodeInfo.variantes`; control looks for the CO one), `ArbolCeldaRenderer` draws the rows
   (neutral LD/LN/DO/DA badges, FC only on attributes, SCL or dictionary description loaded in the

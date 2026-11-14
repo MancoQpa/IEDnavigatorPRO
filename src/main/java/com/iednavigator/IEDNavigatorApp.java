@@ -553,9 +553,10 @@ public class IEDNavigatorApp extends JFrame {
         // La barra y el estado vacio leen el estado de la ventana: un reloj liviano los refresca.
         new javax.swing.Timer(400, e -> refrescarContexto()).start();
 
-        // Barra de estado inferior
-        JPanel statusBar = createStatusBar();
-        mainPanel.add(statusBar, BorderLayout.SOUTH);
+        // Barra de estado inferior: ya no se muestra (la placa del IED esta en la barra de
+        // contexto; el reloj y "Listo" no aportaban). Se arma igual porque lblIedInfo y
+        // lblStatus se siguen escribiendo y la barra lee el error de lblStatus.
+        createStatusBar();
         // Preferencias de Ver guardadas: registro visible y densidad
         if (!PREFS_UI.getBoolean(PREF_REGISTRO, true)) mostrarPanel(tarjetaRegistro, false);
         aplicarDensidad();
@@ -1138,10 +1139,12 @@ public class IEDNavigatorApp extends JFrame {
                 return (t != null && t.startsWith(pre)) ? t.substring(pre.length()).replaceFirst("^[:\\s]+", "") : null;
             }
             public String puertoServidor() { return tfServerPort == null ? "" : tfServerPort.getText().trim(); }
-            public String destinoCliente() {
-                if (tfHost == null) return "";
-                return tfHost.getText().trim() + ":" + tfClientPort.getText().trim();
+            public String destinoServidor() {
+                // ConnectionManager informa "IP (servidor)" como host: en la pildora va solo IP:puerto
+                return hostEnPantalla == null ? "" : hostEnPantalla.replaceAll("\\s*\\([^)]*\\)", "");
             }
+            public String host() { return tfHost == null ? "" : tfHost.getText().trim(); }
+            public String puertoCliente() { return tfClientPort == null ? "" : tfClientPort.getText().trim(); }
             public String ied() { return iedEnPantalla; }
             public String subtitulo() { return subEnPantalla; }
             public String archivoScl() { return loadedSclFile == null ? null : loadedSclFile.getName(); }
@@ -1161,51 +1164,12 @@ public class IEDNavigatorApp extends JFrame {
                 refrescarContexto();
             }
             public void accionPrincipal() { iniciarODetener(); }
-            public JComponent panelConexion() { return IEDNavigatorApp.this.panelConexion(); }
+            public void cambiarDestino(String host, String puerto) {
+                // Los mismos campos que lee la conexion (tfHost, tfClientPort), ya sin panel propio
+                if (!host.equals(tfHost.getText())) tfHost.setText(host);
+                if (puerto != null && !puerto.equals(tfClientPort.getText())) tfClientPort.setText(puerto);
+            }
         };
-    }
-
-    /**
-     * Lo que antes estaba en los paneles Servidor y Cliente, ahora detras del engranaje de la
-     * pildora. Son los mismos campos (no copias): el resto del programa los sigue leyendo.
-     */
-    private JComponent panelConexion() {
-        JPanel p = new JPanel(new GridBagLayout());
-        GridBagConstraints g = new GridBagConstraints();
-        g.insets = new Insets(3, 4, 3, 4);
-        g.anchor = GridBagConstraints.WEST;
-        g.gridy = 0;
-        if (currentMode == AppMode.SERVER) {
-            g.gridx = 0; p.add(new JLabel(I18n.t("lbl.port")), g);
-            g.gridx = 1; p.add(tfServerPort, g);
-            g.gridx = 0; g.gridy++; g.gridwidth = 2;
-            JLabel hint = new JLabel(I18n.t("lbl.porthint"));
-            hint.setForeground(Estilo.TEXTO_2);
-            hint.setFont(Estilo.ui(Font.PLAIN, 11));
-            p.add(hint, g);
-            g.gridy++;
-            JPanel b = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-            b.setOpaque(false);
-            b.add(btnCheckPort);
-            b.add(btnReleasePort);
-            p.add(b, g);
-        } else {
-            g.gridx = 0; p.add(new JLabel(I18n.t("lbl.host")), g);
-            g.gridx = 1; p.add(tfHost, g);
-            g.gridx = 0; g.gridy++; p.add(new JLabel(I18n.t("lbl.port")), g);
-            g.gridx = 1; p.add(tfClientPort, g);
-            g.gridx = 0; g.gridy++; p.add(new JLabel(I18n.t("lbl.timeout")), g);
-            g.gridx = 1; p.add(spinnerTimeout, g);
-            g.gridx = 0; g.gridy++; p.add(cbPolling, g);
-            g.gridx = 1;
-            JPanel iv = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-            iv.setOpaque(false);
-            iv.add(new JLabel(I18n.t("lbl.interval")));
-            iv.add(spinnerInterval);
-            p.add(iv, g);
-            g.gridx = 0; g.gridy++; g.gridwidth = 2; p.add(cbLeerTodo, g);
-        }
-        return p;
     }
 
     /** Archivo > Abrir: en modo servidor carga el SCL a simular; en cliente, el de los GoCB. */
