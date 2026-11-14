@@ -136,8 +136,12 @@ Consolas; accent #1F5FBF; dark title bar). The window is:
   guessed from the text, filters, ×N grouping on screen only. `SessionLog` is unchanged.
 - Monitor bar: in Client mode it also shows the watchlist count and its Clear (what polling reads).
 - Empty tree: title, text, the `server.usage` steps (Server) and Load SCL / Connect.
-- Monitor: `MonitorCeldaRenderer`; column 1 holds the `MonitorItem` (path, FC, change times);
-  quality comes from the DO's `q`; changed rows fade from amber in 1.5 s.
+- Monitor: a ~40 px bar with no title (count pill, Client watchlist | filter, FC, Remove enabled
+  only with a selection, Clear… with confirmation); header 26 px, rows 24/28 px by density, faint
+  horizontal separator, no vertical lines. `MonitorCeldaRenderer`; column 1 holds the `MonitorItem`
+  (path, FC, change times); quality comes from the DO's `q`; changed rows fade from amber in 1.5 s
+  (`timerResalte` runs only while a row is fading; `MonitorManager` starts it via `alResaltar`).
+  The whole table is the drop zone; the drop hint is painted inside the empty table only.
 
 ## Key IEC 61850 Concepts in Code
 

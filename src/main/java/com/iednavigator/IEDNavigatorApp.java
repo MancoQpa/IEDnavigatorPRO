@@ -820,14 +820,14 @@ public class IEDNavigatorApp extends JFrame {
 
     /**
      * Ver › Densidad compacta: alto de las filas del arbol y del monitor, en un solo lugar.
-     * Arbol: 20 / 24 px. Monitor: las medidas del documento (24/28) llegan con el monitor nuevo.
+     * Arbol: 20 / 24 px. Monitor: 24 / 28 px.
      */
     private void aplicarDensidad() {
         boolean compacta = PREFS_UI.getBoolean(PREF_COMPACTA, true);
         int fila = compacta ? 20 : 24;
         UIManager.put("Tree.rowHeight", fila);
         if (modelTree != null) modelTree.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(fila));
-        if (monitorTable != null) monitorTable.setRowHeight(compacta ? 34 : 38);
+        if (monitorTable != null) monitorTable.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(compacta ? 24 : 28));
     }
 
     private static JMenuItem item(String texto, KeyStroke atajo, java.awt.event.ActionListener accion) {
@@ -2338,12 +2338,19 @@ public class IEDNavigatorApp extends JFrame {
                 return c == MonitorCeldaRenderer.COL_SEL ? Boolean.class : Object.class;
             }
         };
-        monitorTable = new JTable(monitorTableModel);
+        // Sin señales, la tabla misma muestra la pista para soltar (sigue siendo la zona de drop)
+        monitorTable = new JTable(monitorTableModel) {
+            @Override protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (getModel().getRowCount() == 0) pintarPistaMonitor((Graphics2D) g, this);
+            }
+        };
         monitorTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        monitorTable.setRowHeight(34);
+        monitorTable.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(PREFS_UI.getBoolean(PREF_COMPACTA, true) ? 24 : 28));
         monitorTable.setShowGrid(false);
         monitorTable.setShowHorizontalLines(true);
-        monitorTable.setGridColor(new Color(0xEEF0F3));
+        monitorTable.setShowVerticalLines(false);
+        monitorTable.setGridColor(new Color(0xF0F2F5));
         monitorTable.setIntercellSpacing(new Dimension(0, 1));
         MonitorCeldaRenderer celdas = new MonitorCeldaRenderer();
         for (int c = 0; c < columns.length; c++) monitorTable.getColumnModel().getColumn(c).setCellRenderer(celdas);
@@ -2356,8 +2363,10 @@ public class IEDNavigatorApp extends JFrame {
         cm.getColumn(4).setPreferredWidth(110);
         cm.getColumn(5).setPreferredWidth(120);
         javax.swing.table.JTableHeader th = monitorTable.getTableHeader();
-        th.setFont(Estilo.ui(Font.BOLD, 12));
+        th.setFont(Estilo.ui(Font.BOLD, 11));
         th.setForeground(Estilo.TEXTO_2);
+        th.putClientProperty("FlatLaf.style", "height:26; background:#F7F8FA; bottomSeparatorColor:#DDE1E7;"
+                + " separatorColor:#F7F8FA; showTrailingVerticalLine:false");
         ((javax.swing.table.DefaultTableCellRenderer) th.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.LEFT);
 
         // Sorter para filtrado
@@ -2370,31 +2379,27 @@ public class IEDNavigatorApp extends JFrame {
         tableScroll.setBorder(BorderFactory.createEmptyBorder());
         tableScroll.getViewport().setBackground(superficie());
 
-        JLabel lblDropHint = new JLabel(I18n.t("monitor.drophint2"));
-        lblDropHint.setForeground(Estilo.TEXTO_2);
-        lblDropHint.setFont(Estilo.ui(Font.PLAIN, 13));
-        lblDropHint.setHorizontalAlignment(SwingConstants.CENTER);
-        lblDropHint.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createEmptyBorder(10, 16, 14, 16),
-                BorderFactory.createCompoundBorder(
-                        BorderFactory.createDashedBorder(Estilo.BORDE_CAMPO, 1.5f, 5, 3, true),
-                        BorderFactory.createEmptyBorder(12, 12, 12, 12))));
-
-        // Encabezado: "Monitor" + contador | filtro · FC · Quitar · Limpiar…
+        // Barra superior (~40 px, sin titulo: ya lo dice la pestaña):
+        // contador · watchlist (Cliente) | filtro · FC · Quitar · Limpiar…
         JPanel enc = new JPanel(new BorderLayout(10, 0));
         enc.setOpaque(false);
-        enc.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
-        JPanel izq = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        enc.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+        JPanel izq = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         izq.setOpaque(false);
-        JLabel titulo = new JLabel(I18n.t("tab.monitor"));
-        titulo.setFont(Estilo.ui(Font.BOLD, 15));
-        JLabel lblCount = new JLabel(I18n.t("monitor.signals", 0));
-        lblCount.setFont(Estilo.ui(Font.BOLD, 12));
+        // Contador en pildora
+        JLabel lblCount = new JLabel(I18n.t("monitor.signals", 0)) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(0xEEF0F3));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        lblCount.setFont(Estilo.ui(Font.BOLD, 11));
         lblCount.setForeground(new Color(0x3F4752));
-        lblCount.setOpaque(true);
-        lblCount.setBackground(new Color(0xEEF0F3));
-        lblCount.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
-        izq.add(titulo);
+        lblCount.setBorder(BorderFactory.createEmptyBorder(3, 9, 3, 9));
         izq.add(lblCount);
         // Watchlist del cliente (lo que lee el polling): contador y Limpiar
         panelWatchlist = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -2416,7 +2421,10 @@ public class IEDNavigatorApp extends JFrame {
 
         JPanel der = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         der.setOpaque(false);
+        int altoControl = com.formdev.flatlaf.util.UIScale.scale(28);
         monitorNameFilter = new javax.swing.JTextField(16);
+        monitorNameFilter.setPreferredSize(new Dimension(com.formdev.flatlaf.util.UIScale.scale(200), altoControl));
+        monitorNameFilter.setFont(Estilo.ui(Font.PLAIN, 12));
         monitorNameFilter.putClientProperty("JTextField.placeholderText", I18n.t("mon.filter.placeholder"));
         monitorNameFilter.putClientProperty("JTextField.showClearButton", true);
         monitorNameFilter.putClientProperty("JTextField.leadingIcon", new IconoLupa());
@@ -2427,17 +2435,26 @@ public class IEDNavigatorApp extends JFrame {
             public void changedUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
         });
         der.add(monitorNameFilter);
-        der.add(new JLabel("FC"));
+        JLabel etiquetaFc = new JLabel("FC");
+        etiquetaFc.setForeground(Estilo.TEXTO_2);
+        etiquetaFc.setFont(Estilo.ui(Font.PLAIN, 12));
+        der.add(etiquetaFc);
         monitorFcFilter = new JComboBox<>(new String[]{
             I18n.t("filter.all"), "ST", "MX", "CF", "DC", "SP", "SV", "BL", "CO", "SE", "SG", "EX", "RP", "BR", "OR"
         });
         monitorFcFilter.addActionListener(e -> applyMonitorFilter());
+        monitorFcFilter.setFont(Estilo.ui(Font.PLAIN, 12));
+        monitorFcFilter.setPreferredSize(new Dimension(monitorFcFilter.getPreferredSize().width, altoControl));
         der.add(monitorFcFilter);
         JButton btnRemove = new JButton(I18n.t("btn.remove"));
+        btnRemove.setFont(Estilo.ui(Font.PLAIN, 12));
+        btnRemove.setPreferredSize(new Dimension(btnRemove.getPreferredSize().width, altoControl));
         btnRemove.setEnabled(false);
         btnRemove.addActionListener(e -> { removeSelectedFromMonitor(); btnRemove.setEnabled(false); });
         der.add(btnRemove);
         JButton btnClear = new JButton(I18n.t("mon.clear"));
+        btnClear.setFont(Estilo.ui(Font.PLAIN, 12));
+        btnClear.setPreferredSize(new Dimension(btnClear.getPreferredSize().width, altoControl));
         btnClear.addActionListener(e -> {
             int n = monitorItems.size();
             if (n == 0) return;
@@ -2453,22 +2470,25 @@ public class IEDNavigatorApp extends JFrame {
         monitorTable.getSelectionModel().addListSelectionListener(e -> habilitarQuitar.run());
         monitorTableModel.addTableModelListener(e -> SwingUtilities.invokeLater(habilitarQuitar));
 
-        // Resaltado que se desvanece: se repinta mientras alguna fila esta en el ambar
-        new javax.swing.Timer(60, e -> {
+        // Resaltado que se desvanece: el Timer repinta mientras alguna fila esta en el ambar y se
+        // detiene solo; lo arranca MonitorManager al marcar un cambio (alResaltar)
+        timerResalte = new javax.swing.Timer(60, e -> {
             long ahora = System.currentTimeMillis();
+            boolean vivo = false;
             for (MonitorItem it : monitorItems.values()) {
                 if (it.resaltarDesde > 0 && ahora - it.resaltarDesde < MonitorCeldaRenderer.DESVANECER_MS + 120) {
-                    monitorTable.repaint();
+                    vivo = true;
                     break;
                 }
             }
-        }).start();
+            monitorTable.repaint();
+            if (!vivo) ((javax.swing.Timer) e.getSource()).stop();
+        });
 
         JPanel cuerpo = new JPanel(new BorderLayout());
         cuerpo.setOpaque(false);
-        cuerpo.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 16));
+        cuerpo.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
         cuerpo.add(tableScroll, BorderLayout.CENTER);
-        cuerpo.add(lblDropHint, BorderLayout.SOUTH);
 
         panel.add(enc, BorderLayout.NORTH);
         panel.add(cuerpo, BorderLayout.CENTER);
@@ -2479,6 +2499,29 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private JLabel monitorCountLabel;
+    /** Repinta el ambar que se desvanece; corre solo mientras hay filas resaltadas. */
+    private javax.swing.Timer timerResalte;
+
+    /** Monitor sin señales: la pista para soltar, en un recuadro punteado dentro de la tabla. */
+    private static void pintarPistaMonitor(Graphics2D g0, JTable t) {
+        Rectangle v = t.getVisibleRect();
+        Graphics2D g = (Graphics2D) g0.create();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        int m = com.formdev.flatlaf.util.UIScale.scale(16);
+        int h = Math.min(com.formdev.flatlaf.util.UIScale.scale(120), v.height - 2 * m);
+        if (h < 30) { g.dispose(); return; }
+        int y = v.y + (v.height - h) / 2;
+        g.setColor(Estilo.BORDE_CAMPO);
+        g.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1f, new float[]{5f, 3f}, 0f));
+        g.drawRoundRect(v.x + m, y, v.width - 2 * m - 1, h, 10, 10);
+        String texto = I18n.t("monitor.drophint2");
+        g.setFont(Estilo.ui(Font.PLAIN, 13));
+        FontMetrics fm = g.getFontMetrics();
+        g.setColor(Estilo.TEXTO_2);
+        g.drawString(texto, v.x + (v.width - fm.stringWidth(texto)) / 2, y + (h - fm.getHeight()) / 2 + fm.getAscent());
+        g.dispose();
+    }
     private TableRowSorter<DefaultTableModel> monitorSorter;
     private JComboBox<String> monitorFcFilter;
     private javax.swing.JTextField monitorNameFilter;
@@ -2556,6 +2599,9 @@ public class IEDNavigatorApp extends JFrame {
 
     private MonitorManager.Context createMonitorContext() {
         return new MonitorManager.Context() {
+            @Override public void alResaltar() {
+                if (timerResalte != null && !timerResalte.isRunning()) timerResalte.start();
+            }
             public void log(String msg)                                           { IEDNavigatorApp.this.log(msg); }
             public java.util.Map<String, MonitorItem> getMonitorItems()           { return monitorItems; }
             public java.util.Set<String> getWatchlist()                           { return watchlist; }

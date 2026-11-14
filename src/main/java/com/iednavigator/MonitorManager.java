@@ -27,6 +27,8 @@ class MonitorManager {
         String formatEnumValue(ModelNode node, String rawValue);
         void updateWatchlistLabel();
         ServerModel getServerModel();
+        /** Una fila quedo resaltada: la ventana arranca el Timer que la desvanece. */
+        default void alResaltar() { }
     }
 
     private final Context ctx;
@@ -325,6 +327,7 @@ class MonitorManager {
         item.lastChangeTime = ahora;
         item.ultimoCambio = ahora;
         item.resaltarDesde = ahora;
+        ctx.alResaltar();
         DefaultTableModel m = ctx.getMonitorTableModel();
         m.setValueAt(item.value, row, MonitorCeldaRenderer.COL_VALOR);
         m.setValueAt(hora(ahora), row, MonitorCeldaRenderer.COL_HORA);

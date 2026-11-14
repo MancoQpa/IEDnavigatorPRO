@@ -23,14 +23,14 @@ final class MonitorCeldaRenderer implements TableCellRenderer {
     private final DefaultTableCellRenderer texto = new DefaultTableCellRenderer();
     private final JCheckBox casilla = new JCheckBox();
     private final JPanel celdaCalidad = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-    private final Insignia pildora = new Insignia(Estilo.ui(Font.BOLD, 12)).alto(20);
+    private final Insignia pildora = new Insignia(Estilo.ui(Font.BOLD, 10)).alto(16);
     private final SimpleDateFormat hora = new SimpleDateFormat("HH:mm:ss.SSS");
 
     MonitorCeldaRenderer() {
         casilla.setHorizontalAlignment(SwingConstants.CENTER);
         casilla.setOpaque(true);
         celdaCalidad.setOpaque(true);
-        celdaCalidad.setBorder(BorderFactory.createEmptyBorder(7, 10, 0, 0));
+        celdaCalidad.setBorder(BorderFactory.createEmptyBorder(4, 8, 0, 0));
         celdaCalidad.add(pildora);
     }
 
@@ -76,18 +76,21 @@ final class MonitorCeldaRenderer implements TableCellRenderer {
                 pildora.poner(q, new Color(0xFDF3E3), Estilo.AVISO, null);
             }
             celdaCalidad.setBackground(fondo);
+            // Pildora centrada en la fila, sea cual sea la densidad
+            int arriba = Math.max(0, (t.getRowHeight() - 16) / 2);
+            celdaCalidad.setBorder(BorderFactory.createEmptyBorder(arriba, 8, 0, 0));
             return celdaCalidad;
         }
         texto.getTableCellRendererComponent(t, v, sel, false, fila, col);
         texto.setBackground(fondo);
         texto.setForeground(Estilo.TEXTO);
         texto.setHorizontalAlignment(SwingConstants.LEFT);
-        texto.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
+        texto.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
         texto.setToolTipText(null);
         switch (c) {
             case COL_SENAL: {
                 MonitorItem it = v instanceof MonitorItem ? (MonitorItem) v : null;
-                texto.setFont(Estilo.mono(Font.PLAIN, 12));
+                texto.setFont(Estilo.mono(Font.PLAIN, 11));
                 if (it == null) { texto.setText(""); break; }
                 String ruta = senal(it.reference);
                 int k = ruta.lastIndexOf('.');
@@ -100,15 +103,15 @@ final class MonitorCeldaRenderer implements TableCellRenderer {
                 break;
             }
             case COL_TIPO:
-                texto.setFont(Estilo.ui(Font.PLAIN, 13));
+                texto.setFont(Estilo.ui(Font.PLAIN, 12));
                 texto.setForeground(new Color(0x4A525D));
                 break;
             case COL_VALOR:
-                texto.setFont(Estilo.mono(Font.BOLD, 12));
+                texto.setFont(Estilo.mono(Font.BOLD, 11));
                 alinearBase(t);
                 break;
             case COL_HORA:
-                texto.setFont(Estilo.mono(Font.PLAIN, 12));
+                texto.setFont(Estilo.mono(Font.PLAIN, 11));
                 texto.setForeground(new Color(0x4A525D));
                 texto.setHorizontalAlignment(SwingConstants.RIGHT);
                 alinearBase(t);
@@ -124,10 +127,10 @@ final class MonitorCeldaRenderer implements TableCellRenderer {
      * Segoe UI de Tipo: se baja con un margen superior igual a la diferencia de metricas.
      */
     private void alinearBase(JTable t) {
-        FontMetrics ui = t.getFontMetrics(Estilo.ui(Font.PLAIN, 13));
+        FontMetrics ui = t.getFontMetrics(Estilo.ui(Font.PLAIN, 12));
         FontMetrics mono = texto.getFontMetrics(texto.getFont());
         int dif = (ui.getAscent() - ui.getDescent()) - (mono.getAscent() - mono.getDescent());
-        texto.setBorder(BorderFactory.createEmptyBorder(Math.max(0, dif), 10, 0, 10));
+        texto.setBorder(BorderFactory.createEmptyBorder(Math.max(0, dif), 8, 0, 8));
     }
 
     String hora(long ms) {
