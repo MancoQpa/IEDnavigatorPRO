@@ -92,10 +92,21 @@ class GoosePanel {
     /** Casilla de publicación simulada (S-bit + campo simulation del PDU). */
     private JCheckBox cbSimulado;
 
-    /** Filtro de retransmisión: solo muestra cambios de stNum (omite heartbeats/sqNum). */
+    /**
+     * Filtro de retransmisiones, como el boton Retrans. de IEDScout: se capturan siempre
+     * todos los mensajes y el filtro solo cambia lo que se ve. Con el filtro, de cada GoCB
+     * queda el primer mensaje recibido y cada cambio de estado (stNum nuevo); sin el, todo,
+     * con las retransmisiones marcadas. Antes las retransmisiones se descartaban al llegar y
+     * al destildar no habia nada que mostrar.
+     */
     private volatile boolean filterRetransmissions = false;
-    /** Último stNum visto por gocbRef/appId para filtrar retransmisiones. */
+    /** Último stNum visto por origen + appId + gocbRef: decide si un mensaje es retransmisión. */
     private final Map<String, Integer> lastStNumBySource = new ConcurrentHashMap<>();
+    /** Columna oculta del modelo de captura: true si el mensaje es una retransmisión. */
+    private static final int COL_RETRANS = 8;
+    /** Mensajes guardados; pasado el tope se descarta primero la retransmisión más vieja. */
+    private static final int MAX_MENSAJES = 5000;
+    private TableRowSorter<DefaultTableModel> gooseDataSorter;
 
     GoosePanel(Context ctx) {
         this.ctx = ctx;
@@ -263,15 +274,7 @@ class GoosePanel {
         cbFilterRetrans.setOpaque(false);
         cbFilterRetrans.addActionListener(e -> {
             filterRetransmissions = cbFilterRetrans.isSelected();
-            lastStNumBySource.clear();
-            // Vaciar tambien la tabla. Si no, las filas anteriores al tildado --todas
-            // retransmisiones-- quedan en pantalla con la casilla marcada, y eso se
-            // lee como que el filtro no funciona. Paso el 2026-09-11: el filtro estaba
-            // filtrando bien y la conclusion fue la contraria, mirando el arrastre.
-            if (filterRetransmissions) {
-                gooseDataTableModel.setRowCount(0);
-                logGoose(I18n.t("log.goose.filtercleared"));
-            }
+            aplicarFiltroRetrans();
         });
         row2.add(cbFilterRetrans);
 
@@ -327,12 +330,17 @@ class GoosePanel {
         // descartaban: sin la MAC no se distingue lo propio de lo ajeno, y sin el bit
         // de simulacion una trama inyectada por un equipo de ensayo se ve igual que
         // la del IED al que suplanta.
-        String[] captureColumns = {"Tiempo", "Origen", "AppID", "st#", "sq#", "Sim", "gocbRef", "Datos"};
+        String[] captureColumns = {"Tiempo", "Origen", "AppID", "st#", "sq#", "Sim", "gocbRef", "Datos", "retrans"};
         gooseDataTableModel = new DefaultTableModel(captureColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
         };
         gooseDataTable = new JTable(gooseDataTableModel);
+        // La marca de retransmisión no se ve como columna: la usa el filtro y la columna gocbRef
+        gooseDataTable.removeColumn(gooseDataTable.getColumnModel().getColumn(COL_RETRANS));
+        gooseDataSorter = new TableRowSorter<>(gooseDataTableModel);
+        for (int c = 0; c < captureColumns.length; c++) gooseDataSorter.setSortable(c, false);
+        gooseDataTable.setRowSorter(gooseDataSorter);
         gooseDataTable.setRowHeight(20);
         gooseDataTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         gooseDataTable.getColumnModel().getColumn(0).setPreferredWidth(80);   // Tiempo
@@ -349,6 +357,14 @@ class GoosePanel {
             public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                // gocbRef de una retransmisión: "(retransmitida)", como el "(Retransmitted)" de IEDScout
+                if (table.convertColumnIndexToModel(column) == 6) {
+                    int m = table.convertRowIndexToModel(row);
+                    if (Boolean.TRUE.equals(gooseDataTableModel.getValueAt(m, COL_RETRANS))) {
+                        setText("<html>" + escaparHtml(String.valueOf(value)) + " <span style='color:#5B6470'>"
+                                + I18n.t("goose.retrans.mark") + "</span></html>");
+                    }
+                }
                 if (!isSelected) {
                     try {
                         Object stNumObj = table.getValueAt(row, 3);   // st#, corrido por Origen
@@ -587,13 +603,17 @@ class GoosePanel {
         btnClear.addActionListener(e -> {
             gooseLogArea.setText("");
             gooseDataTableModel.setRowCount(0);
+            lastStNumBySource.clear();
             if (goosePublisher != null) {
                 goosePublisher.resetCounters();
             }
             logGoose(I18n.t("log.goose.logcleared"));
         });
         JLabel lblCount = new JLabel("Msgs: 0");
-        javax.swing.Timer countTimer = new javax.swing.Timer(500, e -> lblCount.setText(I18n.t("goose.msgs.count", gooseDataTableModel.getRowCount())));
+        javax.swing.Timer countTimer = new javax.swing.Timer(500, e -> lblCount.setText(filterRetransmissions
+                ? I18n.t("goose.msgs.count.filtered", String.valueOf(gooseDataTable.getRowCount()),
+                        String.valueOf(gooseDataTableModel.getRowCount()))
+                : I18n.t("goose.msgs.count", String.valueOf(gooseDataTableModel.getRowCount()))));
         countTimer.start();
         logBtnPanel.add(btnClear);
         logBtnPanel.add(lblCount);
@@ -1490,18 +1510,40 @@ class GoosePanel {
     }
 
     /**
-     * Filtro de retransmisión: devuelve true si el mensaje debe mostrarse.
-     * Muestra la primera aparición de cada stNum y omite las siguientes con el mismo stNum.
+     * true si el mensaje es una retransmisión: el mismo GoCB (origen + appId + gocbRef) ya se
+     * vio con este stNum. El primer mensaje de cada GoCB y cada stNum nuevo no lo son. Se
+     * decide siempre, haya o no filtro: el filtro solo cambia lo que se ve.
      */
-    private boolean shouldShowGoose(String key, int stNum) {
-        if (!filterRetransmissions) return true;
-        Integer prev = lastStNumBySource.get(key);
-        if (prev != null && prev.intValue() == stNum) {
-            return false; // retransmisión (mismo stNum) → omitir
+    private boolean esRetransmision(String key, int stNum) {
+        Integer prev = lastStNumBySource.put(key, stNum);
+        return prev != null && prev.intValue() == stNum;
+    }
+
+    /** Con el filtro, la tabla muestra solo lo que no es retransmisión. */
+    private void aplicarFiltroRetrans() {
+        if (gooseDataSorter == null) return;
+        gooseDataSorter.setRowFilter(!filterRetransmissions ? null : new RowFilter<DefaultTableModel, Integer>() {
+            @Override public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> e) {
+                return !Boolean.TRUE.equals(e.getValue(COL_RETRANS));
+            }
+        });
+    }
+
+    /** Nueva fila arriba. Pasado el tope, sale la retransmisión más vieja (o, si no hay, el más viejo). */
+    private void agregarMensaje(Object[] fila) {
+        int n = gooseDataTableModel.getRowCount();
+        if (n >= MAX_MENSAJES) {
+            int quitar = n - 1;
+            for (int r = n - 1; r >= 0; r--) {
+                if (Boolean.TRUE.equals(gooseDataTableModel.getValueAt(r, COL_RETRANS))) { quitar = r; break; }
+            }
+            gooseDataTableModel.removeRow(quitar);
         }
-        // stNum nuevo o primera vez → mostrar y registrar
-        lastStNumBySource.put(key, stNum);
-        return true;
+        gooseDataTableModel.insertRow(0, fila);
+    }
+
+    private static String escaparHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /**
@@ -1526,8 +1568,8 @@ class GoosePanel {
     }
 
     private void handleGooseMessage(GooseSubscriber.GooseMessage msg) {
-        String key = msg.appId + "|" + (msg.gocbRef != null ? msg.gocbRef : "");
-        if (!shouldShowGoose(key, msg.stNum)) return;
+        String key = msg.srcMac + "|" + msg.appId + "|" + (msg.gocbRef != null ? msg.gocbRef : "");
+        boolean retrans = esRetransmision(key, msg.stNum);
 
         SwingUtilities.invokeLater(() -> {
             StringBuilder dataStr = new StringBuilder();
@@ -1536,11 +1578,7 @@ class GoosePanel {
                 dataStr.append(textoDato(entry.type, entry.value));
             }
 
-            if (gooseDataTableModel.getRowCount() > 1000) {
-                gooseDataTableModel.removeRow(gooseDataTableModel.getRowCount() - 1);
-            }
-
-            gooseDataTableModel.insertRow(0, new Object[]{
+            agregarMensaje(new Object[]{
                 msg.timestamp,
                 msg.srcMac != null ? msg.srcMac : "",
                 String.format("%04X", msg.appId),
@@ -1548,7 +1586,8 @@ class GoosePanel {
                 msg.sqNum,
                 msg.test ? "sim" : "",
                 msg.gocbRef != null ? msg.gocbRef : (msg.goId != null ? msg.goId : ""),
-                dataStr.toString()
+                dataStr.toString(),
+                retrans
             });
 
             gooseMessages.put(msg.appId, msg);
@@ -1556,8 +1595,8 @@ class GoosePanel {
     }
 
     private void handleNativeGooseMessage(NativeGooseSubscriber.NativeGooseMessage msg) {
-        String key = msg.appId + "|" + (msg.goCbRef != null ? msg.goCbRef : "");
-        if (!shouldShowGoose(key, msg.stNum)) return;
+        String key = msg.srcMac + "|" + msg.appId + "|" + (msg.goCbRef != null ? msg.goCbRef : "");
+        boolean retrans = esRetransmision(key, msg.stNum);
 
         SwingUtilities.invokeLater(() -> {
             StringBuilder dataStr = new StringBuilder();
@@ -1566,11 +1605,7 @@ class GoosePanel {
                 dataStr.append(dv.value);
             }
 
-            if (gooseDataTableModel.getRowCount() > 1000) {
-                gooseDataTableModel.removeRow(gooseDataTableModel.getRowCount() - 1);
-            }
-
-            gooseDataTableModel.insertRow(0, new Object[]{
+            agregarMensaje(new Object[]{
                 msg.timestamp,
                 msg.srcMac != null ? msg.srcMac : "",
                 String.format("%04X", msg.appId),
@@ -1578,7 +1613,8 @@ class GoosePanel {
                 msg.sqNum,
                 msg.test ? "sim" : "",
                 msg.goCbRef != null ? msg.goCbRef : (msg.goId != null ? msg.goId : ""),
-                dataStr.toString()
+                dataStr.toString(),
+                retrans
             });
         });
     }
