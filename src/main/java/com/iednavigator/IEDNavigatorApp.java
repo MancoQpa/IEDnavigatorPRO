@@ -482,7 +482,7 @@ public class IEDNavigatorApp extends JFrame {
         // Rediseño: sin raiz visible (los LD arriba) y filas nuevas (ArbolCeldaRenderer)
         modelTree.setRootVisible(false);
         modelTree.setShowsRootHandles(true);
-        rendererArbol = new ArbolCeldaRenderer(watchlist, () -> loadedSclFile);
+        rendererArbol = new ArbolCeldaRenderer(watchlist, () -> loadedSclFile, iconCache);
         modelTree.setCellRenderer(rendererArbol);
         modelTree.setDragEnabled(true);
         ModelTreeBuilder.agruparDo = PREFS_UI.getBoolean(PREF_AGRUPAR, true);
@@ -1765,27 +1765,52 @@ public class IEDNavigatorApp extends JFrame {
         main.setLayout(new BoxLayout(main, BoxLayout.Y_AXIS));
         main.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
 
-        // Arbol del modelo (rediseño 2026-11): marcas de tipo y colores de ArbolCeldaRenderer
+        // Lo que el arbol muestra, con los mismos iconos y colores (SimbolosArbol)
         main.add(legendTitle(I18n.t("legend.nodetypes.title")));
-        main.add(legendMarca("LD", new Color(0x24467E), I18n.t("legend.nodetypes.ld")));
-        main.add(legendMarca("LN", new Color(0x1E5A44), I18n.t("legend.nodetypes.ln")));
-        main.add(legendMarca("DO", new Color(0x4A525D), I18n.t("legend.nodetypes.do")));
-        main.add(legendMarca("DA", new Color(0x626A76), I18n.t("legend.nodetypes.da")));
+        main.add(legendRow(iconCache.get("ld"), I18n.t("legend.nodetypes.ld")));
+        main.add(legendRow(iconCache.get("ln_default"), I18n.t("legend.nodetypes.ln")));
+        main.add(legendRow(iconCache.get("do"), I18n.t("legend.nodetypes.do")));
+        main.add(legendRow(iconCache.get("da"), I18n.t("legend.nodetypes.da")));
+        main.add(Box.createVerticalStrut(8));
+
+        main.add(legendTitle(I18n.t("legend.lngroups.title")));
+        String[][] grupos = {
+            {"XCBR1", "legend.lngroups.x"}, {"CSWI1", "legend.lngroups.xc"}, {"CPOW1", "legend.lngroups.c"},
+            {"MMXU1", "legend.lngroups.m1"}, {"MMTR1", "legend.lngroups.m2"}, {"PTOC1", "legend.lngroups.p"},
+            {"RREC1", "legend.lngroups.r"}, {"ATCC1", "legend.lngroups.a"}, {"LLN0", "legend.lngroups.l"},
+            {"GGIO1", "legend.lngroups.g"}, {"SIMG1", "legend.lngroups.s"}, {"TCTR1", "legend.lngroups.t"},
+            {"IHMI1", "legend.lngroups.i"}, {"ZBAT1", "legend.lngroups.z"}, {"", "legend.lngroups.unclassified"}};
+        for (String[] g : grupos) {
+            main.add(legendRow(ModelTreeCellRenderer.lnIcon(g[0], iconCache), I18n.t(g[1])));
+        }
+        main.add(Box.createVerticalStrut(8));
+
+        main.add(legendTitle(I18n.t("legend.breaker.title")));
+        main.add(legendRow(iconCache.get("breaker_on"), "<b>ON</b> — " + I18n.t("legend.breaker.on")));
+        main.add(legendRow(iconCache.get("breaker_off"), "<b>OFF</b> — " + I18n.t("legend.breaker.off")));
+        main.add(legendRow(iconCache.get("breaker_intermediate"), "<b>INTERMEDIATE_STATE</b> — " + I18n.t("legend.breaker.intermediate")));
+        main.add(legendRow(iconCache.get("breaker_intermediate"), "<b>BAD_STATE</b> — " + I18n.t("legend.breaker.bad")));
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.colors.title")));
-        main.add(legendMuestra(muestraTexto("ST", Estilo.mono(Font.PLAIN, 10), new Color(0x3F4752), new Color(0xEEF0F3)),
-                I18n.t("legend.tree.fc")));
-        main.add(legendMuestra(muestraTexto("= on", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
+        main.add(legendMuestra(muestraTexto("= ON", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ACTIVO, null),
+                I18n.t("legend.colors.green")));
+        main.add(legendMuestra(muestraTexto("= OFF", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_INACTIVO, null),
+                I18n.t("legend.colors.red")));
+        main.add(legendMuestra(muestraTexto("= INTERMEDIATE_STATE", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ADVERTENCIA, null),
+                I18n.t("legend.colors.orange")));
+        main.add(legendMuestra(muestraTexto("blkEna", Estilo.mono(Font.PLAIN, 11), SimbolosArbol.BLOQUEO, null),
+                I18n.t("legend.colors.purple")));
+        main.add(legendMuestra(muestraTexto("stVal", Estilo.mono(Font.PLAIN, 11), SimbolosArbol.MONITOREADO, null),
+                I18n.t("legend.colors.blue")));
+        main.add(legendMuestra(muestraTexto("= 300000", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
                 I18n.t("legend.tree.value")));
-        main.add(legendMuestra(muestraTexto("invalid", Estilo.mono(Font.PLAIN, 11), Estilo.AVISO, null),
+        main.add(legendMuestra(muestraTexto("invalid", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ADVERTENCIA, null),
                 I18n.t("legend.tree.quality")));
         main.add(legendMuestra(muestraTexto("= 10:27:31.204", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
                 I18n.t("legend.tree.time")));
         main.add(legendMuestra(muestraTexto("Abc", Estilo.ui(Font.PLAIN, 11), Estilo.TEXTO_2, null),
                 I18n.t("legend.tree.desc")));
-        main.add(legendMuestra(muestraTexto("stVal", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
-                I18n.t("legend.tree.monitored")));
         main.add(legendMuestra(muestraTexto("  stVal  ", Estilo.mono(Font.PLAIN, 11), Estilo.TEXTO, Estilo.RESALTE),
                 I18n.t("legend.tree.flash")));
         main.add(legendMuestra(muestraTexto("  Pos  ", Estilo.ui(Font.PLAIN, 12), Estilo.TEXTO, new Color(0xF4F6F8)),
@@ -1795,26 +1820,6 @@ public class IEDNavigatorApp extends JFrame {
                 BorderFactory.createMatteBorder(0, 2, 0, 0, Estilo.ACENTO), BorderFactory.createEmptyBorder(0, 3, 0, 3)));
         main.add(legendMuestra(sel, I18n.t("legend.tree.selected")));
         main.add(Box.createVerticalStrut(8));
-
-        // Posicion de un aparato: como la muestra el arbol, "= ON" en el color de acento
-        main.add(legendTitle(I18n.t("legend.breaker.title")));
-        main.add(legendMuestra(muestraFilaDa("stVal", "= ON"), I18n.t("legend.breaker.on")));
-        main.add(legendMuestra(muestraFilaDa("stVal", "= OFF"), I18n.t("legend.breaker.off")));
-        main.add(legendMuestra(muestraFilaDa("stVal", "= INTERMEDIATE_STATE"), I18n.t("legend.breaker.intermediate")));
-        main.add(legendMuestra(muestraFilaDa("stVal", "= BAD_STATE"), I18n.t("legend.breaker.bad")));
-        main.add(Box.createVerticalStrut(8));
-
-        main.add(legendTitle(I18n.t("legend.lngroups.title")));
-        String[][] grupos = {
-            {"XCBR1", "legend.lngroups.x"}, {"CSWI1", "legend.lngroups.xc"}, {"CPOW1", "legend.lngroups.c"},
-            {"MMXU1", "legend.lngroups.m1"}, {"MMTR1", "legend.lngroups.m2"}, {"PTOC1", "legend.lngroups.p"},
-            {"RREC1", "legend.lngroups.r"}, {"ATCC1", "legend.lngroups.a"}, {"LLN0", "legend.lngroups.l"},
-            {"GGIO1", "legend.lngroups.g"}, {"SIMG1", "legend.lngroups.s"}, {"TCTR1", "legend.lngroups.t"},
-            {"IHMI1", "legend.lngroups.i"}, {"ZBAT1", "legend.lngroups.z"}, {"…", "legend.lngroups.unclassified"}};
-        for (String[] g : grupos) main.add(legendMuestra(muestraFilaLn(g[0]), I18n.t(g[1])));
-        main.add(Box.createVerticalStrut(8));
-
-
 
         main.add(legendTitle(I18n.t("legend.fc.title")));
         JLabel notaFc = new JLabel("<html><i>" + I18n.t("legend.fc.note") + "</i></html>");
@@ -2015,47 +2020,11 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     /** Fila de Functional Constraint con badge de color para el diálogo de leyenda. */
-    /** Fila de FC con la etiqueta gris del arbol (el color de cada FC ya no se usa). */
+    /** Fila de FC con la etiqueta del arbol: el color de ese FC (SimbolosArbol), texto blanco. */
     private static JPanel legendFcRow(String fc, Color sinUso, String html) {
         Insignia tag = new Insignia(Estilo.mono(Font.PLAIN, 10)).alto(14)
-                .poner(fc, new Color(0xEEF0F3), new Color(0x3F4752), null);
+                .poner(fc, SimbolosArbol.colorFc(fc), Color.WHITE, null);
         return legendMuestra(tag, html);
-    }
-
-    /** Muestra de fila de LN como en el arbol: marca LN verde y el nombre. */
-    private static JComponent muestraFilaLn(String nombre) {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        p.setOpaque(false);
-        JLabel m = new JLabel("LN");
-        m.setFont(Estilo.mono(Font.BOLD, 9));
-        m.setForeground(new Color(0x1E5A44));
-        m.setPreferredSize(new Dimension(18, 16));
-        JLabel n = new JLabel(nombre);
-        n.setFont(Estilo.ui(Font.PLAIN, 12));
-        n.setForeground(Estilo.TEXTO);
-        p.add(m);
-        p.add(n);
-        return p;
-    }
-
-    /** Muestra de fila de atributo como en el arbol: marca DA, nombre, FC y valor en acento. */
-    private static JComponent muestraFilaDa(String nombre, String valor) {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        p.setOpaque(false);
-        JLabel m = new JLabel("DA");
-        m.setFont(Estilo.mono(Font.BOLD, 9));
-        m.setForeground(new Color(0x626A76));
-        m.setPreferredSize(new Dimension(18, 16));
-        JLabel n = new JLabel(nombre + " ");
-        n.setFont(Estilo.mono(Font.PLAIN, 11));
-        JLabel v = new JLabel(" " + valor);
-        v.setFont(Estilo.mono(Font.PLAIN, 11));
-        v.setForeground(Estilo.ACENTO);
-        p.add(m);
-        p.add(n);
-        p.add(new Insignia(Estilo.mono(Font.PLAIN, 10)).alto(14).poner("ST", new Color(0xEEF0F3), new Color(0x3F4752), null));
-        p.add(v);
-        return p;
     }
 
     /** Encabezado de subcategoría CDC (texto en cursiva). */

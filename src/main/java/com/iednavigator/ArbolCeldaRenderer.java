@@ -21,10 +21,14 @@ import java.util.function.Supplier;
  *   LN  PDOP1  Sobrepotencia direccional
  *   DA  stVal  ST  = on
  *
- * - Marca: LD / LN / DO / DA en monoespaciada de 9 px, color propio, sin recuadro.
+ * - Simbolo: el icono del tipo de nodo y del grupo de la clase de LN; el de interruptor para
+ *   una posicion (Pos y su stVal), segun su estado. Iconos y colores salen de SimbolosArbol,
+ *   lo mismo que muestra la leyenda.
  * - Nombre: LD/LN/DO en sans de 12 px; DA en monoespaciada de 11 px.
- * - FC y valor solo en los DA. La calidad (q) solo si no es good, en color de aviso; los
- *   timestamps (t), solo la hora con milisegundos.
+ * - FC (en su color) y valor solo en los DA. El valor va en el color de su estado (verde
+ *   activo, rojo inactivo, naranja advertencia) o, si no expresa un estado, en el acento. La
+ *   calidad (q) solo si no es good, en naranja; los timestamps (t), solo la hora con ms.
+ * - Nombre violeta en los nodos de bloqueo (FC=BL) y azul en lo que esta en el monitor.
  * - Descripcion en gris al final, la primera en recortarse con "…": siempre en LD y LN; en
  *   los DO solo con el mouse encima o la fila seleccionada; nunca si repite el nombre o la
  *   clase del LN. Se apaga con Ver › Mostrar descripciones.
@@ -34,12 +38,10 @@ import java.util.function.Supplier;
  */
 final class ArbolCeldaRenderer implements TreeCellRenderer {
 
-    private static final Color MARCA_LD = new Color(0x24467E), MARCA_LN = new Color(0x1E5A44),
-            MARCA_DO = new Color(0x4A525D), MARCA_DA = new Color(0x626A76);   // 4,8:1 o mas sobre hover, seleccion y ambar
-    private static final Color FC_FONDO = new Color(0xEEF0F3), FC_TINTA = new Color(0x3F4752);
 
     private final Set<String> watchlist;
     private final Supplier<File> scl;
+    private final Map<String, Icon> iconos;
     private final JPanel celda = new JPanel() {
         /** Nunca mas ancha que lo visible del arbol: asi la descripcion se recorta con "…". */
         @Override public Dimension getPreferredSize() {
@@ -68,14 +70,14 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
             Collections.singletonMap(TextAttribute.WEIGHT, TextAttribute.WEIGHT_MEDIUM));
     private final Font fuenteNombreDa = Estilo.mono(Font.PLAIN, 11);
 
-    ArbolCeldaRenderer(Set<String> watchlist, Supplier<File> scl) {
+    ArbolCeldaRenderer(Set<String> watchlist, Supplier<File> scl, Map<String, Icon> iconos) {
         this.watchlist = watchlist;
         this.scl = scl;
+        this.iconos = iconos;
         celda.setLayout(new BoxLayout(celda, BoxLayout.X_AXIS));
         celda.setOpaque(false);
-        tipo.setFont(Estilo.mono(Font.BOLD, 9));
         tipo.setHorizontalAlignment(SwingConstants.LEFT);
-        Dimension dt = new Dimension(UIScale.scale(18), UIScale.scale(14));
+        Dimension dt = new Dimension(UIScale.scale(21), UIScale.scale(16));
         tipo.setPreferredSize(dt);
         tipo.setMinimumSize(dt);
         tipo.setMaximumSize(dt);
@@ -127,18 +129,14 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
         tipo.setVisible(true);
         String pre = info.prefix == null ? "" : info.prefix;
         boolean esDa = "DA".equals(pre) || "SDO".equals(pre);
-        if ("LD".equals(pre))      marca("LD", MARCA_LD);
-        else if ("LN".equals(pre)) marca("LN", MARCA_LN);
-        else if ("DO".equals(pre)) marca("DO", MARCA_DO);
-        else if (esDa)             marca("DA", MARCA_DA);
-        else                       marca(pre.length() > 3 ? pre.substring(0, 3) : pre, MARCA_DO);
+        tipo.setIcon(SimbolosArbol.icono(info, iconos));
 
         nombre.setText(info.name != null ? info.name : info.toString());
         nombre.setFont(esDa ? fuenteNombreDa : fuenteNombre);
 
         if (esDa) {
             if (info.fc != null && !info.fc.isEmpty()) {
-                fc.poner(info.fc, FC_FONDO, FC_TINTA, null);
+                fc.poner(info.fc, SimbolosArbol.colorFc(info.fc), Color.WHITE, null);
                 fc.setVisible(true);
                 sepFc.setVisible(true);
             }
@@ -153,27 +151,24 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
             }
         }
 
-        // En el monitor: el nombre en el color de acento
+        // En el monitor: azul. Bloqueo (FC=BL): violeta
         if (info.node instanceof FcModelNode) {
             String ref = info.node.getReference() + "$" + ((FcModelNode) info.node).getFc();
-            if (watchlist.contains(ref)) nombre.setForeground(Estilo.ACENTO);
+            if (watchlist.contains(ref)) nombre.setForeground(SimbolosArbol.MONITOREADO);
         }
+        if ("BL".equals(info.fc)) nombre.setForeground(SimbolosArbol.BLOQUEO);
         return celda;
-    }
-
-    private void marca(String t, Color c) {
-        tipo.setText(t);
-        tipo.setForeground(c);
     }
 
     /** "= valor" en acento; q solo si no es good (en aviso); t solo la hora. */
     private void ponerValor(NodeInfo info) {
         ModelNode n = info.node;
         String texto = null;
-        Color color = Estilo.ACENTO;
+        Color estado = SimbolosArbol.colorEstado(SimbolosArbol.estadoDe(info));
+        Color color = estado != null ? estado : Estilo.ACENTO;
         if (n instanceof BdaQuality) {
             texto = calidadNoBuena((BdaQuality) n);
-            color = Estilo.AVISO;
+            color = SimbolosArbol.VALOR_ADVERTENCIA;
         } else if (n instanceof BdaTimestamp) {
             try {
                 java.time.Instant i = ((BdaTimestamp) n).getInstant();
@@ -187,6 +182,8 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
         if (texto == null || texto.isEmpty()) return;
         valor.setText(n instanceof BdaQuality ? texto : "= " + texto);
         valor.setForeground(color);
+        // Un valor que expresa un estado va en negrita, como en la leyenda
+        valor.setFont(Estilo.mono(estado != null || n instanceof BdaQuality ? Font.BOLD : Font.PLAIN, 11));
         valor.setVisible(true);
         sepValor.setVisible(true);
     }
