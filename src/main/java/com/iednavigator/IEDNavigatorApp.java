@@ -1709,7 +1709,7 @@ public class IEDNavigatorApp extends JFrame {
     private void showAboutDialog() {
         String message =
             "<html><body style='width: 380px; padding: 10px;'>" +
-            "<h2 style='color: #2E86AB; margin-bottom: 5px;'>IED Navigator</h2>" +
+            "<h2 style='color: #2E86AB; margin-bottom: 5px;'>IEDNavigatorPRO</h2>" +
             "<p style='color: #666; font-size: 11px;'>" + I18n.t("about.version", Version.etiqueta()) + "</p>" +
             "<hr style='margin: 10px 0;'>" +
             "<p><b>IEC 61850 Explorer Tool</b></p>" +
@@ -1729,6 +1729,9 @@ public class IEDNavigatorApp extends JFrame {
             "<p style='font-size: 11px;'>" + I18n.t("about.role") + "</p>" +
             "<p style='font-size: 11px;'>\uD83C\uDDF5\uD83C\uDDFE Paraguay</p>" +
             "<br>" +
+            "<p><b>" + I18n.t("about.collab") + "</b></p>" +
+            "<p style='color: #2E86AB; font-size: 13px;'><b>" + I18n.t("about.collab.name") + "</b></p>" +
+            "<br>" +
             "<p style='color: #B71C1C; font-size: 10px;'>" +
             "<b>" + I18n.t("about.edu.title") + "</b> " + I18n.t("about.edu.body") + "</p>" +
             "<p style='color: #888; font-size: 10px;'>" +
@@ -1738,7 +1741,7 @@ public class IEDNavigatorApp extends JFrame {
             "&copy; 2024-" + java.time.Year.now().getValue() + " - " + I18n.t("about.rights") + "</p>" +
             "</body></html>";
 
-        JOptionPane.showMessageDialog(this, message, I18n.t("about.title"),
+        JOptionPane.showMessageDialog(this, message, I18n.t("about.title", Version.etiqueta()),
             JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -1785,52 +1788,40 @@ public class IEDNavigatorApp extends JFrame {
                 I18n.t("legend.tree.monitored")));
         main.add(legendMuestra(muestraTexto("  stVal  ", Estilo.mono(Font.PLAIN, 11), Estilo.TEXTO, Estilo.RESALTE),
                 I18n.t("legend.tree.flash")));
+        main.add(legendMuestra(muestraTexto("  Pos  ", Estilo.ui(Font.PLAIN, 12), Estilo.TEXTO, new Color(0xF4F6F8)),
+                I18n.t("legend.tree.hover")));
+        JLabel sel = muestraTexto("  stVal  ", Estilo.mono(Font.PLAIN, 11), Estilo.TEXTO, Estilo.ACENTO_SUAVE);
+        sel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 2, 0, 0, Estilo.ACENTO), BorderFactory.createEmptyBorder(0, 3, 0, 3)));
+        main.add(legendMuestra(sel, I18n.t("legend.tree.selected")));
+        main.add(Box.createVerticalStrut(8));
+
+        // Posicion de un aparato: como la muestra el arbol, "= ON" en el color de acento
+        main.add(legendTitle(I18n.t("legend.breaker.title")));
+        main.add(legendMuestra(muestraFilaDa("stVal", "= ON"), I18n.t("legend.breaker.on")));
+        main.add(legendMuestra(muestraFilaDa("stVal", "= OFF"), I18n.t("legend.breaker.off")));
+        main.add(legendMuestra(muestraFilaDa("stVal", "= INTERMEDIATE_STATE"), I18n.t("legend.breaker.intermediate")));
+        main.add(legendMuestra(muestraFilaDa("stVal", "= BAD_STATE"), I18n.t("legend.breaker.bad")));
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.lngroups.title")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(36, 70, 126)),
-                I18n.t("legend.lngroups.x")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(200,100, 50)),
-                I18n.t("legend.lngroups.xc")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(150,100,200)),
-                I18n.t("legend.lngroups.c")));
-        main.add(legendRow(IconFactory.createMeterIcon(new Color(0,100,200)),
-                I18n.t("legend.lngroups.m1")));
-        main.add(legendRow(IconFactory.createMeterIcon(new Color(0,150,100)),
-                I18n.t("legend.lngroups.m2")));
-        main.add(legendRow(IconFactory.createShieldIcon(new Color(59, 74, 107), false),
-                I18n.t("legend.lngroups.p")));
-        main.add(legendRow(IconFactory.createShieldIcon(new Color(130,30,170), false),
-                I18n.t("legend.lngroups.r")));
-        main.add(legendRow(IconFactory.createGearIcon(new Color(0,150,170)),
-                I18n.t("legend.lngroups.a")));
-        main.add(legendRow(IconFactory.createDiamondIcon(new Color(70,70,70)),
-                I18n.t("legend.lngroups.l")));
-        main.add(legendRow(IconFactory.createDiamondIcon(new Color(90,90,90)),
-                I18n.t("legend.lngroups.g")));
-        main.add(legendRow(IconFactory.createMeterIcon(new Color(20,140,120)),
-                I18n.t("legend.lngroups.s")));
-        main.add(legendRow(IconFactory.createMeterIcon(new Color(140,80,0)),
-                I18n.t("legend.lngroups.t")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(50,90,200)),
-                I18n.t("legend.lngroups.i")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(80,80,150)),
-                I18n.t("legend.lngroups.z")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(100,150,100)),
-                I18n.t("legend.lngroups.unclassified")));
+        String[][] grupos = {
+            {"XCBR1", "legend.lngroups.x"}, {"CSWI1", "legend.lngroups.xc"}, {"CPOW1", "legend.lngroups.c"},
+            {"MMXU1", "legend.lngroups.m1"}, {"MMTR1", "legend.lngroups.m2"}, {"PTOC1", "legend.lngroups.p"},
+            {"RREC1", "legend.lngroups.r"}, {"ATCC1", "legend.lngroups.a"}, {"LLN0", "legend.lngroups.l"},
+            {"GGIO1", "legend.lngroups.g"}, {"SIMG1", "legend.lngroups.s"}, {"TCTR1", "legend.lngroups.t"},
+            {"IHMI1", "legend.lngroups.i"}, {"ZBAT1", "legend.lngroups.z"}, {"…", "legend.lngroups.unclassified"}};
+        for (String[] g : grupos) main.add(legendMuestra(muestraFilaLn(g[0]), I18n.t(g[1])));
         main.add(Box.createVerticalStrut(8));
 
-        main.add(legendTitle(I18n.t("legend.breaker.title")));
-        main.add(legendRow(IconFactory.createBreakerIcon("on"),
-                I18n.t("legend.breaker.on")));
-        main.add(legendRow(IconFactory.createBreakerIcon("off"),
-                I18n.t("legend.breaker.off")));
-        main.add(legendRow(IconFactory.createBreakerIcon("intermediate"),
-                I18n.t("legend.breaker.intermediate")));
-        main.add(Box.createVerticalStrut(8));
 
 
         main.add(legendTitle(I18n.t("legend.fc.title")));
+        JLabel notaFc = new JLabel("<html><i>" + I18n.t("legend.fc.note") + "</i></html>");
+        notaFc.setForeground(Estilo.TEXTO_2);
+        notaFc.setBorder(BorderFactory.createEmptyBorder(0, 8, 4, 8));
+        notaFc.setAlignmentX(Component.LEFT_ALIGNMENT);
+        main.add(notaFc);
         main.add(legendFcRow("ST", new Color(21,101,192),
                 I18n.t("legend.fc.st")));
         main.add(legendFcRow("MX", new Color(0,105,92),
@@ -1913,7 +1904,7 @@ public class IEDNavigatorApp extends JFrame {
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setBorder(null);
 
-        JDialog dlg = new JDialog(this, "Leyenda de íconos y colores — IED Navigator", false);
+        JDialog dlg = new JDialog(this, I18n.t("legend.title"), false);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dlg.add(scroll);
         dlg.pack();
@@ -1989,10 +1980,10 @@ public class IEDNavigatorApp extends JFrame {
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel caja = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         caja.setOpaque(false);
-        caja.setPreferredSize(new Dimension(110, 18));
+        caja.setPreferredSize(new Dimension(215, 18));
         caja.add(muestra);
         row.add(caja, BorderLayout.WEST);
-        row.add(new JLabel("<html><div style='width:270px'>" + descripcion + "</div></html>"), BorderLayout.CENTER);
+        row.add(new JLabel("<html><div style='width:190px'>" + descripcion + "</div></html>"), BorderLayout.CENTER);
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
         return row;
     }
@@ -2024,21 +2015,47 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     /** Fila de Functional Constraint con badge de color para el diálogo de leyenda. */
-    private static JPanel legendFcRow(String fc, Color badge, String html) {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        row.setOpaque(false);
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JLabel lbl = new JLabel(fc);
-        lbl.setOpaque(true);
-        lbl.setBackground(badge);
-        lbl.setForeground(Color.WHITE);
-        lbl.setFont(lbl.getFont().deriveFont(Font.BOLD, 10f));
-        lbl.setBorder(BorderFactory.createEmptyBorder(1, 5, 1, 5));
-        lbl.setPreferredSize(new java.awt.Dimension(30, 17));
-        lbl.setHorizontalAlignment(SwingConstants.CENTER);
-        row.add(lbl);
-        row.add(new JLabel("<html>" + html + "</html>"));
-        return row;
+    /** Fila de FC con la etiqueta gris del arbol (el color de cada FC ya no se usa). */
+    private static JPanel legendFcRow(String fc, Color sinUso, String html) {
+        Insignia tag = new Insignia(Estilo.mono(Font.PLAIN, 10)).alto(14)
+                .poner(fc, new Color(0xEEF0F3), new Color(0x3F4752), null);
+        return legendMuestra(tag, html);
+    }
+
+    /** Muestra de fila de LN como en el arbol: marca LN verde y el nombre. */
+    private static JComponent muestraFilaLn(String nombre) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        p.setOpaque(false);
+        JLabel m = new JLabel("LN");
+        m.setFont(Estilo.mono(Font.BOLD, 9));
+        m.setForeground(new Color(0x1E5A44));
+        m.setPreferredSize(new Dimension(18, 16));
+        JLabel n = new JLabel(nombre);
+        n.setFont(Estilo.ui(Font.PLAIN, 12));
+        n.setForeground(Estilo.TEXTO);
+        p.add(m);
+        p.add(n);
+        return p;
+    }
+
+    /** Muestra de fila de atributo como en el arbol: marca DA, nombre, FC y valor en acento. */
+    private static JComponent muestraFilaDa(String nombre, String valor) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        p.setOpaque(false);
+        JLabel m = new JLabel("DA");
+        m.setFont(Estilo.mono(Font.BOLD, 9));
+        m.setForeground(new Color(0x626A76));
+        m.setPreferredSize(new Dimension(18, 16));
+        JLabel n = new JLabel(nombre + " ");
+        n.setFont(Estilo.mono(Font.PLAIN, 11));
+        JLabel v = new JLabel(" " + valor);
+        v.setFont(Estilo.mono(Font.PLAIN, 11));
+        v.setForeground(Estilo.ACENTO);
+        p.add(m);
+        p.add(n);
+        p.add(new Insignia(Estilo.mono(Font.PLAIN, 10)).alto(14).poner("ST", new Color(0xEEF0F3), new Color(0x3F4752), null));
+        p.add(v);
+        return p;
     }
 
     /** Encabezado de subcategoría CDC (texto en cursiva). */
@@ -2058,7 +2075,8 @@ public class IEDNavigatorApp extends JFrame {
         name.setPreferredSize(new java.awt.Dimension(46, 16));
         row.add(Box.createHorizontalStrut(26));
         row.add(name);
-        row.add(new JLabel("<html>" + html + "</html>"));
+        // Ancho acotado: el texto se parte en renglones y la leyenda entra sin barra horizontal
+        row.add(new JLabel("<html><div style='width:300px'>" + html + "</div></html>"));
         return row;
     }
 
