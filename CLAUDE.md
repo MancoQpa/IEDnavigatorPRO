@@ -96,10 +96,13 @@ Main class: `com.iednavigator.IEDNavigatorApp`
 UI only; no IEC 61850 logic changed. Colors and fonts live in `Estilo` (system fonts: Segoe UI and
 Consolas; accent #1F5FBF; dark title bar). The window is:
 
-- Menu bar: Archivo (open, recent, export monitor/log, get/save CID), Simulación (start/stop F5,
-  server/client mode, port), Ver, Herramientas (Compare SCL, GOOSE map and Data Model open in
-  their own non-modal `JDialog`, created once and hidden on close; HTML report; Preferences with
-  language and theme, applied on restart), Ayuda.
+- Menu bar: Archivo (load, recent, export monitor/log, exit); Simulación in Server / Conexión in
+  Client (title and items follow the mode: start/stop or connect F5; port, check, release; polling,
+  interval, read all, timeout; mode radios); Ver (log Ctrl+L, tree, expand/collapse, group DO by FC,
+  descriptions, compact density, theme: saved in Preferences `view.*`); Herramientas (get/save
+  CID, HTML report, Compare SCL, GOOSE map and Data Model in their own non-modal `JDialog`, created
+  once and hidden on close; Language submenu; Preferences); Ayuda. Mnemonics come from the
+  bundles (`menu.x.mn`). Test mode and Virtual breaker items exist hidden until main is merged.
 - `BarraContexto`: one 48 px row. Left (grows): IED, "model · vendor · cfg", a fixed 220 px slot
   (Server: SCL file button; Client: editable `host:port` that writes `tfHost`/`tfClientPort`) and a
   hidden Test mode toggle (wired when main is merged). Right (fixed widths, computed from the
