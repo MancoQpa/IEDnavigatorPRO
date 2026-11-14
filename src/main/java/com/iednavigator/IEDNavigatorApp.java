@@ -520,6 +520,7 @@ public class IEDNavigatorApp extends JFrame {
         panelesHerramienta.put("tab.sclcmp", new SclComparePanel(this, this::log).createPanel());
         panelesHerramienta.put("tab.goosemap", new GooseMapPanel(this, this::log).createPanel());
         rightTabbedPane.setTabPlacement(JTabbedPane.TOP);
+        estilarPestanias(rightTabbedPane);
         // Boton Registro al extremo derecho de la fila de pestañas
         // (FlatLaf estira el componente final hasta el borde: va opaco y con el boton a la derecha)
         JPanel finFila = new JPanel(new GridBagLayout());
@@ -1462,6 +1463,37 @@ public class IEDNavigatorApp extends JFrame {
         }
         d.setVisible(true);
         d.toFront();
+    }
+
+    /**
+     * Fila de pestañas de 34 px (rediseño 2026-11): 12 px, la seleccionada en el acento y en
+     * negrita con el subrayado de 2 px; las demas en gris oscuro. FlatLaf no pone en negrita solo
+     * la seleccionada, asi que cada pestaña lleva su etiqueta y se actualiza al cambiar.
+     */
+    private static void estilarPestanias(JTabbedPane tp) {
+        tp.putClientProperty("JTabbedPane.tabHeight", 34);
+        tp.putClientProperty("JTabbedPane.tabInsets", new Insets(0, 10, 0, 10));
+        tp.putClientProperty("JTabbedPane.tabAreaInsets", new Insets(0, 8, 0, 0));
+        tp.setFont(Estilo.ui(Font.PLAIN, 12));
+        Runnable marcar = () -> {
+            for (int i = 0; i < tp.getTabCount(); i++) {
+                Component c = tp.getTabComponentAt(i);
+                if (!(c instanceof JLabel)) continue;
+                boolean sel = i == tp.getSelectedIndex();
+                c.setFont(Estilo.ui(sel ? Font.BOLD : Font.PLAIN, 12));
+                c.setForeground(sel ? Estilo.ACENTO : new Color(0x3F4752));
+            }
+        };
+        for (int i = 0; i < tp.getTabCount(); i++) {
+            JLabel l = new JLabel(tp.getTitleAt(i));
+            // El ancho de la negrita: asi la fila no se mueve al cambiar de pestaña
+            l.setFont(Estilo.ui(Font.BOLD, 12));
+            l.setPreferredSize(l.getPreferredSize());
+            l.setHorizontalAlignment(SwingConstants.CENTER);
+            tp.setTabComponentAt(i, l);
+        }
+        tp.addChangeListener(e -> marcar.run());
+        marcar.run();
     }
 
     /** Pestaña Ajustes: el grupo de ajustes activo arriba y los ajustes sin grupo (SP) abajo. */
@@ -4787,6 +4819,7 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("TabbedPane.background", Estilo.SUPERFICIE);
         UIManager.put("TabbedPane.contentAreaColor", Estilo.BORDE);
         UIManager.put("TabbedPane.underlineColor", accent);
+        UIManager.put("TabbedPane.tabSelectionHeight", 2);
         UIManager.put("TabbedPane.inactiveUnderlineColor", accent);
         UIManager.put("TabbedPane.hoverColor", Estilo.ACENTO_SUAVE);
         UIManager.put("TabbedPane.showTabSeparators", false);
