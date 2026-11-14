@@ -64,6 +64,7 @@ public class IEDNavigatorApp extends JFrame {
     private JLabel lblFileName;
     private JTextField tfServerPort;
     private JButton btnStartStop;
+    private JToggleButton btnModoTest;
     private JButton btnCheckPort;
     private JButton btnReleasePort;
 
@@ -601,9 +602,9 @@ public class IEDNavigatorApp extends JFrame {
     private JMenu menuModo;
     private JMenuItem miIniciarDetener;
     private JCheckBoxMenuItem miRegistroVisible;
-    /** Simulacion › Modo test del IED: llega con la union con main (alternarModoTest); por ahora oculto. */
+    /** Simulacion › Modo test del IED (solo en Servidor): lo mismo que el toggle de la barra. */
     private JCheckBoxMenuItem miModoTest;
-    /** Herramientas › Interruptor virtual: llega con la union con main; por ahora oculto. */
+    /** Herramientas › Interruptor virtual: el dialogo del interruptor simulado (InterruptorVirtualDialog). */
     private JMenuItem miInterruptorVirtual;
 
     // Preferencias de Ver, guardadas como el idioma (Preferences de com/iednavigator)
@@ -636,7 +637,8 @@ public class IEDNavigatorApp extends JFrame {
         menuModo = new JMenu();
         miIniciarDetener = item("", KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), e -> iniciarODetener());
         miModoTest = new JCheckBoxMenuItem(I18n.t("modo.boton"));
-        miModoTest.setVisible(false);
+        miModoTest.setToolTipText(I18n.t("modo.boton.tip"));
+        miModoTest.addActionListener(e -> { alternarModoTest(); refrescarContexto(); });
         JMenuItem miPuerto = item(I18n.t("menu.sim.port"), null, e -> configurarPuerto());
         JMenuItem miCheck = item(I18n.t("menu.sim.checkport"), null, e -> checkPort());
         JMenuItem miRelease = item(I18n.t("menu.sim.releaseport"), null, e -> releasePort());
@@ -672,7 +674,11 @@ public class IEDNavigatorApp extends JFrame {
             @Override public void menuSelected(javax.swing.event.MenuEvent e) {
                 boolean srv = currentMode == AppMode.SERVER;
                 actualizarMenuModo();
-                for (Component c : new Component[]{sepServidor, miPuerto, miCheck, miRelease}) c.setVisible(srv);
+                for (Component c : new Component[]{miModoTest, sepServidor, miPuerto, miCheck, miRelease}) c.setVisible(srv);
+                boolean hayServidor = srv && server != null && server.getServerModel() != null && isServerRunning;
+                Integer modo = hayServidor ? server.modoIed() : null;
+                miModoTest.setEnabled(hayServidor);
+                miModoTest.setSelected(modo != null && (modo == 3 || modo == 4));
                 for (Component c : new Component[]{sepCliente, miPolling, miIntervalo, miLeerTodo, miTimeout}) c.setVisible(!srv);
                 miServidor.setSelected(srv);
                 miCliente.setSelected(!srv);
@@ -732,7 +738,7 @@ public class IEDNavigatorApp extends JFrame {
         menuTools.add(item(I18n.t("menu.tools.savecid"), null, e -> guardarCid()));
         menuTools.add(item(I18n.t("menu.tools.htmlreport"), null, e -> generateModelReport()));
         miInterruptorVirtual = new JMenuItem(I18n.t("menu.tools.interruptor"));
-        miInterruptorVirtual.setVisible(false);
+        miInterruptorVirtual.addActionListener(e -> abrirInterruptorVirtual());
         menuTools.add(miInterruptorVirtual);
         menuTools.addSeparator();
         menuTools.add(item(I18n.t("menu.tools.sclcmp"), KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrl), e -> abrirHerramienta("tab.sclcmp")));
@@ -1209,6 +1215,14 @@ public class IEDNavigatorApp extends JFrame {
             public String ied() { return iedEnPantalla; }
             public String subtitulo() { return subEnPantalla; }
             public String archivoScl() { return loadedSclFile == null ? null : loadedSclFile.getName(); }
+            public boolean modoTestDisponible() {
+                return server != null && server.getServerModel() != null && isServerRunning;
+            }
+            public boolean enModoTest() {
+                if (!modoTestDisponible()) return false;
+                Integer m = server.modoIed();
+                return m != null && (m == 3 || m == 4);
+            }
             public boolean accionHabilitada() {
                 JButton b = currentMode == AppMode.SERVER ? btnStartStop : btnConnect;
                 return b != null && b.isEnabled();
@@ -1225,6 +1239,7 @@ public class IEDNavigatorApp extends JFrame {
                 refrescarContexto();
             }
             public void accionPrincipal() { iniciarODetener(); }
+            public void alternarModoTest() { IEDNavigatorApp.this.alternarModoTest(); refrescarContexto(); }
             public void cambiarDestino(String host, String puerto) {
                 // Los mismos campos que lee la conexion (tfHost, tfClientPort), ya sin panel propio
                 if (!host.equals(tfHost.getText())) tfHost.setText(host);
@@ -2231,7 +2246,16 @@ public class IEDNavigatorApp extends JFrame {
         btnStartStop.setEnabled(false);
         btnStartStop.setToolTipText(I18n.t("btn.startsim.tip"));
         row3.add(btnStartStop);
+        // Modo test del IED: pone en test el LLN0 de todos los LD (y con eso a sus LN).
+        btnModoTest = new JToggleButton(I18n.t("modo.boton"));
+        btnModoTest.setToolTipText(I18n.t("modo.boton.tip"));
+        btnModoTest.setMargin(new Insets(2, 6, 2, 6));
+        btnModoTest.setEnabled(false);
+        btnModoTest.addActionListener(e -> alternarModoTest());
         panel.add(row3);
+        JPanel row3b = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
+        row3b.add(btnModoTest);
+        panel.add(row3b);
 
         // Fila 4: Verificar Puerto + Liberar Puerto
         JPanel row4 = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
@@ -2823,6 +2847,11 @@ public class IEDNavigatorApp extends JFrame {
         miMonitorear.addActionListener(e -> monitorearSeleccion());
         serverPopupMenu.add(miMonitorear);
         serverPopupMenu.addSeparator();
+        // Modo (Mod) del IED, del LD o del LN, con el Beh derivado como en un relé
+        if (info.node instanceof LogicalDevice || info.node instanceof LogicalNode) {
+            agregarMenuModo(info.node);
+            serverPopupMenu.addSeparator();
+        }
 
         // Detect data type
         boolean isBoolean = (info.node instanceof BdaBoolean)
@@ -2911,6 +2940,84 @@ public class IEDNavigatorApp extends JFrame {
         serverPopupMenu.add(miInfoSrv);
     }
 
+    /** Submenus de modo para un LD (su LLN0.Mod) o un LN (su Mod), y el del IED entero. */
+    private void agregarMenuModo(ModelNode nodo) {
+        boolean esLd = nodo instanceof LogicalDevice;
+        String modRef = esLd ? nodo.getName() + "/LLN0.Mod" : nodo.getReference().toString() + ".Mod";
+        String nombre = esLd ? nodo.getName() : nodo.getReference().toString();
+        Integer actual = server.valorEnum(modRef);
+        if (actual != null) {
+            JMenu m = new JMenu(I18n.t(esLd ? "modo.menu.ld" : "modo.menu.ln", nombre));
+            for (int v = 1; v <= 5; v++) {
+                final int modo = v;
+                JRadioButtonMenuItem mi = new JRadioButtonMenuItem(IEC61850Server.textoModo(v), actual == v);
+                mi.addActionListener(ev -> {
+                    if (!isServerRunning) { avisoModoSinServidor(); return; }
+                    server.ponerModo(modRef, modo);
+                    log(I18n.t("modo.evt.nodo", modRef, IEC61850Server.textoModo(modo)));
+                    refrescarBotonModo();
+                });
+                m.add(mi);
+            }
+            if (!esLd) {
+                Integer beh = server.valorEnum(nodo.getReference().toString() + ".Beh");
+                if (beh != null) {
+                    m.addSeparator();
+                    JMenuItem info = new JMenuItem(I18n.t("modo.beh", IEC61850Server.textoModo(beh)));
+                    info.setEnabled(false);
+                    m.add(info);
+                }
+            }
+            serverPopupMenu.add(m);
+        }
+        JMenu mIed = new JMenu(I18n.t("modo.menu.ied"));
+        Integer modoIed = server.modoIed();
+        for (int v = 1; v <= 5; v++) {
+            final int modo = v;
+            JRadioButtonMenuItem mi = new JRadioButtonMenuItem(IEC61850Server.textoModo(v),
+                    modoIed != null && modoIed == v);
+            mi.addActionListener(ev -> {
+                if (!isServerRunning) { avisoModoSinServidor(); return; }
+                server.ponerModoIed(modo);
+                log(I18n.t("modo.evt.ied", IEC61850Server.textoModo(modo)));
+                refrescarBotonModo();
+            });
+            mIed.add(mi);
+        }
+        serverPopupMenu.add(mIed);
+    }
+
+    private void avisoModoSinServidor() {
+        JOptionPane.showMessageDialog(this, I18n.t("modo.sinservidor"), I18n.t("modo.boton"),
+                JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /** Boton "Modo test del IED": test en todos los LLN0, o de vuelta a on. */
+    private void alternarModoTest() {
+        if (server == null || server.getServerModel() == null || !isServerRunning) {
+            avisoModoSinServidor();
+            refrescarBotonModo();
+            return;
+        }
+        Integer m = server.modoIed();
+        int nuevo = (m != null && m == 3) ? 1 : 3;
+        server.ponerModoIed(nuevo);
+        log(I18n.t("modo.evt.ied", IEC61850Server.textoModo(nuevo)));
+        refrescarBotonModo();
+    }
+
+    private void refrescarBotonModo() {
+        if (btnModoTest == null) return;
+        boolean hay = currentMode == AppMode.SERVER && server != null && server.getServerModel() != null
+                && isServerRunning;
+        Integer m = hay ? server.modoIed() : null;
+        boolean enTest = m != null && (m == 3 || m == 4);
+        btnModoTest.setEnabled(hay);
+        btnModoTest.setSelected(enTest);
+        btnModoTest.setText(I18n.t(enTest ? "modo.boton.activo" : "modo.boton"));
+        btnModoTest.setForeground(enTest ? new Color(0xEF6C00) : null);
+    }
+
     private void handleTreePopup(MouseEvent e) {
         if (!e.isPopupTrigger()) return;
 
@@ -2982,6 +3089,23 @@ public class IEDNavigatorApp extends JFrame {
     private void navigateToFcdaInModel(String fcdaName) {
         if (buscador != null && buscador.filtrando()) buscador.limpiar();
         ModelTreeBuilder.navigateToFcdaInModel(modelTree, fcdaName, this::log, this::logGoose);
+    }
+
+    /** Panel "Interruptor virtual" (uno solo abierto a la vez). Requiere un modelo en modo servidor. */
+    private InterruptorVirtualDialog interruptorVirtual;
+
+    private void abrirInterruptorVirtual() {
+        if (currentMode != AppMode.SERVER || server == null || server.getServerModel() == null) {
+            JOptionPane.showMessageDialog(this, I18n.t("vint.requiere"), I18n.t("vint.titulo"),
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (interruptorVirtual != null && interruptorVirtual.isDisplayable()) {
+            interruptorVirtual.toFront();
+            return;
+        }
+        interruptorVirtual = new InterruptorVirtualDialog(this, server, goosePanel);
+        interruptorVirtual.setVisible(true);
     }
 
     /** Muestra el diálogo educativo IEC 61850 para el nodo actualmente seleccionado en el árbol. */
@@ -4636,7 +4760,7 @@ public class IEDNavigatorApp extends JFrame {
             public boolean isConnected() { return IEDNavigatorApp.this.isConnected; }
             public void setConnected(boolean v) { isConnected = v; }
             public boolean isServerRunning() { return IEDNavigatorApp.this.isServerRunning; }
-            public void setServerRunning(boolean v) { isServerRunning = v; }
+            public void setServerRunning(boolean v) { isServerRunning = v; SwingUtilities.invokeLater(IEDNavigatorApp.this::refrescarBotonModo); }
             public File getLoadedSclFile() { return loadedSclFile; }
             public void setLoadedSclFile(File f) { loadedSclFile = f; }
             public void sclElegido(File f) { agregarReciente(f); }

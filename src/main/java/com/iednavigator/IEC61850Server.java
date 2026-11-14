@@ -1157,6 +1157,16 @@ public class IEC61850Server implements ServerEventListener {
             // Fix relative DataSet refs in RCBs before starting (e.g. "TestDS" -> "TestIEDLD0/LLN0$TestDS")
             fixRcbDataSetReferences(serverModel);
 
+            // Mismo arranque que el IEDsimulatorPRO: Mod/Beh/Health con valores válidos (un 0
+            // de archivo es "sin configurar") y el proceso en un estado operable —sin
+            // posiciones en intermedio, con calidad buena y con las banderas que habilitan la
+            // maniobra—, ANTES de crear el ServerSap, para que el primer cliente ya lea un
+            // modelo que se puede maniobrar.
+            com.iednavigator.mando.EstadoLocal.inicializarModoYSalud(serverModel);
+            com.iednavigator.mando.EstadoLocal.derivarComportamiento(serverModel);
+            com.iednavigator.mando.EstadoLocal.olvidarSimulacion();
+            com.iednavigator.mando.EstadoLocal.normalizar(serverModel, new ArrayList<BasicDataAttribute>());
+
             // Crear ServerSap igual que la APK: (port, backlog, bindAddress, model, socketFactory)
             serverSap = new ServerSap(port, 0, null, serverModel, null);
 
@@ -1269,6 +1279,12 @@ public class IEC61850Server implements ServerEventListener {
 
                 String newValue = ValorBda.texto(bda);
                 System.out.println("[SERVER] Value set: " + cleanRef + " [" + fc + "] = " + newValue);
+
+                // Editar un Mod a mano tambien cambia el Beh del LD (IEC 61850-7-4, anexo A).
+                if (cleanRef.endsWith(".Mod.stVal") && cleanRef.indexOf('/') > 0) {
+                    publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.recalcularComportamiento(
+                            serverModel, cleanRef.substring(0, cleanRef.indexOf('/')), null));
+                }
 
                 return true;
             } else {
@@ -1443,9 +1459,48 @@ public class IEC61850Server implements ServerEventListener {
         if (listener != null) listener.onServerStopped();
     }
 
+    /**
+     * Motor de mando del IEDsimulatorPRO (paquete com.iednavigator.mando). Decide cada SELECT,
+     * OPERATE y CANCEL como un relé: modelo de control (los cuatro, incluido el SBO con seguridad
+     * reforzada), autoridad local/bahía/estación/remoto, enclavamiento, sincronismo y modo de
+     * prueba; mueve el aparato y arma la terminación del comando. El parche de ServerAssociation
+     * manda el LastApplError de un rechazo y el CommandTermination.
+     */
+    private final com.iednavigator.mando.ControlEngine motorMando = new com.iednavigator.mando.ControlEngine();
+
     @Override
     public List<ServiceError> write(List<BasicDataAttribute> bdas) {
         System.out.println("[SERVER] Client writing " + bdas.size() + " values");
+
+        com.iednavigator.mando.ControlEngine.Resultado ctl = motorMando.procesar(serverModel, bdas);
+        if (ctl.eraControl) {
+            if (ctl.error != null) {
+                String aviso = "[SERVER] Mando RECHAZADO: " + ctl.error.getMessage();
+                System.out.println(aviso);
+                if (listener != null) listener.onLog(aviso);
+                avisarMando("MMS", I18n.t("vint.evt.rechazado", ctl.error.getMessage()), false);
+                // Un error por cada atributo escrito: la librería solo toma el rechazo si los
+                // tamaños coinciden; con uno solo lo daría por exitoso y el mando se aplicaría.
+                List<ServiceError> errores = new ArrayList<>();
+                for (int i = 0; i < bdas.size(); i++) errores.add(ctl.error);
+                return errores;
+            }
+            String aviso = "[SERVER] Mando aceptado: " + ctl.descripcion;
+            System.out.println(aviso);
+            if (listener != null) listener.onLog(aviso);
+            avisarMando("MMS", ctl.descripcion, true);
+            // Cómo termina el mando (en el acto, diferido o negativo): lo toma la asociación
+            // apenas vuelve este write().
+            com.iednavigator.mando.Terminacion.publicador = this::publicarCambiosDeMando;
+            com.iednavigator.mando.Terminacion.anunciar(ctl.terminacion);
+            if (!ctl.cambiados.isEmpty()) {
+                final List<BasicDataAttribute> cambiados = ctl.cambiados;
+                // setValues() no se puede llamar dentro de write(): la librería está a mitad de
+                // la respuesta y la asociación se cae. Se publica en otro hilo.
+                new Thread(() -> publicarCambiosDeMando(cambiados), "publicar-mando").start();
+            }
+            return null;
+        }
 
         for (BasicDataAttribute bda : bdas) {
             String ref = bda.getReference().toString();
@@ -1455,60 +1510,312 @@ public class IEC61850Server implements ServerEventListener {
             if (listener != null) {
                 listener.onClientWrite(ref, value);
             }
-
-            aplicarRealimentacionDeMando(bda, ref, value);
         }
 
         return null; // No errors
     }
 
     /**
-     * Realimentación del mando: lleva el ctlVal de un Oper aceptado al stVal del mismo objeto.
-     *
-     * Sin esto, un mando entra y no pasa nada. Medido antes de escribirlo: ante una orden, la
-     * librería entrega a write() un único BDA, "&lt;LD&gt;/&lt;LN&gt;.&lt;DO&gt;.Oper.ctlVal" con FC=CO, y
-     * ahí termina — ni iec61850bean ni esta aplicación cableaban el efecto sobre el estado.
-     * El cliente recibía respuesta positiva y el stVal se quedaba quieto, que es exactamente
-     * el cuadro que el 07-08 hizo falta detectar contra un IED real, sólo que del otro lado.
-     *
-     * Es lo que convierte al simulador en un banco de maniobra: recién con el estado moviéndose
-     * se puede ejercitar la verificación de posición del cliente, que es lo único que separa
-     * "el IED dijo que sí" de "el aparato se movió".
-     *
-     * Alcance, dicho para que no se lea como más de lo que es:
-     *   - No hay enclavamiento ni autoridad de mando: si la orden llegó hasta acá, la librería
-     *     ya la aceptó. Simular un CILO que rechace es otra cosa y no está.
-     *   - No hay tiempo de maniobra: el estado salta, no pasa por intermediate.
-     *   - Sólo llega acá lo que la librería atiende. Del lado servidor implementa
-     *     ctlModel=1 (direct-with-normal-security); ante un ctlModel=3 responde
-     *     "unsupported ctlModel: 3" y write() no se llama.
+     * Autoridad de mando de un LD (local, bahía, estación o remoto), como el selector del
+     * frente del equipo. Cambia Loc/LocKey/LocSta en el modelo y lo publica. Devuelve false si
+     * no hay modelo o el LD no existe.
      */
-    private void aplicarRealimentacionDeMando(BasicDataAttribute bda, String ref, String value) {
-        final String SUFIJO = ".Oper.ctlVal";
-        if (!ref.endsWith(SUFIJO) || value == null) return;
-        if (serverModel == null) return;
+    public boolean ponerAutoridad(String ldName, com.iednavigator.mando.EstadoLocal.Autoridad autoridad) {
+        if (serverModel == null) return false;
+        List<BasicDataAttribute> c = com.iednavigator.mando.EstadoLocal.ponerAutoridad(serverModel, ldName, autoridad);
+        if (c.isEmpty()) return false;
+        publicarCambiosDeMando(c);
+        return true;
+    }
 
-        String refDo = ref.substring(0, ref.length() - SUFIJO.length());
-        ModelNode estado = serverModel.findModelNode(refDo, Fc.ST);
-        if (estado == null) return;                       // el DO no expone rama de estado
-        ModelNode stVal = estado.getChild("stVal");
-        if (!(stVal instanceof BasicDataAttribute)) return;
+    /** Autoridad de mando actual de un LD. */
+    public com.iednavigator.mando.EstadoLocal.Autoridad autoridadDe(String ldName) {
+        return com.iednavigator.mando.EstadoLocal.autoridadDe(serverModel, ldName);
+    }
 
-        String valorEstado = value;
-        if (stVal instanceof BdaDoubleBitPos) {
-            // En un DPC el ctlVal es booleano y el stVal es de dos bits: cerrar es "on".
-            valorEstado = ("true".equalsIgnoreCase(value) || "1".equals(value)) ? "on" : "off";
+    // ── Interruptor virtual: lo que usa el panel ─────────────────────────────
+
+    /** Quien recibe los eventos de mando (MMS y panel), para el registro del panel. */
+    public interface ObservadorMando {
+        /** @param origen "MMS" o "Panel"; @param aceptado false si el mando se rechazó */
+        void evento(String origen, String texto, boolean aceptado);
+    }
+
+    private final List<ObservadorMando> observadoresMando = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public void agregarObservadorMando(ObservadorMando o) { observadoresMando.add(o); }
+
+    public void quitarObservadorMando(ObservadorMando o) { observadoresMando.remove(o); }
+
+    void avisarMando(String origen, String texto, boolean aceptado) {
+        for (ObservadorMando o : observadoresMando) {
+            try { o.evento(origen, texto, aceptado); } catch (Exception ignorada) { }
         }
-        setBasicDataAttributeValue((BasicDataAttribute) stVal, valorEstado);
+    }
 
-        // La marca de tiempo del estado, si el objeto la tiene. Sin esto un cliente que mire
-        // el t no vería que el valor es nuevo.
-        ModelNode t = estado.getChild("t");
-        if (t instanceof BdaTimestamp) ((BdaTimestamp) t).setCurrentTime();
+    /** Aparatos de maniobra del modelo (posiciones de XCBR, XSWI, CSWI…), con su estado. */
+    public List<com.iednavigator.mando.EstadoLocal.Objeto> listarAparatos() {
+        if (serverModel == null) return new ArrayList<>();
+        return com.iednavigator.mando.EstadoLocal.listarAparatos(serverModel);
+    }
 
-        String aviso = "[SERVER] Realimentación de mando: " + refDo + ".stVal = " + valorEstado;
-        System.out.println(aviso);
-        if (listener != null) listener.onLog(aviso);
+    /** Abre o cierra el aparato a pie de equipo (sin pasar por MMS) y lo publica. */
+    public void maniobrarLocal(String ref, boolean cerrar) {
+        ordenarAparato(ref, cerrar, "Panel");
+    }
+
+    private final java.util.concurrent.ScheduledExecutorService relojManiobra =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread h = new Thread(r, "maniobra-aparato");
+                h.setDaemon(true);
+                return h;
+            });
+
+    /**
+     * Orden directa a las bobinas del aparato, sin pasar por el modelo de control: la del panel
+     * (a pie de equipo) y la que llega por GOOSE (disparo o cierre de una protección). Respeta
+     * las fallas del instructor igual que un mando por MMS: SF6 en bloqueo y resorte descargado
+     * impiden la maniobra, una falla de mecanismo deja el aparato quieto, y las respuestas y
+     * tiempos de maniobra lo hacen pasar por intermedio.
+     *
+     * @return true si el aparato empezó a moverse
+     */
+    public boolean ordenarAparato(String ref, boolean cerrar, String origen) {
+        if (serverModel == null || ref == null) return false;
+        com.iednavigator.mando.EstadoLocal.Sf6 gas = com.iednavigator.mando.EstadoLocal.sf6Para(serverModel, ref);
+        if (gas == com.iednavigator.mando.EstadoLocal.Sf6.BLOQUEO) {
+            avisarMando(origen, I18n.t("vint.evt.bloq.sf6", ref), false);
+            return false;
+        }
+        if (cerrar && com.iednavigator.mando.EstadoLocal.resorteDescargadoPara(serverModel, ref)) {
+            avisarMando(origen, I18n.t("vint.evt.bloq.resorte", ref), false);
+            return false;
+        }
+        if (com.iednavigator.mando.EstadoLocal.fallaMecanismoPara(serverModel, ref, cerrar)) {
+            avisarMando(origen, I18n.t(cerrar ? "vint.evt.falla.cierre" : "vint.evt.falla.apertura", ref), false);
+            return false;
+        }
+        com.iednavigator.mando.EstadoLocal.Respuesta r = com.iednavigator.mando.EstadoLocal.respuestaPara(serverModel, ref);
+        if (r == com.iednavigator.mando.EstadoLocal.Respuesta.TRABADO) {
+            avisarMando(origen, I18n.t("vint.evt.trabado", ref), false);
+            return false;
+        }
+        long ms = r == com.iednavigator.mando.EstadoLocal.Respuesta.LENTO
+                ? com.iednavigator.mando.EstadoLocal.recorridoLentoMs
+                : com.iednavigator.mando.EstadoLocal.tiempoManiobraMs(cerrar);
+        if (r == com.iednavigator.mando.EstadoLocal.Respuesta.SIN_CABLEAR || ms > 0) {
+            List<String> posiciones = new ArrayList<>();
+            posiciones.add(ref);
+            posiciones.addAll(com.iednavigator.mando.EstadoLocal.posicionesVinculadas(serverModel, ref));
+            List<BasicDataAttribute> intermedio = new ArrayList<>();
+            for (String p : posiciones) com.iednavigator.mando.EstadoLocal.aplicarIntermedio(serverModel, p, intermedio);
+            publicarCambiosDeMando(intermedio);
+            if (r == com.iednavigator.mando.EstadoLocal.Respuesta.SIN_CABLEAR) {
+                avisarMando(origen, I18n.t("vint.evt.sincablear", ref), false);
+                return true;
+            }
+            final long inicio = System.currentTimeMillis();
+            relojManiobra.schedule(() -> {
+                publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.maniobrar(serverModel, ref, cerrar));
+                avisarMando(origen, I18n.t(cerrar ? "vint.evt.cerrado.en" : "vint.evt.abierto.en", ref,
+                        String.valueOf(System.currentTimeMillis() - inicio)), true);
+            }, ms, java.util.concurrent.TimeUnit.MILLISECONDS);
+            return true;
+        }
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.maniobrar(serverModel, ref, cerrar));
+        avisarMando(origen, I18n.t(cerrar ? "vint.evt.cierre" : "vint.evt.apertura", ref), true);
+        return true;
+    }
+
+    // Fallas del mecanismo y del gas, y tiempos de maniobra (paridad con un interruptor de práctica)
+
+    public boolean fallaApertura(String ref) { return com.iednavigator.mando.EstadoLocal.fallaApertura(ref); }
+    public boolean fallaCierre(String ref) { return com.iednavigator.mando.EstadoLocal.fallaCierre(ref); }
+    public boolean resorteDescargado(String ref) { return com.iednavigator.mando.EstadoLocal.resorteDescargado(ref); }
+    public com.iednavigator.mando.EstadoLocal.Sf6 sf6De(String ref) { return com.iednavigator.mando.EstadoLocal.sf6De(ref); }
+
+    public void ponerFallaApertura(String ref, boolean falla) {
+        com.iednavigator.mando.EstadoLocal.ponerFallaApertura(ref, falla);
+        avisarMando("Panel", I18n.t(falla ? "vint.evt.f.apertura.si" : "vint.evt.f.apertura.no", ref), true);
+    }
+
+    public void ponerFallaCierre(String ref, boolean falla) {
+        com.iednavigator.mando.EstadoLocal.ponerFallaCierre(ref, falla);
+        avisarMando("Panel", I18n.t(falla ? "vint.evt.f.cierre.si" : "vint.evt.f.cierre.no", ref), true);
+    }
+
+    public void ponerResorteDescargado(String ref, boolean descargado) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerResorteDescargado(serverModel, ref, descargado));
+        avisarMando("Panel", I18n.t(descargado ? "vint.evt.resorte.si" : "vint.evt.resorte.no", ref), true);
+    }
+
+    // Modo del IED, de un LD o de un LN (Mod), con el Beh derivado como en un relé
+
+    /** Modo del IED (el de los LLN0 si coinciden), o null si no hay o difieren. */
+    public Integer modoIed() {
+        return com.iednavigator.mando.EstadoLocal.modoIed(serverModel);
+    }
+
+    /** Pone el mismo modo en el LLN0 de todos los LD. */
+    public void ponerModoIed(int modo) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerModoIed(serverModel, modo));
+        avisarMando("Panel", I18n.t("modo.evt.ied", textoModo(modo)), true);
+    }
+
+    /** Pone el modo de un LD ("LD/LLN0.Mod") o de un LN ("LD/LN.Mod"). */
+    public boolean ponerModo(String modRef, int modo) {
+        if (serverModel == null) return false;
+        List<BasicDataAttribute> c = com.iednavigator.mando.EstadoLocal.ponerModo(serverModel, modRef, modo);
+        if (c.isEmpty()) return false;
+        publicarCambiosDeMando(c);
+        avisarMando("Panel", I18n.t("modo.evt.nodo", modRef, textoModo(modo)), true);
+        return true;
+    }
+
+    /** Valor de Mod.stVal o Beh.stVal de un nodo ("LD/LN.Mod"), o null si no lo declara. */
+    public Integer valorEnum(String doRef) {
+        if (serverModel == null) return null;
+        ModelNode n = serverModel.findModelNode(doRef + ".stVal", Fc.ST);
+        if (!(n instanceof BasicDataAttribute)) return null;
+        try { return Integer.valueOf(ValorBda.texto((BasicDataAttribute) n).trim()); }
+        catch (NumberFormatException e) { return null; }
+    }
+
+    public static String textoModo(int modo) {
+        switch (modo) {
+            case 1:  return I18n.t("modo.on");
+            case 2:  return I18n.t("modo.bloqueado");
+            case 3:  return I18n.t("modo.test");
+            case 4:  return I18n.t("modo.test.bloqueado");
+            case 5:  return I18n.t("modo.off");
+            default: return String.valueOf(modo);
+        }
+    }
+
+    public void ponerSf6(String ref, com.iednavigator.mando.EstadoLocal.Sf6 estado) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerSf6(serverModel, ref, estado));
+        avisarMando("Panel", I18n.t("vint.evt.sf6", ref, textoSf6(estado)), true);
+    }
+
+    public static String textoSf6(com.iednavigator.mando.EstadoLocal.Sf6 s) {
+        switch (s) {
+            case ALARMA:  return I18n.t("vint.sf6.alarma");
+            case BLOQUEO: return I18n.t("vint.sf6.bloqueo");
+            default:      return I18n.t("vint.sf6.normal");
+        }
+    }
+
+    public long tiempoAperturaMs() { return com.iednavigator.mando.EstadoLocal.tiempoAperturaMs; }
+    public long tiempoCierreMs() { return com.iednavigator.mando.EstadoLocal.tiempoCierreMs; }
+    public long tiempoFallaMs() { return com.iednavigator.mando.EstadoLocal.tiempoFallaMs; }
+    public void ponerTiempoAperturaMs(long ms) { com.iednavigator.mando.EstadoLocal.tiempoAperturaMs = Math.max(0, ms); }
+    public void ponerTiempoCierreMs(long ms) { com.iednavigator.mando.EstadoLocal.tiempoCierreMs = Math.max(0, ms); }
+    public void ponerTiempoFallaMs(long ms) { com.iednavigator.mando.EstadoLocal.tiempoFallaMs = Math.max(0, ms); }
+
+    /** Llave local del aparato: true = LOCAL (no acepta órdenes por comunicaciones). */
+    public Boolean enLocal(String ref) {
+        return serverModel == null ? null : com.iednavigator.mando.EstadoLocal.enLocal(serverModel, ref);
+    }
+
+    public void ponerLlave(String ref, boolean local) {
+        if (serverModel == null) return;
+        publicarCambiosDeMando(com.iednavigator.mando.EstadoLocal.ponerLlave(serverModel, ref, local));
+        avisarMando("Panel", I18n.t("vint.evt.llave", ref, local ? "LOCAL" : "REMOTO"), true);
+    }
+
+    /** Cómo responde el aparato a un mando aceptado (normal, sin cablear, trabado, lento). */
+    public com.iednavigator.mando.EstadoLocal.Respuesta respuestaDe(String ref) {
+        return com.iednavigator.mando.EstadoLocal.respuestaDe(ref);
+    }
+
+    public void ponerRespuesta(String ref, com.iednavigator.mando.EstadoLocal.Respuesta r) {
+        com.iednavigator.mando.EstadoLocal.ponerRespuesta(ref, r);
+        avisarMando("Panel", I18n.t("vint.evt.respuesta", ref, textoRespuesta(r)), true);
+    }
+
+    /** Nombre de la respuesta del aparato en el idioma activo. */
+    public static String textoRespuesta(com.iednavigator.mando.EstadoLocal.Respuesta r) {
+        switch (r) {
+            case SIN_CABLEAR: return I18n.t("vint.resp.sin_cablear");
+            case TRABADO:     return I18n.t("vint.resp.trabado");
+            case LENTO:       return I18n.t("vint.resp.lento");
+            default:          return I18n.t("vint.resp.normal");
+        }
+    }
+
+    public boolean sincronismoEnFalla(String ref) {
+        return com.iednavigator.mando.EstadoLocal.sincronismoEnFalla(ref);
+    }
+
+    public void ponerSincronismo(String ref, boolean falla) {
+        com.iednavigator.mando.EstadoLocal.ponerSincronismo(ref, falla);
+        avisarMando("Panel", I18n.t(falla ? "vint.evt.sync.falla" : "vint.evt.sync.ok", ref), true);
+    }
+
+    /** Tiempo de recorrido de un aparato "lento", en ms (común a todos los aparatos). */
+    public long tiempoRecorridoMs() { return com.iednavigator.mando.EstadoLocal.recorridoLentoMs; }
+
+    public void ponerTiempoRecorridoMs(long ms) {
+        com.iednavigator.mando.EstadoLocal.recorridoLentoMs = Math.max(0, ms);
+    }
+
+    /**
+     * Fuerza la posición del aparato (intermedio o bad-state), como una falla de los contactos
+     * auxiliares. Va por copia, como el motor, para que salga por los reportes.
+     */
+    public void forzarPosicion(String ref, BdaDoubleBitPos.DoubleBitPos pos) {
+        if (serverModel == null) return;
+        ModelNode st = serverModel.findModelNode(ref + ".stVal", Fc.ST);
+        if (!(st instanceof BdaDoubleBitPos)) return;
+        List<BasicDataAttribute> c = new ArrayList<>();
+        BdaDoubleBitPos copia = ((BdaDoubleBitPos) st).copy();
+        copia.setDoubleBitPos(pos);
+        c.add(copia);
+        ModelNode t = serverModel.findModelNode(ref + ".t", Fc.ST);
+        if (t instanceof BdaTimestamp) {
+            BdaTimestamp tc = (BdaTimestamp) ((BdaTimestamp) t).copy();
+            tc.setCurrentTime();
+            c.add(tc);
+        }
+        publicarCambiosDeMando(c);
+        avisarMando("Panel", I18n.t("vint.evt.forzada", ref, pos.name()), true);
+    }
+
+    /** Calidad de la posición: inválida (true) o buena (false). */
+    public void ponerCalidadInvalida(String ref, boolean invalida) {
+        if (serverModel == null) return;
+        ModelNode q = serverModel.findModelNode(ref + ".q", Fc.ST);
+        if (!(q instanceof BdaQuality)) return;
+        BdaQuality copia = ((BdaQuality) q).copy();
+        copia.setValidity(invalida ? BdaQuality.Validity.INVALID : BdaQuality.Validity.GOOD);
+        List<BasicDataAttribute> c = new ArrayList<>();
+        c.add(copia);
+        publicarCambiosDeMando(c);
+        avisarMando("Panel", I18n.t(invalida ? "vint.evt.calidad.mala" : "vint.evt.calidad.buena", ref), true);
+    }
+
+    /**
+     * Publica lo que movió un mando: escribe cada atributo en el modelo con setValues() —que es
+     * lo que emite los reportes— y avisa a la ventana, que actualiza el árbol, el monitor y los
+     * GOOSE que publican esos datos. Uno por uno: setValues() falla con un atributo que no está
+     * en ningún DataSet, y eso no debe impedir publicar los demás.
+     */
+    private void publicarCambiosDeMando(List<BasicDataAttribute> cambiados) {
+        ServerSap sap = serverSap;
+        if (sap == null) return;
+        for (BasicDataAttribute b : cambiados) {
+            List<BasicDataAttribute> uno = new ArrayList<>();
+            uno.add(b);
+            try {
+                sap.setValues(uno);
+            } catch (Exception e) {
+                System.out.println("[SERVER] setValues no pudo publicar " + b.getReference() + ": " + e);
+            }
+            if (listener != null) listener.onClientWrite(b.getReference().toString(), ValorBda.texto(b));
+        }
     }
 
     /**

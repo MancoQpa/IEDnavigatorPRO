@@ -83,6 +83,37 @@ Main class: `com.iednavigator.IEDNavigatorApp`
 - **CachedValue**: Inner class in IEC61850Client for tracking attribute values with timestamps.
 - **Who does what** (verified 2026-10-11 in the code, not deduced from names):
   - MMS client and simulated server: iec61850bean.
+  - Control decisions in server mode (since 2026-11-12): package `com.iednavigator.mando`, the
+    same control engine as the Android IEDsimulatorPRO (`ControlEngine`, `ControlPolicy`,
+    `EstadoLocal`, `Terminacion`), copied with only the package changed and `android.util.Log`
+    replaced by a local `Log`. Keep both copies in step: a fix in one belongs in the other.
+    `IEC61850Server.write()` delegates to it; `start()` runs `EstadoLocal.inicializarModoYSalud`
+    and `normalizar` before creating the `ServerSap`.
+  - Virtual breaker panel (since 2026-11-12): `InterruptorVirtualDialog` (Tools → Virtual
+    breaker, server mode only). It drives one switching device of the served model through
+    `IEC61850Server` (`listarAparatos`, `maniobrarLocal`, `ponerLlave`, `ponerAutoridad`,
+    `ponerRespuesta`, `ponerSincronismo`, `forzarPosicion`, `ponerCalidadInvalida`) and logs
+    MMS and panel events via `ObservadorMando`. Changes go out by reports and through
+    `onClientWrite`, so the tree, the monitor and active GOOSE publishers follow them.
+    The instructor can also set mechanism failures (opening/closing: the order is accepted,
+    nothing moves, negative CommandTermination with AddCause 16 after `tiempoFallaMs`), a
+    discharged spring (close rejected, AddCause 9, CBOpCap Open), SF6 alarm/lockout (InsAlm,
+    InsBlk, Health) and separate opening/closing times that pass through intermediate; they
+    live in `EstadoLocal` and `ControlPolicy` rule 4b; the simulator has the same code since
+    2026-11-12 (its maneuver window has the buttons). `ordenarAparato(ref, cerrar, origen)` is the direct order to the coils (panel
+    and GOOSE) and respects the same failures. `BobinasGoose` wires the opening/closing coils
+    to boolean data of received GOOSE (rising edge only, so retransmissions and a signal
+    already true do nothing), fed by `GoosePanel.agregarOyenteGoose`.
+    A breaker modeled per pole (one XCBR per phase plus a three-pole one, a single CSWI) moves
+    as one: `posicionesVinculadas` adds the XCBRs without their own CSWI when the LD has only
+    one commanded XCBR (`test/TestInterruptorPolos`, `test_interruptor_polos.cid`).
+    `test/TestInterruptorVirtual`, `TestFallasInterruptor`, `TestBobinasGoose`.
+  - Mode and behaviour (since 2026-11-12): `Beh` is derived from the LD mode (`LLN0.Mod`) and
+    the LN's own `Mod` as in IEC 61850-7-4 annex A (`EstadoLocal.comportamiento`), at start
+    (`derivarComportamiento`), when a client operates a `Mod`, when `Mod.stVal` is edited in
+    the tree, and from the server panel button "Modo test del IED" / the tree's right-click
+    "Modo" submenus. A command on `Mod` itself skips the Beh/Test rules (otherwise an LN in
+    test or off could not be brought back). `test/TestModoTest`. Same code in the simulator.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
     pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
   - Sampled Values: not in the desktop app (the SV tab is commented out in
@@ -108,10 +139,11 @@ centered, so the monitor value/time cells and the host:port field add top margin
   descriptions, compact density, theme: saved in Preferences `view.*`); Herramientas (get/save
   CID, HTML report, Compare SCL, GOOSE map and Data Model in their own non-modal `JDialog`, created
   once and hidden on close; Language submenu; Preferences); Ayuda. Mnemonics come from the
-  bundles (`menu.x.mn`). Test mode and Virtual breaker items exist hidden until main is merged.
+  bundles (`menu.x.mn`). Simulación › Modo test del IED and Herramientas › Interruptor virtual…
+  call `alternarModoTest()` / `abrirInterruptorVirtual()` (main was merged in on 2026-11-14).
 - `BarraContexto`: one 48 px row. Left (grows): IED, "model · vendor · cfg", a fixed 220 px slot
-  (Server: SCL file button; Client: editable `host:port` that writes `tfHost`/`tfClientPort`) and a
-  hidden Test mode toggle (wired when main is merged). Right (fixed widths, computed from the
+  (Server: SCL file button; Client: editable `host:port` that writes `tfHost`/`tfClientPort`) and, in
+  Server only, the Test mode toggle (sets LLN0.Mod of every LD; enabled while the server runs). Right (fixed widths, computed from the
   longest text of the four bundles so switching mode or language moves nothing): Server | Client,
   status pill (server running shows `IP:port`), main button (F5; accent fill to start/connect,
   outline to stop/disconnect). Port, timeout and polling are in the Simulación/Conexión menu; the
@@ -281,6 +313,16 @@ because `classes` comes first in the classpath). Each file says why and what cha
   request in flight but did not enforce it (shared output buffer, response queue and expected
   invoke id), so the polling thread, the control dialog and the keep-alive could cross
   responses and break the association (`test/TestPedidosConcurrentes`).
+- `ServerAssociation.java` (since 2026-11-12): the IEDsimulatorPRO's patched copy, with only the
+  reference to `Terminacion` moved to `com.iednavigator.mando`. Its changes are documented
+  one by one in the simulator's `PARCHES-LIBRERIA.md` and marked `PARCHE IEDSimulator` in the
+  file. In short: ctlModel 3 and 4, SBOw/SBO/Cancel and the full control structure now reach
+  `write()` (the original answered "unsupported" and only passed `ctlVal`); a rejection sends
+  `LastApplError` with AddCause and answers object-access-denied; an accepted Oper with
+  ctlModel 3/4 sends `CommandTermination`, possibly deferred (`Terminacion`).
+  `test/TestServidorMando` maneuvers a ctlModel-4 CSWI with the app's own client.
+  Known: changing the command authority (`ponerAutoridad`) changes `Loc` in the model but the
+  library cannot report it (`setValues` needs a mirror copy); the same happens in the simulator.
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.

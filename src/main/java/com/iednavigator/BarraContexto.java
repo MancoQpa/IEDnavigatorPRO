@@ -46,6 +46,10 @@ final class BarraContexto extends JPanel {
         /** Nombre del SCL cargado, o null. */
         String archivoScl();
         boolean accionHabilitada();
+        /** Hay un servidor simulado corriendo al que ponerle el modo. */
+        boolean modoTestDisponible();
+        /** El IED simulado esta en test (LLN0.Mod de todos los LD). */
+        boolean enModoTest();
     }
 
     /** Lo que la barra hace; lo resuelve la ventana principal. */
@@ -55,6 +59,8 @@ final class BarraContexto extends JPanel {
         void accionPrincipal();
         /** El campo host:puerto cambio: los mismos campos que lee la conexion. */
         void cambiarDestino(String host, String puerto);
+        /** Toggle Modo test: test en todos los LLN0 del IED simulado, o de vuelta a on. */
+        void alternarModoTest();
     }
 
     private static final String[] IDIOMAS = {"es", "en", "pt", "zh"};
@@ -67,7 +73,7 @@ final class BarraContexto extends JPanel {
     private final JPanel ranura = new JPanel(cartasRanura);
     private final BotonScl btnScl = new BotonScl();
     private final JTextField campoDestino = new JTextField();
-    /** Modo test del IED: llega con la union con main (alternarModoTest); por ahora oculto. */
+    /** Modo test del IED simulado (solo en Servidor): refleja y cambia el LLN0.Mod de todos los LD. */
     final JToggleButton tglModoTest = new JToggleButton(I18n.t("ctx.testmode"), new IconoInterruptor());
     private final JToggleButton segServidor = new JToggleButton(I18n.t("ctx.seg.server"));
     private final JToggleButton segCliente = new JToggleButton(I18n.t("ctx.seg.client"));
@@ -128,6 +134,8 @@ final class BarraContexto extends JPanel {
         tglModoTest.putClientProperty("FlatLaf.style", "arc:6; focusWidth:0; innerFocusWidth:0; margin:0,10,0,10;"
                 + " borderColor:#DDE1E7; background:#FFFFFF; selectedBackground:#EAF1FB; foreground:#3F4752");
         fijar(tglModoTest, tglModoTest.getPreferredSize().width, UIScale.scale(30));
+        tglModoTest.setToolTipText(I18n.t("modo.boton.tip"));
+        tglModoTest.addActionListener(e -> acciones.alternarModoTest());
         tglModoTest.setVisible(false);
 
         izq.add(lblIed);
@@ -255,7 +263,10 @@ final class BarraContexto extends JPanel {
             campoDestino.setText(destino);
             escribiendoDestino = false;
         }
-        tglModoTest.setVisible(false);   // ver tglModoTest
+        // Solo en Servidor, al final del grupo izquierdo: aparecer o no, no empuja nada
+        tglModoTest.setVisible(srv);
+        tglModoTest.setEnabled(srv && estado.modoTestDisponible());
+        tglModoTest.setSelected(srv && estado.enModoTest());
 
         // Pildora de estado
         String err = estado.error();
