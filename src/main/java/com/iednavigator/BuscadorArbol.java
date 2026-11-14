@@ -7,6 +7,8 @@ import javax.swing.event.TreeModelEvent;
 import javax.swing.event.TreeModelListener;
 import javax.swing.tree.*;
 import java.util.*;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -15,6 +17,9 @@ import java.util.function.Consumer;
  *
  * Un CID grande tiene mas de cien mil nodos. Para no trabar la ventana:
  *   - se espera a que se deje de escribir (250 ms) antes de buscar;
+ *   - la busqueda y el armado del resultado corren en segundo plano (el executor de la
+ *     ventana); en el hilo de Swing solo se pone el modelo y se expande. Una busqueda vieja
+ *     que termina despues de una nueva se descarta (generacion);
  *   - se busca sobre un indice de rutas armado una vez por modelo (se rehace solo cuando
  *     cambia la estructura del arbol);
  *   - el resultado se muestra en un modelo aparte con copias livianas de los nodos que
@@ -32,15 +37,22 @@ final class BuscadorArbol {
     private final JTextField campo;
     private final Consumer<String> aviso;
     private final javax.swing.Timer espera;
-    private List<Object[]> indice;
-    private final Map<TreeNode, DefaultMutableTreeNode> copiaAOriginal = new HashMap<>();
+    private final Executor fondo;
+    private final AtomicInteger generacion = new AtomicInteger();
+    private volatile List<Object[]> indice;
+    /** Copia mostrada -> nodo real. Se reemplaza entero (en el hilo de Swing) con cada resultado. */
+    private Map<TreeNode, DefaultMutableTreeNode> copiaAOriginal = new HashMap<>();
     private boolean filtrando;
 
-    /** @param aviso recibe "N coincidencias" (o "" al limpiar) */
-    BuscadorArbol(JTree arbol, DefaultTreeModel original, JTextField campo, Consumer<String> aviso) {
+    /**
+     * @param fondo donde corre la busqueda (el backgroundExecutor de la ventana)
+     * @param aviso recibe "N coincidencias" (o "" al limpiar)
+     */
+    BuscadorArbol(JTree arbol, DefaultTreeModel original, JTextField campo, Executor fondo, Consumer<String> aviso) {
         this.arbol = arbol;
         this.original = original;
         this.campo = campo;
+        this.fondo = fondo;
         this.aviso = aviso;
         espera = new javax.swing.Timer(250, e -> aplicar(campo.getText()));
         espera.setRepeats(false);
@@ -80,10 +92,11 @@ final class BuscadorArbol {
     private void aplicar(String texto) {
         String q = texto == null ? "" : texto.trim().toLowerCase(Locale.ROOT);
         if (q.isEmpty()) {
+            generacion.incrementAndGet();   // descarta una busqueda en curso
             if (filtrando) {
                 DefaultMutableTreeNode sel = seleccionOriginal();
                 filtrando = false;
-                copiaAOriginal.clear();
+                copiaAOriginal = new HashMap<>();
                 arbol.setModel(original);
                 arbol.expandPath(new TreePath(original.getRoot()));
                 if (sel != null) {
@@ -95,45 +108,71 @@ final class BuscadorArbol {
             aviso.accept("");
             return;
         }
-        if (indice == null) indice = armarIndice();
+        int gen = generacion.incrementAndGet();
+        fondo.execute(() -> {
+            Resultado r;
+            try {
+                r = buscar(q);
+            } catch (RuntimeException e) {
+                return;   // el arbol cambio mientras se buscaba: invalidar() vuelve a buscar
+            }
+            SwingUtilities.invokeLater(() -> mostrar(r, gen));
+        });
+    }
 
+    /** Lo armado en segundo plano: el modelo de copias y que expandir. */
+    private static final class Resultado {
+        DefaultMutableTreeNode raiz;
+        final Map<TreeNode, DefaultMutableTreeNode> copiaAOriginal = new HashMap<>();
+        final List<DefaultMutableTreeNode> aExpandir = new ArrayList<>();
+        int total;
+    }
+
+    /** En segundo plano: coincidencias y copias livianas (no toca el JTree). */
+    private Resultado buscar(String q) {
+        List<Object[]> ind = indice;
+        if (ind == null) { ind = armarIndice(); indice = ind; }
+        Resultado res = new Resultado();
         List<DefaultMutableTreeNode> hallados = new ArrayList<>();
-        int total = 0;
-        for (Object[] e : indice) {
+        for (Object[] e : ind) {
             if (((String) e[0]).contains(q)) {
-                total++;
+                res.total++;
                 if (hallados.size() < MAX_COINCIDENCIAS) hallados.add((DefaultMutableTreeNode) e[1]);
             }
         }
-
         DefaultMutableTreeNode raizOriginal = (DefaultMutableTreeNode) original.getRoot();
         Map<DefaultMutableTreeNode, DefaultMutableTreeNode> copias = new HashMap<>();
-        copiaAOriginal.clear();
-        DefaultMutableTreeNode raiz = copiar(raizOriginal, copias);
+        res.raiz = copiar(raizOriginal, copias, res.copiaAOriginal);
         int[] copiados = {0};
-        List<DefaultMutableTreeNode> aExpandir = new ArrayList<>();
         Set<DefaultMutableTreeNode> conjunto = new HashSet<>(hallados);
         for (DefaultMutableTreeNode h : hallados) {
-            DefaultMutableTreeNode c = asegurarCamino(h, copias);
+            DefaultMutableTreeNode c = asegurarCamino(h, copias, res.copiaAOriginal);
             // Se abre hasta la coincidencia de mas arriba de cada rama: las anidadas (todo un
             // Oper, por ejemplo) quedan a un clic, sin llenar la lista.
             boolean anidada = false;
             for (TreeNode t = h.getParent(); t != null; t = t.getParent()) {
                 if (conjunto.contains(t)) { anidada = true; break; }
             }
-            if (!anidada && aExpandir.size() < MAX_EXPANDIDOS) aExpandir.add((DefaultMutableTreeNode) c.getParent());
+            if (!anidada && res.aExpandir.size() < MAX_EXPANDIDOS) res.aExpandir.add((DefaultMutableTreeNode) c.getParent());
             // Lo que cuelga de lo hallado tambien se ve (buscar "PDOP1.Beh" muestra sus atributos)
-            copiarDescendientes(h, c, copias, copiados);
+            copiarDescendientes(h, c, copias, res.copiaAOriginal, copiados);
         }
+        return res;
+    }
+
+    /** En el hilo de Swing: muestra el resultado si sigue siendo la busqueda vigente. */
+    private void mostrar(Resultado r, int gen) {
+        if (gen != generacion.get() || campo.getText().trim().isEmpty()) return;
         filtrando = true;
-        arbol.setModel(new DefaultTreeModel(raiz));
-        for (DefaultMutableTreeNode n : aExpandir) {
+        copiaAOriginal = r.copiaAOriginal;
+        arbol.setModel(new DefaultTreeModel(r.raiz));
+        for (DefaultMutableTreeNode n : r.aExpandir) {
             if (n != null) arbol.expandPath(new TreePath(n.getPath()));
         }
-        arbol.expandPath(new TreePath(raiz.getPath()));
-        aviso.accept(total > MAX_COINCIDENCIAS
-                ? I18n.t("tree.search.many", String.valueOf(total), String.valueOf(MAX_COINCIDENCIAS))
-                : I18n.t("tree.search.count", String.valueOf(total)));
+        arbol.expandPath(new TreePath(r.raiz.getPath()));
+        aviso.accept(r.total > MAX_COINCIDENCIAS
+                ? I18n.t("tree.search.many", String.valueOf(r.total), String.valueOf(MAX_COINCIDENCIAS))
+                : I18n.t("tree.search.count", String.valueOf(r.total)));
     }
 
     private DefaultMutableTreeNode seleccionOriginal() {
@@ -141,33 +180,36 @@ final class BuscadorArbol {
         return p == null ? null : original(p.getLastPathComponent());
     }
 
-    private DefaultMutableTreeNode copiar(DefaultMutableTreeNode o, Map<DefaultMutableTreeNode, DefaultMutableTreeNode> copias) {
+    private static DefaultMutableTreeNode copiar(DefaultMutableTreeNode o, Map<DefaultMutableTreeNode, DefaultMutableTreeNode> copias,
+                                                 Map<TreeNode, DefaultMutableTreeNode> aOriginal) {
         DefaultMutableTreeNode c = new DefaultMutableTreeNode(o.getUserObject());
         copias.put(o, c);
-        copiaAOriginal.put(c, o);
+        aOriginal.put(c, o);
         return c;
     }
 
     /** Copia el camino desde la raiz hasta o (solo lo que falte) y devuelve la copia de o. */
-    private DefaultMutableTreeNode asegurarCamino(DefaultMutableTreeNode o,
-                                                  Map<DefaultMutableTreeNode, DefaultMutableTreeNode> copias) {
+    private static DefaultMutableTreeNode asegurarCamino(DefaultMutableTreeNode o,
+                                                         Map<DefaultMutableTreeNode, DefaultMutableTreeNode> copias,
+                                                         Map<TreeNode, DefaultMutableTreeNode> aOriginal) {
         DefaultMutableTreeNode c = copias.get(o);
         if (c != null) return c;
-        DefaultMutableTreeNode padre = asegurarCamino((DefaultMutableTreeNode) o.getParent(), copias);
-        c = copiar(o, copias);
+        DefaultMutableTreeNode padre = asegurarCamino((DefaultMutableTreeNode) o.getParent(), copias, aOriginal);
+        c = copiar(o, copias, aOriginal);
         padre.add(c);
         return c;
     }
 
-    private void copiarDescendientes(DefaultMutableTreeNode o, DefaultMutableTreeNode c,
-                                     Map<DefaultMutableTreeNode, DefaultMutableTreeNode> copias, int[] copiados) {
+    private static void copiarDescendientes(DefaultMutableTreeNode o, DefaultMutableTreeNode c,
+                                            Map<DefaultMutableTreeNode, DefaultMutableTreeNode> copias,
+                                            Map<TreeNode, DefaultMutableTreeNode> aOriginal, int[] copiados) {
         for (int i = 0; i < o.getChildCount() && copiados[0] < MAX_NODOS_COPIADOS; i++) {
             DefaultMutableTreeNode hijo = (DefaultMutableTreeNode) o.getChildAt(i);
             if (copias.containsKey(hijo)) continue;
-            DefaultMutableTreeNode ch = copiar(hijo, copias);
+            DefaultMutableTreeNode ch = copiar(hijo, copias, aOriginal);
             c.add(ch);
             copiados[0]++;
-            copiarDescendientes(hijo, ch, copias, copiados);
+            copiarDescendientes(hijo, ch, copias, aOriginal, copiados);
         }
     }
 

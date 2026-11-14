@@ -114,11 +114,19 @@ Consolas; accent #1F5FBF; dark title bar). The window is:
   report connected clients. No bottom status bar (it is built but not shown: `lblStatus` carries
   the error the pill shows).
 - Left card: the model tree. `ModelTreeBuilder` merges a DO's FC variants into one node
-  (`NodeInfo.variantes`; control looks for the CO one), `ArbolCeldaRenderer` draws the rows
-  (neutral LD/LN/DO/DA badges, FC only on attributes, SCL or dictionary description loaded in the
-  background), `BuscadorArbol` filters (debounced, path index, lightweight copy model; the real
-  tree is untouched; `original(node)` maps back). Double-click on a leaf, "+ Monitor", Enter and the
-  context menu add to the monitor; read/edit stay in the context menu.
+  (`NodeInfo.variantes`; control looks for the CO one; Ver › Agrupar DO por FC off restores one DO
+  per FC). `ArbolCeldaRenderer` draws each row as mark · name · FC · value · description: LD/LN/DO/DA
+  mark in 9 px mono with no box; FC and `= value` only on DAs; `q` only when not good (warning
+  color), `t` only as time of day with ms; description (SCL or dictionary, loaded in the background)
+  always on LD/LN, on DOs only on hover or selection, never when it repeats the name or LN class,
+  truncated first. `ArbolUI` (a `FlatTreeUI`) paints vertical indent guides only, full-width hover,
+  a 2 px accent bar on the selection and an amber fade when a value changes (`NodeInfo.ponerValor`
+  stamps `resaltarDesde`; every tree value update must go through it). Row height 20/24 px by
+  density. `BuscadorArbol` filters (debounced 250 ms; index, matching and the lightweight copy model
+  are built on its own background thread, the EDT only swaps the model; the real tree is untouched;
+  `original(node)` maps back): 157k nodes search in ~100 ms with the EDT busy at most ~50 ms.
+  Double-click, Enter and the context menu add to the monitor (no in-row button); read/edit stay in
+  the context menu.
 - Right: five tabs (Monitor, Reports, GOOSE, Ajustes = Setting Groups above + SP below, Datasets)
   with a `BotonRegistro` at the right end of the tab row (FlatLaf `JTabbedPane.trailingComponent`;
   badge = warnings/errors since the log was last opened, amber or red). `PanelRegistro` is hidden by

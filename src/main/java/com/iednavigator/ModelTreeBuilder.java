@@ -118,7 +118,7 @@ class ModelTreeBuilder {
         if (treeNode != null) {
             Object userObj = treeNode.getUserObject();
             if (userObj instanceof NodeInfo) {
-                ((NodeInfo) userObj).value = value;
+                ((NodeInfo) userObj).ponerValor(value);
                 treeModel.nodeChanged(treeNode);
             }
         }
@@ -139,7 +139,7 @@ class ModelTreeBuilder {
         if (treeNode != null && treeNode.getUserObject() instanceof NodeInfo) {
             NodeInfo info = (NodeInfo) treeNode.getUserObject();
             if (info.node instanceof BasicDataAttribute) {
-                info.value = formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node));
+                info.ponerValor(formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node)));
                 treeModel.nodeChanged(treeNode);
                 return;
             }
@@ -151,7 +151,7 @@ class ModelTreeBuilder {
                 if (node.getUserObject() instanceof NodeInfo) {
                     NodeInfo info = (NodeInfo) node.getUserObject();
                     if (info.node instanceof BasicDataAttribute) {
-                        info.value = formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node));
+                        info.ponerValor(formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node)));
                         treeModel.nodeChanged(node);
                     }
                 }
@@ -525,7 +525,7 @@ class ModelTreeBuilder {
             NodeInfo info = (NodeInfo) userObj;
             if (info.node instanceof BasicDataAttribute) {
                 BasicDataAttribute bda = (BasicDataAttribute) info.node;
-                info.value = ValorBda.texto(bda);
+                info.ponerValor(ValorBda.texto(bda));
                 treeModel.nodeChanged(treeNode);
             }
         }

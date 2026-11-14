@@ -26,6 +26,21 @@ class NodeInfo {
      * aca estan todas, para quien necesite una en particular (el mando busca la de CO).
      */
     java.util.List<ModelNode> variantes;
+    /** Cuando cambio el valor por ultima vez (0 = nunca): la fila se resalta y se desvanece. */
+    volatile long resaltarDesde;
+    /** El ultimo cambio de cualquier nodo: ArbolUI repinta mientras haya resaltes vivos. */
+    static volatile long ultimoResalte;
+
+    /** Pone el valor; si cambio respecto del anterior, la fila se resalta (como en el monitor). */
+    void ponerValor(String nuevo) {
+        String viejo = value;
+        value = nuevo;
+        if (viejo != null && !viejo.equals(nuevo)) {
+            long ahora = System.currentTimeMillis();
+            resaltarDesde = ahora;
+            ultimoResalte = ahora;
+        }
+    }
 
     @Override
     public String toString() {

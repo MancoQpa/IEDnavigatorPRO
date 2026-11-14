@@ -472,13 +472,14 @@ public class IEDNavigatorApp extends JFrame {
         rootNode = new DefaultMutableTreeNode(I18n.t("tree.root"));
         treeModel = new DefaultTreeModel(rootNode);
         modelTree = new JTree(treeModel);
+        // Guias verticales, hover, barra de seleccion y resalte de cambios (ArbolUI)
+        modelTree.setUI(new ArbolUI());
         // Rediseño: sin raiz visible (los LD arriba) y filas nuevas (ArbolCeldaRenderer)
         modelTree.setRootVisible(false);
         modelTree.setShowsRootHandles(true);
         rendererArbol = new ArbolCeldaRenderer(watchlist, () -> loadedSclFile);
         modelTree.setCellRenderer(rendererArbol);
         modelTree.setDragEnabled(true);
-        modelTree.setRowHeight(28);
         ModelTreeBuilder.agruparDo = PREFS_UI.getBoolean(PREF_AGRUPAR, true);
         rendererArbol.mostrarDescripciones = PREFS_UI.getBoolean(PREF_DESCRIPCIONES, true);
         modelTree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
@@ -818,11 +819,13 @@ public class IEDNavigatorApp extends JFrame {
 
     /**
      * Ver › Densidad compacta: alto de las filas del arbol y del monitor, en un solo lugar.
-     * Las medidas finales del documento (20/24 y 24/28) llegan con el arbol y el monitor nuevos.
+     * Arbol: 20 / 24 px. Monitor: las medidas del documento (24/28) llegan con el monitor nuevo.
      */
     private void aplicarDensidad() {
         boolean compacta = PREFS_UI.getBoolean(PREF_COMPACTA, true);
-        if (modelTree != null) modelTree.setRowHeight(compacta ? 28 : 32);
+        int fila = compacta ? 20 : 24;
+        UIManager.put("Tree.rowHeight", fila);
+        if (modelTree != null) modelTree.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(fila));
         if (monitorTable != null) monitorTable.setRowHeight(compacta ? 34 : 38);
     }
 
@@ -1013,13 +1016,13 @@ public class IEDNavigatorApp extends JFrame {
         busq.setAlignmentX(0f);
         arriba.add(busq);
 
-        lblRuta.setFont(Estilo.mono(Font.PLAIN, 12));
+        lblRuta.setFont(Estilo.mono(Font.PLAIN, 11));
         lblRuta.setForeground(Estilo.TEXTO_2);
         lblRuta.setOpaque(true);
         lblRuta.setBackground(Estilo.temaOscuro() ? superficie() : new Color(0xF7F8FA));
         lblRuta.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 1, 0, new Color(0xEEF0F3)),
-                BorderFactory.createEmptyBorder(6, 14, 6, 14)));
+                BorderFactory.createEmptyBorder(4, 14, 4, 14)));
         lblRuta.setAlignmentX(0f);
         lblRuta.setMaximumSize(new Dimension(Integer.MAX_VALUE, lblRuta.getPreferredSize().height + 14));
         arriba.add(lblRuta);
@@ -1036,7 +1039,13 @@ public class IEDNavigatorApp extends JFrame {
                 BorderFactory.createEmptyBorder(7, 14, 7, 14)));
         p.add(pista, BorderLayout.SOUTH);
 
-        buscador = new BuscadorArbol(modelTree, treeModel, campoBusqueda, t -> {
+        // Hilo propio: backgroundExecutor tiene uno solo y lo ocupan tareas largas (leer un CID)
+        java.util.concurrent.ExecutorService hiloBusqueda = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "busqueda-arbol");
+            t.setDaemon(true);
+            return t;
+        });
+        buscador = new BuscadorArbol(modelTree, treeModel, campoBusqueda, hiloBusqueda, t -> {
             lblCoincidencias.setText(t);
             lblCoincidencias.setVisible(!t.isEmpty());
         });
@@ -1088,28 +1097,11 @@ public class IEDNavigatorApp extends JFrame {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
-    /** Agrega al monitor lo seleccionado en el arbol (Enter, doble clic, + Monitor, menu). */
+    /** Agrega al monitor lo seleccionado en el arbol (Enter, doble clic, menu). */
     private void monitorearSeleccion() {
         TreePath[] paths = modelTree.getSelectionPaths();
         if (paths == null) return;
         for (TreePath tp : paths) addNodeToMonitor((DefaultMutableTreeNode) tp.getLastPathComponent());
-    }
-
-    /** true si el clic cayo sobre el "+ Monitor" de la fila seleccionada. */
-    private boolean clicEnMonitor(MouseEvent e) {
-        TreePath tp = modelTree.getPathForLocation(e.getX(), e.getY());
-        if (tp == null || !modelTree.isPathSelected(tp)) return false;
-        Rectangle r = modelTree.getPathBounds(tp);
-        if (r == null) return false;
-        int row = modelTree.getRowForPath(tp);
-        Component c = rendererArbol.getTreeCellRendererComponent(modelTree, tp.getLastPathComponent(), true,
-                modelTree.isExpanded(tp), modelTree.getModel().isLeaf(tp.getLastPathComponent()), row, true);
-        if (!rendererArbol.monitor.isVisible()) return false;
-        c.setSize(r.width, r.height);
-        c.doLayout();
-        Rectangle b = rendererArbol.monitor.getBounds();
-        b.translate(r.x, r.y);
-        return b.contains(e.getPoint());
     }
 
     /** Lupa del campo de busqueda (dibujada: sin archivos de imagen). */
@@ -1700,17 +1692,33 @@ public class IEDNavigatorApp extends JFrame {
         main.setLayout(new BoxLayout(main, BoxLayout.Y_AXIS));
         main.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
 
+        // Arbol del modelo (rediseño 2026-11): marcas de tipo y colores de ArbolCeldaRenderer
         main.add(legendTitle(I18n.t("legend.nodetypes.title")));
-        main.add(legendRow(IconFactory.createNodeIcon("LD", new Color(100,100,200)),
-                I18n.t("legend.nodetypes.ld")));
-        main.add(legendRow(IconFactory.createNodeIcon("DO", new Color(150,150,200)),
-                I18n.t("legend.nodetypes.do")));
-        main.add(legendRow(IconFactory.createCircleIcon(new Color(100,180,100), 14),
-                I18n.t("legend.nodetypes.da")));
+        main.add(legendMarca("LD", new Color(0x24467E), I18n.t("legend.nodetypes.ld")));
+        main.add(legendMarca("LN", new Color(0x1E5A44), I18n.t("legend.nodetypes.ln")));
+        main.add(legendMarca("DO", new Color(0x4A525D), I18n.t("legend.nodetypes.do")));
+        main.add(legendMarca("DA", new Color(0x6B7480), I18n.t("legend.nodetypes.da")));
+        main.add(Box.createVerticalStrut(8));
+
+        main.add(legendTitle(I18n.t("legend.colors.title")));
+        main.add(legendMuestra(muestraTexto("ST", Estilo.mono(Font.PLAIN, 10), new Color(0x3F4752), new Color(0xEEF0F3)),
+                I18n.t("legend.tree.fc")));
+        main.add(legendMuestra(muestraTexto("= on", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
+                I18n.t("legend.tree.value")));
+        main.add(legendMuestra(muestraTexto("invalid", Estilo.mono(Font.PLAIN, 11), Estilo.AVISO, null),
+                I18n.t("legend.tree.quality")));
+        main.add(legendMuestra(muestraTexto("= 10:27:31.204", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
+                I18n.t("legend.tree.time")));
+        main.add(legendMuestra(muestraTexto("Abc", Estilo.ui(Font.PLAIN, 11), Estilo.TEXTO_2, null),
+                I18n.t("legend.tree.desc")));
+        main.add(legendMuestra(muestraTexto("stVal", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
+                I18n.t("legend.tree.monitored")));
+        main.add(legendMuestra(muestraTexto("  stVal  ", Estilo.mono(Font.PLAIN, 11), Estilo.TEXTO, Estilo.RESALTE),
+                I18n.t("legend.tree.flash")));
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.lngroups.title")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(200, 50, 50)),
+        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(36, 70, 126)),
                 I18n.t("legend.lngroups.x")));
         main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(200,100, 50)),
                 I18n.t("legend.lngroups.xc")));
@@ -1720,9 +1728,9 @@ public class IEDNavigatorApp extends JFrame {
                 I18n.t("legend.lngroups.m1")));
         main.add(legendRow(IconFactory.createMeterIcon(new Color(0,150,100)),
                 I18n.t("legend.lngroups.m2")));
-        main.add(legendRow(IconFactory.createShieldIcon(new Color(180,30,30)),
+        main.add(legendRow(IconFactory.createShieldIcon(new Color(59, 74, 107), false),
                 I18n.t("legend.lngroups.p")));
-        main.add(legendRow(IconFactory.createShieldIcon(new Color(130,30,170)),
+        main.add(legendRow(IconFactory.createShieldIcon(new Color(130,30,170), false),
                 I18n.t("legend.lngroups.r")));
         main.add(legendRow(IconFactory.createGearIcon(new Color(0,150,170)),
                 I18n.t("legend.lngroups.a")));
@@ -1751,18 +1759,6 @@ public class IEDNavigatorApp extends JFrame {
                 I18n.t("legend.breaker.intermediate")));
         main.add(Box.createVerticalStrut(8));
 
-        main.add(legendTitle(I18n.t("legend.colors.title")));
-        main.add(legendColorRow(new Color(0,150,0),
-                I18n.t("legend.colors.green")));
-        main.add(legendColorRow(new Color(200,0,0),
-                I18n.t("legend.colors.red")));
-        main.add(legendColorRow(new Color(255,140,0),
-                I18n.t("legend.colors.orange")));
-        main.add(legendColorRow(new Color(120,80,180),
-                I18n.t("legend.colors.purple")));
-        main.add(legendColorRow(new Color(0,100,200),
-                I18n.t("legend.colors.blue")));
-        main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.fc.title")));
         main.add(legendFcRow("ST", new Color(21,101,192),
@@ -1904,6 +1900,43 @@ public class IEDNavigatorApp extends JFrame {
         row.add(iconLbl);
         row.add(new JLabel("<html>" + html + "</html>"));
         return row;
+    }
+
+    /** Fila con la marca de tipo del arbol (LD, LN, DO, DA: monoespaciada de 9 px, sin recuadro). */
+    private static JPanel legendMarca(String marca, Color color, String descripcion) {
+        JLabel m = new JLabel(marca);
+        m.setFont(Estilo.mono(Font.BOLD, 9));
+        m.setForeground(color);
+        m.setPreferredSize(new Dimension(22, 16));
+        return legendMuestra(m, descripcion);
+    }
+
+    /** Fila con una muestra (como se ve en el arbol) y su explicacion. */
+    private static JPanel legendMuestra(JComponent muestra, String descripcion) {
+        // Muestra a la izquierda y el texto en el resto: un texto largo se parte en dos renglones
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        row.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel caja = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        caja.setOpaque(false);
+        caja.setPreferredSize(new Dimension(110, 18));
+        caja.add(muestra);
+        row.add(caja, BorderLayout.WEST);
+        row.add(new JLabel("<html><div style='width:270px'>" + descripcion + "</div></html>"), BorderLayout.CENTER);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+        return row;
+    }
+
+    private static JLabel muestraTexto(String t, Font f, Color tinta, Color fondo) {
+        JLabel l = new JLabel(t);
+        l.setFont(f);
+        l.setForeground(tinta);
+        if (fondo != null) {
+            l.setOpaque(true);
+            l.setBackground(fondo);
+            l.setBorder(BorderFactory.createEmptyBorder(0, 3, 0, 3));
+        }
+        return l;
     }
 
     /** Fila de color de texto + descripción para el diálogo de leyenda. */
@@ -2545,11 +2578,6 @@ public class IEDNavigatorApp extends JFrame {
 
             @Override
             public void mousePressed(MouseEvent e) {
-                if (SwingUtilities.isLeftMouseButton(e) && clicEnMonitor(e)) {
-                    monitorearSeleccion();
-                    e.consume();
-                    return;
-                }
                 handleTreePopup(e);
             }
 
@@ -4784,9 +4812,10 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("TableHeader.separatorColor", new Color(0xDDDDDD));
         UIManager.put("TableHeader.font", Estilo.ui(Font.BOLD, 12));
 
-        UIManager.put("Tree.rowHeight", 22);
+        UIManager.put("Tree.rowHeight", PREFS_UI.getBoolean(PREF_COMPACTA, true) ? 20 : 24);
         UIManager.put("Tree.wideSelection", true);
-        UIManager.put("Tree.paintLines", false);
+        UIManager.put("Tree.paintLines", true);
+        UIManager.put("Tree.hash", new Color(0xE3E6EB));
         UIManager.put("List.selectionArc", 8);
 
         // ── 3. Detalles de pulido ─────────────────────────────────────────

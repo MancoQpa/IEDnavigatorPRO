@@ -21,13 +21,14 @@ class IconFactory {
         iconCache.put("breaker_intermediate", createBreakerIcon("intermediate"));
 
         // Iconos para tipos de LN — grupos IEC 61850-7-4
-        iconCache.put("ln_xcbr",    createNodeIcon("LN", new Color(200,  50,  50)));  // X switching: rojo
+        // Rediseño 2026-11: el rojo queda solo para estados reales (no para una clase de LN)
+        iconCache.put("ln_xcbr",    createNodeIcon("LN", new Color( 36,  70, 126)));  // X switching: azul pizarra
         iconCache.put("ln_xswi",    createNodeIcon("LN", new Color(200, 100,  50)));  // X switching: naranja
         iconCache.put("ln_mmxu",    createMeterIcon(new Color(  0, 100, 200)));       // M medición: azul
         iconCache.put("ln_mmtr",    createMeterIcon(new Color(  0, 150, 100)));       // M energía: verde-azul
         iconCache.put("ln_cswi",    createNodeIcon("LN", new Color(150, 100, 200)));  // C control: violeta
-        iconCache.put("ln_prot",    createShieldIcon(new Color(180,  30,  30)));      // P protección: rojo
-        iconCache.put("ln_rela",    createShieldIcon(new Color(130,  30, 170)));      // R prot-relacionada: violeta
+        iconCache.put("ln_prot",    createShieldIcon(new Color( 59,  74, 107), false)); // P protección: pizarra, sin "!"
+        iconCache.put("ln_rela",    createShieldIcon(new Color(130,  30, 170), false)); // R prot-relacionada: violeta
         iconCache.put("ln_auto",    createGearIcon(new Color(  0, 150, 170)));        // A automático: cian
         iconCache.put("ln_syst",    createDiamondIcon(new Color( 70,  70,  70)));     // L sistema: gris oscuro
         iconCache.put("ln_genr",    createDiamondIcon(new Color( 90,  90,  90)));     // G genérico: gris
@@ -186,6 +187,11 @@ class IconFactory {
 
     /** Ícono escudo — para nodos de protección (grupo P y R). */
     static Icon createShieldIcon(Color color) {
+        return createShieldIcon(color, true);
+    }
+
+    /** @param exclamacion el "!" de adentro: se leia como una alarma, y no lo es (rediseño 2026-11). */
+    static Icon createShieldIcon(Color color, boolean exclamacion) {
         return new Icon() {
             @Override
             public void paintIcon(Component c, Graphics g, int x, int y) {
@@ -206,6 +212,7 @@ class IconFactory {
                 g2.setStroke(new BasicStroke(1f));
                 g2.draw(shield);
                 // Símbolo de exclamación interior (protección)
+                if (!exclamacion) { g2.dispose(); return; }
                 g2.setColor(new Color(255, 255, 255, 200));
                 g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 g2.drawLine(x+8, y+5, x+8, y+10);
