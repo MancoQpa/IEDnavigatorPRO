@@ -107,7 +107,8 @@ final class BarraContexto extends JPanel {
         campoDestino.setFont(Estilo.mono(Font.PLAIN, 12));
         campoDestino.putClientProperty("JTextField.leadingIcon", new IconoPantalla());
         campoDestino.putClientProperty("JTextField.placeholderText", I18n.t("ctx.dest.placeholder"));
-        campoDestino.putClientProperty("FlatLaf.style", "arc:6; focusWidth:0; innerFocusWidth:1; borderColor:#C9CFD7");
+        // Consolas centrada queda alta (como en el monitor): mas margen arriba que abajo
+        campoDestino.putClientProperty("FlatLaf.style", "arc:6; focusWidth:0; innerFocusWidth:1; borderColor:#C9CFD7; margin:6,6,0,6");
         campoDestino.setToolTipText(I18n.t("ctx.dest.tip"));
         campoDestino.getAccessibleContext().setAccessibleName(I18n.t("ctx.dest.tip"));
         campoDestino.getDocument().addDocumentListener(new DocumentListener() {
@@ -173,6 +174,23 @@ final class BarraContexto extends JPanel {
         }
         segServidor.addActionListener(e -> { if (!estado.modoServidor()) acciones.elegirModo(true); });
         segCliente.addActionListener(e -> { if (estado.modoServidor()) acciones.elegirModo(false); });
+        // Teclado: Tab llega solo al boton marcado del grupo; las flechas pasan al otro modo
+        for (JToggleButton b : new JToggleButton[]{segServidor, segCliente}) {
+            b.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("LEFT"), "modoServidor");
+            b.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("RIGHT"), "modoCliente");
+            b.getActionMap().put("modoServidor", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    if (!estado.modoServidor()) { acciones.elegirModo(true); segServidor.requestFocusInWindow(); }
+                }
+            });
+            b.getActionMap().put("modoCliente", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    if (estado.modoServidor()) { acciones.elegirModo(false); segCliente.requestFocusInWindow(); }
+                }
+            });
+        }
+        segServidor.setToolTipText(I18n.t("ctx.seg.tip"));
+        segCliente.setToolTipText(I18n.t("ctx.seg.tip"));
         g.gridx = 1; g.insets = new Insets(0, UIScale.scale(12), 0, 0);
         add(seg, g);
 
@@ -440,6 +458,8 @@ final class BarraContexto extends JPanel {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(Estilo.TEXTO_2);
             g2.setStroke(new BasicStroke(1.4f));
+            // 3 px mas arriba: el margen del campo (que baja el texto en Consolas) tambien lo baja a el
+            y -= 3;
             g2.drawRoundRect(x + 1, y + 2, 11, 7, 2, 2);
             g2.drawLine(x + 6, y + 9, x + 6, y + 12);
             g2.drawLine(x + 4, y + 12, x + 9, y + 12);

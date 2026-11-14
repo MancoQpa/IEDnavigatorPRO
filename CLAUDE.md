@@ -94,7 +94,13 @@ Main class: `com.iednavigator.IEDNavigatorApp`
 ## Main window layout (redesign of 2026-11)
 
 UI only; no IEC 61850 logic changed. Colors and fonts live in `Estilo` (system fonts: Segoe UI and
-Consolas; accent #1F5FBF; dark title bar). The window is:
+Consolas, created with FlatLaf `FontUtils.getCompositeFont` so CJK text has a fallback; accent
+#1F5FBF; dark title bar). Consolas only for references, values, the log and shortcuts. Cards have a
+1 px border and 8 px radius; `TitledBorder` is restyled globally (bold 12 px title over a faint top
+line, no box). Ver › Densidad compacta changes everything in `aplicarDensidad()`: tree rows 20/24,
+tables 24/28 (monitor and any table still on the default height), outer margin and gaps 8/12. Text
+and background pairs are kept at 4.5:1 or more (checked in a test); Consolas sits high when
+centered, so the monitor value/time cells and the host:port field add top margin. The window is:
 
 - Menu bar: Archivo (load, recent, export monitor/log, exit); Simulación in Server / Conexión in
   Client (title and items follow the mode: start/stop or connect F5; port, check, release; polling,

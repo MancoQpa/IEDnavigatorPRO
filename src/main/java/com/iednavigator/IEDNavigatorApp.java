@@ -92,6 +92,9 @@ public class IEDNavigatorApp extends JFrame {
     private JSplitPane splitDerecha;
     /** Alto del registro abierto; se recuerda al cerrarlo. Al principio, 190 px. */
     private int altoRegistro = -1;
+    /** Lo que la densidad ajusta ademas de las filas: margen exterior y separacion entre paneles. */
+    private JPanel panelContenido;
+    private JSplitPane splitPrincipal;
     private int tamDivisor;
     /** Boton Registro de la fila de pestañas, con el badge de avisos y errores. */
     private final BotonRegistro btnRegistro = new BotonRegistro();
@@ -352,7 +355,9 @@ public class IEDNavigatorApp extends JFrame {
 
         // === Panel de contenido ===
         JPanel contentPanel = new JPanel(new BorderLayout(5, 5));
-        contentPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(separacionPaneles(), separacionPaneles(),
+                separacionPaneles(), separacionPaneles()));
+        panelContenido = contentPanel;
         contentPanel.setBackground(fondoVentana());
 
         // === Panel Superior: Modo + Status + Connection Info ===
@@ -388,7 +393,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Info de conexion (IP:Puerto)
         lblConnectionInfo = new JLabel(I18n.t("status.noconn"));
-        lblConnectionInfo.setFont(new Font("Monospaced", Font.BOLD, 12));
+        lblConnectionInfo.setFont(Estilo.mono(Font.BOLD, 12));
         lblConnectionInfo.setForeground(new Color(0, 80, 160));
         statusPanel.add(new JLabel(I18n.t("lbl.connection")));
         statusPanel.add(lblConnectionInfo);
@@ -397,7 +402,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Panel EAST: nombre del IED/equipo activo destacado
         lblIedDisplay = new JLabel("  " + I18n.t("status.nodevice") + "  ");
-        lblIedDisplay.setFont(new Font("Dialog", Font.BOLD, 15));
+        lblIedDisplay.setFont(Estilo.ui(Font.BOLD, 15));
         lblIedDisplay.setForeground(new Color(15, 55, 120));
         lblIedDisplay.setHorizontalAlignment(SwingConstants.CENTER);
         lblIedDisplay.setVerticalAlignment(SwingConstants.CENTER);
@@ -565,6 +570,7 @@ public class IEDNavigatorApp extends JFrame {
             });
         }
         JSplitPane mainSplit = separador(JSplitPane.HORIZONTAL_SPLIT, panelArbol, derecha);
+        splitPrincipal = mainSplit;
         mainSplit.setResizeWeight(0.3);
         mainSplit.setDividerLocation(380);
         centerPanel.setOpaque(false);
@@ -582,7 +588,7 @@ public class IEDNavigatorApp extends JFrame {
         // lblStatus se siguen escribiendo y la barra lee el error de lblStatus.
         createStatusBar();
         // Preferencias de Ver guardadas: registro (oculto por defecto) y densidad
-        tamDivisor = splitDerecha.getDividerSize();
+        tamDivisor = separacionPaneles();
         tarjetaRegistro.setVisible(false);
         splitDerecha.setDividerSize(0);
         if (PREFS_UI.getBoolean(PREF_REGISTRO, false)) SwingUtilities.invokeLater(() -> mostrarRegistro(true));
@@ -820,14 +826,45 @@ public class IEDNavigatorApp extends JFrame {
 
     /**
      * Ver › Densidad compacta: alto de las filas del arbol y del monitor, en un solo lugar.
-     * Arbol: 20 / 24 px. Monitor: 24 / 28 px.
+     * Arbol: 20 / 24 px. Tablas: 24 / 28 px. Margen y separacion entre paneles: 8 / 12 px.
      */
     private void aplicarDensidad() {
         boolean compacta = PREFS_UI.getBoolean(PREF_COMPACTA, true);
         int fila = compacta ? 20 : 24;
         UIManager.put("Tree.rowHeight", fila);
         if (modelTree != null) modelTree.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(fila));
-        if (monitorTable != null) monitorTable.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(compacta ? 24 : 28));
+        // Tablas: el monitor y las de las otras pestañas que usan el alto por defecto
+        int tablaAntes = UIManager.getInt("Table.rowHeight");
+        int tabla = compacta ? 24 : 28;
+        UIManager.put("Table.rowHeight", tabla);
+        if (monitorTable != null) monitorTable.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(tabla));
+        for (JTable t : tablas(getContentPane())) {
+            if (t != monitorTable && t.getRowHeight() == com.formdev.flatlaf.util.UIScale.scale(tablaAntes)) {
+                t.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(tabla));
+            }
+        }
+        // Margen exterior y separacion entre paneles
+        int sep = separacionPaneles();
+        if (panelContenido != null) panelContenido.setBorder(BorderFactory.createEmptyBorder(sep, sep, sep, sep));
+        if (splitPrincipal != null) splitPrincipal.setDividerSize(sep);
+        tamDivisor = sep;
+        if (splitDerecha != null && tarjetaRegistro != null && tarjetaRegistro.isVisible()) splitDerecha.setDividerSize(sep);
+        if (getContentPane() != null) { getContentPane().revalidate(); getContentPane().repaint(); }
+    }
+
+    /** Separacion entre paneles y margen exterior: 8 px compacta, 12 px comoda. */
+    private static int separacionPaneles() {
+        return com.formdev.flatlaf.util.UIScale.scale(PREFS_UI.getBoolean(PREF_COMPACTA, true) ? 8 : 12);
+    }
+
+    private static java.util.List<JTable> tablas(Container c) {
+        java.util.List<JTable> l = new java.util.ArrayList<>();
+        if (c == null) return l;
+        for (Component x : c.getComponents()) {
+            if (x instanceof JTable) l.add((JTable) x);
+            else if (x instanceof Container) l.addAll(tablas((Container) x));
+        }
+        return l;
     }
 
     private static JMenuItem item(String texto, KeyStroke atajo, java.awt.event.ActionListener accion) {
@@ -866,9 +903,10 @@ public class IEDNavigatorApp extends JFrame {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(superficie());
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                int arco = com.formdev.flatlaf.util.UIScale.scale(16);   // radio de 8 px
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, arco, arco);
                 g2.setColor(Estilo.BORDE);
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, arco, arco);
                 g2.dispose();
             }
         };
@@ -892,7 +930,7 @@ public class IEDNavigatorApp extends JFrame {
     private static JSplitPane separador(int orientacion, Component a, Component b) {
         JSplitPane sp = new JSplitPane(orientacion, a, b);
         sp.setBorder(null);
-        sp.setDividerSize(12);
+        sp.setDividerSize(separacionPaneles());
         sp.setOpaque(false);
         sp.setContinuousLayout(true);
         if (sp.getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI) {
@@ -1729,7 +1767,7 @@ public class IEDNavigatorApp extends JFrame {
         main.add(legendMarca("LD", new Color(0x24467E), I18n.t("legend.nodetypes.ld")));
         main.add(legendMarca("LN", new Color(0x1E5A44), I18n.t("legend.nodetypes.ln")));
         main.add(legendMarca("DO", new Color(0x4A525D), I18n.t("legend.nodetypes.do")));
-        main.add(legendMarca("DA", new Color(0x6B7480), I18n.t("legend.nodetypes.da")));
+        main.add(legendMarca("DA", new Color(0x626A76), I18n.t("legend.nodetypes.da")));
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.colors.title")));
@@ -2096,7 +2134,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Placa de identificación del IED (se llena tras conectar con FC=DC)
         lblIedInfo = new JLabel(" ");
-        lblIedInfo.setFont(new java.awt.Font("Monospaced", java.awt.Font.PLAIN, 11));
+        lblIedInfo.setFont(Estilo.mono(Font.PLAIN, 11));
         lblIedInfo.setForeground(new Color(40, 80, 160));
         statusBar.add(lblIedInfo, BorderLayout.CENTER);
 
@@ -4571,7 +4609,7 @@ public class IEDNavigatorApp extends JFrame {
         iedList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         iedList.setSelectedIndex(0);
         iedList.setVisibleRowCount(Math.min(ieds.size(), 8));
-        iedList.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        iedList.setFont(Estilo.mono(Font.PLAIN, 12));   // nombres de IED: identificadores
         JScrollPane scrollPane = new JScrollPane(iedList);
         scrollPane.setPreferredSize(new Dimension(350, 150));
         panel.add(scrollPane, BorderLayout.CENTER);
@@ -4880,7 +4918,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // ── 2. Tablas y árbol ─────────────────────────────────────────────
         if (!oscuro) UIManager.put("Table.alternateRowColor", new Color(0xF5F8FC));
-        UIManager.put("Table.rowHeight", 22);
+        UIManager.put("Table.rowHeight", PREFS_UI.getBoolean(PREF_COMPACTA, true) ? 24 : 28);
         UIManager.put("Table.showHorizontalLines", false);
         UIManager.put("Table.showVerticalLines", false);
         UIManager.put("Table.intercellSpacing", new Dimension(0, 0));
@@ -4958,7 +4996,8 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("List.selectionForeground", Color.BLACK);
 
         // Campos de texto: borde gris que pasa a azul con foco, placeholder gris
-        UIManager.put("TextField.placeholderForeground", new Color(0x9E9E9E));
+        // Placeholder legible: #6B7480 sobre blanco da 4,8:1 (el gris de antes, 2,7:1)
+        UIManager.put("TextField.placeholderForeground", new Color(0x6B7480));
         UIManager.put("ComboBox.buttonStyle", "mac"); // flecha sin caja separada
         UIManager.put("Spinner.buttonStyle", "mac");
 
@@ -4969,6 +5008,10 @@ public class IEDNavigatorApp extends JFrame {
 
         // TitledBorder con fuente más chica y semibold (look de sección)
         UIManager.put("TitledBorder.font", Estilo.ui(Font.BOLD, 12));
+        // Rediseño: sin recuadros. Los paneles que usan TitledBorder (Reports, GOOSE, Datasets...)
+        // quedan con el titulo en negrita de 12 px sobre una linea tenue
+        UIManager.put("TitledBorder.border", BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0xEEF0F3)));
+        UIManager.put("TitledBorder.titleColor", Estilo.TEXTO);
 
         // ── 5. Barra de título moderna (decoraciones FlatLaf, estilo VS Code) ──
         // Menú embebido en la barra de título + fondo unificado con la ventana
@@ -4994,7 +5037,7 @@ public class IEDNavigatorApp extends JFrame {
                     "TabbedPane.selectedBackground", "TabbedPane.hoverColor", "TabbedPane.inactiveUnderlineColor",
                     "Table.selectionBackground", "Table.selectionForeground", "Tree.selectionBackground",
                     "Tree.selectionForeground", "List.selectionBackground", "List.selectionForeground",
-                    "SplitPaneDivider.gripColor", "TextField.placeholderForeground",
+                    "SplitPaneDivider.gripColor", "TextField.placeholderForeground", "TitledBorder.border",
                     "TabbedPane.background", "TabbedPane.contentAreaColor"}) {
                 UIManager.put(k, null);
             }

@@ -35,7 +35,7 @@ import java.util.function.Supplier;
 final class ArbolCeldaRenderer implements TreeCellRenderer {
 
     private static final Color MARCA_LD = new Color(0x24467E), MARCA_LN = new Color(0x1E5A44),
-            MARCA_DO = new Color(0x4A525D), MARCA_DA = new Color(0x6B7480);
+            MARCA_DO = new Color(0x4A525D), MARCA_DA = new Color(0x626A76);   // 4,8:1 o mas sobre hover, seleccion y ambar
     private static final Color FC_FONDO = new Color(0xEEF0F3), FC_TINTA = new Color(0x3F4752);
 
     private final Set<String> watchlist;
