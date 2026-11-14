@@ -124,7 +124,8 @@ centered, so the monitor value/time cells and the host:port field add top margin
   per FC). `ArbolCeldaRenderer` draws each row as symbol · name · FC · value · description. Symbols
   and colors come from `SimbolosArbol`, which the legend also uses (keep them in one place): icon per
   node type and per LN class group, breaker icon for a Pos and its stVal by state, value colored by
-  state (green active, red inactive, orange warning; accent otherwise), violet name for FC=BL, blue
+  state (substation convention: red closed/energized, green open/de-energized, orange warning;
+  accent otherwise), violet name for FC=BL, blue
   for monitored, one color per FC tag. FC and `= value` only on DAs; `q` only when not good,
   `t` only as time of day with ms; description (SCL or dictionary, loaded in the background)
   always on LD/LN, on DOs only on hover or selection, never when it repeats the name or LN class,

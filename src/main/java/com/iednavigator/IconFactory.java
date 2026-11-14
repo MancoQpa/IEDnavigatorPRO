@@ -105,8 +105,9 @@ class IconFactory {
 
     static Icon createBreakerIcon(String state) {
         return new Icon() {
-            private final Color COLOR_ON           = new Color(0, 180, 0);
-            private final Color COLOR_OFF          = new Color(220, 50, 50);
+            // Convencion de subestaciones: cerrado/energizado en rojo, abierto/desenergizado en verde
+            private final Color COLOR_ON           = new Color(220, 50, 50);
+            private final Color COLOR_OFF          = new Color(0, 160, 0);
             private final Color COLOR_INTERMEDIATE = new Color(255, 165, 0);
 
             @Override
@@ -116,9 +117,9 @@ class IconFactory {
 
                 Color color; Color bgColor; boolean closed;
                 if (state.equalsIgnoreCase("on") || state.equals("2")) {
-                    color = COLOR_ON; bgColor = new Color(200, 255, 200); closed = true;
+                    color = COLOR_ON; bgColor = new Color(255, 200, 200); closed = true;
                 } else if (state.equalsIgnoreCase("off") || state.equals("1")) {
-                    color = COLOR_OFF; bgColor = new Color(255, 200, 200); closed = false;
+                    color = COLOR_OFF; bgColor = new Color(200, 255, 200); closed = false;
                 } else {
                     color = COLOR_INTERMEDIATE; bgColor = new Color(255, 240, 200); closed = false;
                 }
@@ -146,8 +147,9 @@ class IconFactory {
 
     static Icon createLargeBreakerIcon(String state) {
         return new Icon() {
-            private final Color COLOR_ON           = new Color(0, 180, 0);
-            private final Color COLOR_OFF          = new Color(220, 50, 50);
+            // Convencion de subestaciones: cerrado/energizado en rojo, abierto/desenergizado en verde
+            private final Color COLOR_ON           = new Color(220, 50, 50);
+            private final Color COLOR_OFF          = new Color(0, 160, 0);
             private final Color COLOR_INTERMEDIATE = new Color(255, 165, 0);
 
             @Override
@@ -157,9 +159,9 @@ class IconFactory {
 
                 Color color; Color bgColor; boolean closed;
                 if (state.equalsIgnoreCase("on") || state.equals("2")) {
-                    color = COLOR_ON; bgColor = new Color(200, 255, 200); closed = true;
+                    color = COLOR_ON; bgColor = new Color(255, 200, 200); closed = true;
                 } else if (state.equalsIgnoreCase("off") || state.equals("1")) {
-                    color = COLOR_OFF; bgColor = new Color(255, 200, 200); closed = false;
+                    color = COLOR_OFF; bgColor = new Color(200, 255, 200); closed = false;
                 } else {
                     color = COLOR_INTERMEDIATE; bgColor = new Color(255, 240, 200); closed = false;
                 }

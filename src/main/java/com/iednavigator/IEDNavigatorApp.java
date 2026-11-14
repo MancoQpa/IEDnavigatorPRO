@@ -1793,10 +1793,10 @@ public class IEDNavigatorApp extends JFrame {
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.colors.title")));
-        main.add(legendMuestra(muestraTexto("= ON", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ACTIVO, null),
-                I18n.t("legend.colors.green")));
-        main.add(legendMuestra(muestraTexto("= OFF", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_INACTIVO, null),
+        main.add(legendMuestra(muestraTexto("= ON", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_CERRADO, null),
                 I18n.t("legend.colors.red")));
+        main.add(legendMuestra(muestraTexto("= OFF", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ABIERTO, null),
+                I18n.t("legend.colors.green")));
         main.add(legendMuestra(muestraTexto("= INTERMEDIATE_STATE", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ADVERTENCIA, null),
                 I18n.t("legend.colors.orange")));
         main.add(legendMuestra(muestraTexto("blkEna", Estilo.mono(Font.PLAIN, 11), SimbolosArbol.BLOQUEO, null),

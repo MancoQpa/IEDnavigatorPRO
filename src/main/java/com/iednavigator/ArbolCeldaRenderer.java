@@ -25,8 +25,9 @@ import java.util.function.Supplier;
  *   una posicion (Pos y su stVal), segun su estado. Iconos y colores salen de SimbolosArbol,
  *   lo mismo que muestra la leyenda.
  * - Nombre: LD/LN/DO en sans de 12 px; DA en monoespaciada de 11 px.
- * - FC (en su color) y valor solo en los DA. El valor va en el color de su estado (verde
- *   activo, rojo inactivo, naranja advertencia) o, si no expresa un estado, en el acento. La
+ * - FC (en su color) y valor solo en los DA. El valor va en el color de su estado (rojo
+ *   cerrado/energizado, verde abierto/desenergizado, naranja advertencia) o, si no expresa
+ *   un estado, en el acento. La
  *   calidad (q) solo si no es good, en naranja; los timestamps (t), solo la hora con ms.
  * - Nombre violeta en los nodos de bloqueo (FC=BL) y azul en lo que esta en el monitor.
  * - Descripcion en gris al final, la primera en recortarse con "…": siempre en LD y LN; en

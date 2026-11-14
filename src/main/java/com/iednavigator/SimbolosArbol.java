@@ -15,7 +15,9 @@ import java.util.Map;
  *
  *   - icono por tipo de nodo (LD, DO, DA) y por grupo de la clase de LN (IEC 61850-7-4);
  *   - icono de interruptor segun la posicion (stVal de un Pos: ON / OFF / intermedio);
- *   - color del valor segun el estado (verde activo, rojo inactivo, naranja advertencia);
+ *   - color del valor segun el estado, con la convencion de subestaciones: rojo cerrado o
+ *     energizado (ON, CLOSED, TRUE; tambien ALARM), verde abierto o desenergizado (OFF, OPEN,
+ *     FALSE; tambien OK, la salud normal), naranja advertencia;
  *   - violeta para los nodos de bloqueo (FC=BL), azul para lo que esta en el monitor;
  *   - un color por FC.
  *
@@ -24,8 +26,8 @@ import java.util.Map;
  */
 final class SimbolosArbol {
 
-    static final Color VALOR_ACTIVO = new Color(0x1E7A46);       // ON, TRUE, OK, CLOSED
-    static final Color VALOR_INACTIVO = new Color(0xC80000);     // OFF, FALSE, ALARM, OPEN
+    static final Color VALOR_CERRADO = new Color(0xC80000);      // ON, CLOSED, TRUE, ALARM: cerrado / energizado
+    static final Color VALOR_ABIERTO = new Color(0x1E7A46);      // OFF, OPEN, FALSE, OK: abierto / desenergizado
     static final Color VALOR_ADVERTENCIA = new Color(0xA85400);  // INTERMEDIATE, BAD, TEST, BLOCKED
     static final Color BLOQUEO = new Color(0x7850B4);            // FC=BL
     static final Color MONITOREADO = new Color(0x0064C8);         // en el monitor / watchlist
@@ -57,14 +59,14 @@ final class SimbolosArbol {
         return c != null ? c : new Color(0x4A525D);
     }
 
-    /** Estado que expresa un valor: 1 activo, -1 inactivo, 0 advertencia, null ninguno. */
+    /** Estado que expresa un valor: 1 cerrado/energizado, -1 abierto/desenergizado, 0 advertencia, null ninguno. */
     static Integer estadoDe(NodeInfo info) {
         if (info == null || info.value == null || info.value.isEmpty()) return null;
         String v = info.value.trim().toLowerCase(Locale.ROOT);
         // "4 [sbo-with-enhanced-security]", "1 [on]": la etiqueta es lo de los corchetes
         String e = v.contains("[") && v.contains("]") ? v.substring(v.indexOf('[') + 1, v.lastIndexOf(']')).trim() : v;
-        if (e.equals("on") || e.equals("ok") || e.equals("closed") || e.equals("true")) return 1;
-        if (e.equals("off") || e.equals("alarm") || e.equals("open") || e.equals("false")) return -1;
+        if (e.equals("on") || e.equals("closed") || e.equals("true") || e.equals("alarm")) return 1;
+        if (e.equals("off") || e.equals("open") || e.equals("false") || e.equals("ok")) return -1;
         if (e.contains("intermediate") || e.equals("bad") || e.equals("bad_state") || e.equals("warning")
                 || e.equals("blocked") || e.equals("test")) return 0;
         // Posicion de doble bit sin nombre: 2 cerrado, 1 abierto, 0 y 3 intermedio/malo
@@ -78,7 +80,7 @@ final class SimbolosArbol {
 
     static Color colorEstado(Integer estado) {
         if (estado == null) return null;
-        return estado > 0 ? VALOR_ACTIVO : estado < 0 ? VALOR_INACTIVO : VALOR_ADVERTENCIA;
+        return estado > 0 ? VALOR_CERRADO : estado < 0 ? VALOR_ABIERTO : VALOR_ADVERTENCIA;
     }
 
     /** Icono de la fila: tipo de nodo, grupo de LN, o interruptor segun la posicion. */
