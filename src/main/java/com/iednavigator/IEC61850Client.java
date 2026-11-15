@@ -1931,6 +1931,12 @@ public class IEC61850Client implements ClientEventListener {
     }
 
     private volatile Retoma ultimaRetoma = Retoma.NINGUNA;
+    private volatile byte[] ultimaRetomaId;
+
+    /** La EntryID que se escribió en la última habilitación con retoma (null si no hubo). */
+    public byte[] entryIdRetomada() {
+        return ultimaRetomaId == null ? null : ultimaRetomaId.clone();
+    }
 
     public void enableReporting(Rcb rcb, ReportListener listener) throws IOException {
         if (!isConnected() || association == null) {
@@ -1950,6 +1956,7 @@ public class IEC61850Client implements ClientEventListener {
             } else if (rcb instanceof Brcb) {
                 Brcb brcb = (Brcb) rcb;
                 ultimaRetoma = Retoma.NINGUNA;
+                ultimaRetomaId = null;
                 String rptId = brcb.getRptId() != null ? brcb.getRptId().getStringValue() : null;
                 byte[] ultima = rptId == null ? null : ultimaEntryId.get(claveEntry(rptId));
                 boolean habilitado = brcb.getRptEna() != null && brcb.getRptEna().getValue();
@@ -1959,7 +1966,7 @@ public class IEC61850Client implements ClientEventListener {
                             false, false, false, false, false, false, false, true);
                     ultimaRetoma = errores.isEmpty() || errores.get(0) == null
                             ? Retoma.RETOMADO : Retoma.RECHAZADO;
-                    logDiag("[BRCB] " + rptId + ": EntryID " + hex(ultima) + " -> " + ultimaRetoma);
+                    ultimaRetomaId = ultima.clone();
                 }
                 enableRcb(brcb);
             }

@@ -431,12 +431,11 @@ class ReportsPanel {
      * se avisa en el registro si retomo o si el IED ya no la tenia.
      */
     private void habilitar(IEC61850Client cl, Rcb rcb, String rcbName) throws java.io.IOException {
-        String rptId = rcb.getRptId() != null ? rcb.getRptId().getStringValue() : null;
-        byte[] antes = rcb instanceof Brcb ? cl.ultimaEntryIdDe(rptId) : null;
         IEC61850Client.Retoma r = cl.enableReportingRetomando(rcb, report ->
             SwingUtilities.invokeLater(() -> handleReportReceived(report)));
-        if (antes == null || r == IEC61850Client.Retoma.NINGUNA) return;
-        String hex = IEC61850Client.hex(antes);
+        byte[] id = cl.entryIdRetomada();
+        if (id == null || r == IEC61850Client.Retoma.NINGUNA) return;
+        String hex = IEC61850Client.hex(id);
         String msg = r == IEC61850Client.Retoma.RETOMADO
                 ? I18n.t("log.rep.resync", rcbName, hex)
                 : I18n.t("log.rep.resync.rechazada", rcbName, hex);
