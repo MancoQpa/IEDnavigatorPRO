@@ -643,7 +643,7 @@ class GoosePanel {
 
         gooseLogArea = new JTextArea();
         gooseLogArea.setEditable(false);
-        gooseLogArea.setFont(new Font("Monospaced", Font.PLAIN, 10));
+        gooseLogArea.setFont(Estilo.mono(Font.PLAIN, 11));
         JScrollPane logScroll = new JScrollPane(gooseLogArea);
         JPanel logPanel = new JPanel(new BorderLayout());
         logPanel.add(logScroll, BorderLayout.CENTER);

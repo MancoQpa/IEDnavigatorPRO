@@ -144,7 +144,7 @@ final class InterruptorVirtualDialog extends JDialog {
 
         // ── Registro ────────────────────────────────────────────────────────
         taRegistro.setEditable(false);
-        taRegistro.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        taRegistro.setFont(Estilo.mono(Font.PLAIN, 12));
         JPanel registro = new JPanel(new BorderLayout(4, 4));
         registro.setBorder(new TitledBorder(I18n.t("vint.registro")));
         registro.add(new JScrollPane(taRegistro), BorderLayout.CENTER);

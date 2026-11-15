@@ -2661,7 +2661,7 @@ public class Iec61850Dictionary {
         // Badge de tipo
         EntryType etype = entry != null ? entry.type : EntryType.SPECIAL;
         JLabel badge = new JLabel(etype.badge);
-        badge.setFont(new Font("Monospaced", Font.BOLD, 13));
+        badge.setFont(Estilo.mono(Font.BOLD, 13));
         badge.setForeground(Color.WHITE);
         badge.setOpaque(true);
         badge.setBackground(headerColor.darker());

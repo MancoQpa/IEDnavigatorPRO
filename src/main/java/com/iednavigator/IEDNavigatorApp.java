@@ -656,6 +656,10 @@ public class IEDNavigatorApp extends JFrame {
             @Override public void menuCanceled(javax.swing.event.MenuEvent e) { }
         });
         menuFile.add(menuRecent);
+        JMenuItem miNuevaVentana = item(I18n.t("menu.file.newwindow"),
+                KeyStroke.getKeyStroke(KeyEvent.VK_N, ctrl | InputEvent.SHIFT_DOWN_MASK), e -> abrirNuevaVentana());
+        miNuevaVentana.setToolTipText(I18n.t("menu.file.newwindow.tip"));
+        menuFile.add(miNuevaVentana);
         menuFile.addSeparator();
         menuFile.add(item(I18n.t("menu.file.exportmonitor"), KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrl), e -> exportarMonitor()));
         menuFile.add(item(I18n.t("menu.file.exportlog"), null, e -> exportarRegistro()));
@@ -1490,6 +1494,52 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     /** Ver > Arbol / Registro: muestra u oculta el panel; el divisor se acomoda solo. */
+    /**
+     * Archivo › Nueva ventana: otra instancia del programa, con su modelo, su arbol, su monitor
+     * y su registro de sesion. Es la forma de tener la simulacion corriendo en una y el Cliente
+     * en la otra (INFORME_SERVIDOR_DE_FONDO.md, opcion 0): en una sola ventana el arbol, el
+     * monitor y la placa GOOSE son unicos y los comparten los dos modos.
+     *
+     * El IEDNavigatorPRO.exe carga la JVM dentro de su propio proceso: relanzar el mismo comando
+     * abre otra instancia. Corriendo con java (desde el repo), se relanza java con los mismos
+     * argumentos de la JVM y la misma ruta de clases.
+     */
+    private void abrirNuevaVentana() {
+        try {
+            java.util.List<String> cmd = comandoNuevaVentana();
+            Process p = new ProcessBuilder(cmd)
+                    .directory(new File(System.getProperty("user.dir")))
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            log(I18n.t("log.newwindow", String.valueOf(p.pid())));
+        } catch (Exception ex) {
+            log(I18n.t("err.newwindow", String.valueOf(ex.getMessage())));
+            JOptionPane.showMessageDialog(this, I18n.t("err.newwindow", String.valueOf(ex.getMessage())),
+                    I18n.t("menu.file.newwindow"), JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    static java.util.List<String> comandoNuevaVentana() {
+        String actual = ProcessHandle.current().info().command().orElse(null);
+        java.util.List<String> cmd = new java.util.ArrayList<>();
+        String nombre = actual == null ? "" : new File(actual).getName().toLowerCase(java.util.Locale.ROOT);
+        if (actual != null && !nombre.startsWith("java")) {
+            cmd.add(actual);   // el lanzador .exe
+            return cmd;
+        }
+        cmd.add(actual != null ? actual
+                : System.getProperty("java.home") + File.separator + "bin" + File.separator + "java");
+        for (String arg : java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+            if (arg.startsWith("-agentlib") || arg.startsWith("-javaagent") || arg.startsWith("-Xdebug")) continue;
+            cmd.add(arg);
+        }
+        cmd.add("-cp");
+        cmd.add(System.getProperty("java.class.path"));
+        cmd.add(IEDNavigatorApp.class.getName());
+        return cmd;
+    }
+
     /** Plegado: solo la cabecera. Desplegado: el alto recordado (por defecto 220 px). */
     private void ajustarAltoPropiedades() {
         if (splitIzquierda == null || panelPropiedades == null || splitIzquierda.getHeight() <= 0) return;
@@ -1676,6 +1726,7 @@ public class IEDNavigatorApp extends JFrame {
     private void mostrarAtajos() {
         String[][] filas = {
             {"Ctrl+O", I18n.t("menu.file.open")},
+            {"Ctrl+Shift+N", I18n.t("menu.file.newwindow")},
             {"Ctrl+E", I18n.t("menu.file.exportmonitor")},
             {"F5", I18n.t("menu.sim.startstop")},
             {"Ctrl+L", I18n.t("menu.view.log")},
@@ -4621,7 +4672,7 @@ public class IEDNavigatorApp extends JFrame {
     private void showPortDiagnosisDialog(int port, String result) {
         JTextArea ta = new JTextArea(result);
         ta.setEditable(false);
-        ta.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        ta.setFont(Estilo.mono(Font.PLAIN, 12));
         ta.setBackground(new Color(248, 248, 248));
         ta.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
