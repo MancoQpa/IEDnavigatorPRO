@@ -323,6 +323,12 @@ because `classes` comes first in the classpath). Each file says why and what cha
   `test/TestServidorMando` maneuvers a ctlModel-4 CSWI with the app's own client.
   Known: changing the command authority (`ponerAutoridad`) changes `Loc` in the model but the
   library cannot report it (`setValues` needs a mirror copy); the same happens in the simulator.
+- `BdaReasonForInclusion.java` (since 2026-11-15): original v1.9.0 source rebuilt from the jar,
+  one change. A report's ReasonCode is **sent** with 6 bits (`84 02 02 04` for GI) instead of
+  7; the 7th bit (application-trigger) is sent only when set. With 7 bits OMICRON IEDScout
+  dropped the association 1 ms after the first report (GI or integrity); its own simulator
+  sends 6. The class size stays 7 so the client still **accepts** 6 and 7 bits
+  (`setValueFromMmsDataObj` rejects a longer bit-string). `test/TestMotivoReporte`.
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.
