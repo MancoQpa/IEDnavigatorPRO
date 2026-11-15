@@ -353,6 +353,11 @@ because `classes` comes first in the classpath). Each file says why and what cha
   rejected every write once the SCL set dataRef/configRef. `test/TestBrcb`; checked with IEDScout
   (GI, dchg and resync after reconnect). SqNum stays INT8U as the library models it (8-1 says
   INT16U for a BRCB).
+  Client side (2026-11-15): `IEC61850Client` remembers the last EntryID received per BRCB
+  (static map keyed `host:port|RptID`, so it survives a reconnect) and writes it before RptEna
+  (`enableReportingRetomando` returns `Retoma` NINGUNA/RETOMADO/RECHAZADO; a rejected EntryID
+  still enables). The Reports tab adds Entry time and EntryID columns, logs the resync and
+  warns on BufOvfl. `test/TestBrcbCliente`.
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.
