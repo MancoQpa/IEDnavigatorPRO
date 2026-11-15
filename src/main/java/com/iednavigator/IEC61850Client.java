@@ -665,6 +665,7 @@ public class IEC61850Client implements ClientEventListener {
         heartbeatNode = null;
         valueCache.clear();
         ctlModelLeido.clear();
+        leidos.clear();
 
         // Shutdown executor if needed
         if (connectionExecutor != null && !connectionExecutor.isShutdown()) {
@@ -965,9 +966,29 @@ public class IEC61850Client implements ClientEventListener {
         marcarTrafico();
         try {
             association.getDataValues(n);
+            marcarLeido(n);
         } finally {
             marcarTrafico();
         }
+    }
+
+    // Atributos cuyo valor vino del IED (lectura o reporte), como "ref$FC". La lectura es
+    // diferida: hasta que se lee, el modelo tiene el valor por defecto (0, false, 1970), y el
+    // árbol no debe mostrarlo como si fuera un dato.
+    private final java.util.Set<String> leidos = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private void marcarLeido(ModelNode n) {
+        if (n instanceof BasicDataAttribute) {
+            leidos.add(n.getReference() + "$" + ((BasicDataAttribute) n).getFc());
+        } else if (n != null && n.getChildren() != null) {
+            for (ModelNode h : n.getChildren()) marcarLeido(h);
+        }
+    }
+
+    /** ¿El valor de este atributo vino del IED? (false: es el valor por defecto del modelo). */
+    public boolean fueLeido(ModelNode n) {
+        return n instanceof BasicDataAttribute
+                && leidos.contains(n.getReference() + "$" + ((BasicDataAttribute) n).getFc());
     }
 
     /** setDataValues con el mismo criterio que {@link #leer}. */
@@ -1951,6 +1972,7 @@ public class IEC61850Client implements ClientEventListener {
 
         // Notificar cambios de valores
         List<FcModelNode> values = report.getValues();
+        if (values != null) for (FcModelNode v : values) marcarLeido(v);
         if (values != null && valueChangeListener != null) {
             for (FcModelNode node : values) {
                 if (node instanceof BasicDataAttribute) {

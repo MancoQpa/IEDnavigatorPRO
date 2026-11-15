@@ -183,11 +183,24 @@ class ModelTreeBuilder {
             BiFunction<ModelNode, String, String> enumFormatter) {
         Collection<ModelNode> children = modelNode.getChildren();
         if (children == null) return;
+        agregarHijos(parent, modelNode, new ArrayList<>(children), nodeMap, enumFormatter);
+    }
 
-        // Un DO aparece una sola vez aunque la libreria lo tenga una vez por FC (Beh [ST],
-        // Beh [SV]...): sus atributos de todos los FC cuelgan del mismo nodo y el FC se ve
-        // junto a cada atributo. Rediseño de 2026-11.
-        if (agruparDo && modelNode instanceof LogicalNode) {
+    /**
+     * Agrega al nodo del arbol los hijos de un nodo del modelo (o, para un DO agrupado, los de
+     * todas sus variantes).
+     *
+     * Un DO aparece una sola vez aunque la libreria lo tenga una vez por FC (Beh [ST],
+     * Beh [SV]...): sus atributos de todos los FC cuelgan del mismo nodo y el FC se ve junto a
+     * cada atributo. Lo mismo un SDO dentro de un DO (phsA de un WYE). Rediseño de 2026-11.
+     */
+    private static void agregarHijos(
+            DefaultMutableTreeNode parent,
+            ModelNode padreModelo,
+            List<ModelNode> children,
+            Map<String, DefaultMutableTreeNode> nodeMap,
+            BiFunction<ModelNode, String, String> enumFormatter) {
+        if (agruparDo && (padreModelo instanceof LogicalNode || padreModelo instanceof FcDataObject)) {
             Map<String, List<ModelNode>> porNombre = new LinkedHashMap<>();
             List<ModelNode> otros = new ArrayList<>();
             for (ModelNode child : children) {
@@ -202,13 +215,17 @@ class ModelTreeBuilder {
                 for (ModelNode v : variantes) {
                     if (((FcModelNode) v).getFc() == Fc.ST) { principal = v; break; }
                 }
-                DefaultMutableTreeNode doNode = createTreeNode(principal, "DO", enumFormatter);
+                DefaultMutableTreeNode doNode = createTreeNode(principal, getNodePrefix(principal), enumFormatter);
                 NodeInfo info = (NodeInfo) doNode.getUserObject();
                 info.fc = null;
                 info.variantes = variantes;
                 parent.add(doNode);
                 nodeMap.put(principal.getReference().toString(), doNode);
-                for (ModelNode v : variantes) buildTreeRecursive(doNode, v, nodeMap, enumFormatter);
+                List<ModelNode> hijos = new ArrayList<>();
+                for (ModelNode v : variantes) {
+                    if (v.getChildren() != null) hijos.addAll(v.getChildren());
+                }
+                agregarHijos(doNode, principal, hijos, nodeMap, enumFormatter);
             }
             children = otros;
         }
@@ -252,12 +269,19 @@ class ModelTreeBuilder {
         return new DefaultMutableTreeNode(info);
     }
 
-    private static String getNodePrefix(ModelNode node) {
+    /**
+     * Marca de cada nodo, como en el SCL: DO (de un LN), SDO (un DO dentro de otro), DA
+     * (atributo de un DO, simple o compuesto: stVal, q, Oper) y BDA (componente de un DA
+     * compuesto: Oper.ctlVal, mag.f). Hasta 2026-11 un DA compuesto salia como "SDO" y un
+     * SDO de verdad como "DO".
+     */
+    static String getNodePrefix(ModelNode node) {
         if (node instanceof LogicalDevice)          return "LD";
         if (node instanceof LogicalNode)            return "LN";
-        if (node instanceof FcDataObject)           return "DO";
-        if (node instanceof ConstructedDataAttribute) return "SDO";
-        if (node instanceof BasicDataAttribute)     return "DA";
+        if (node instanceof FcDataObject)           return node.getParent() instanceof FcDataObject ? "SDO" : "DO";
+        if (node instanceof ConstructedDataAttribute || node instanceof BasicDataAttribute || node instanceof Array) {
+            return node.getParent() instanceof FcDataObject || node.getParent() == null ? "DA" : "BDA";
+        }
         return "";
     }
 

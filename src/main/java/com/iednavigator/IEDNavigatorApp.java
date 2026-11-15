@@ -484,7 +484,11 @@ public class IEDNavigatorApp extends JFrame {
         modelTree.setRootVisible(false);
         modelTree.setShowsRootHandles(true);
         rendererArbol = new ArbolCeldaRenderer(watchlist, () -> loadedSclFile, iconCache);
+        rendererArbol.modoServidor = () -> currentMode == AppMode.SERVER;
+        rendererArbol.sinLeer = n -> currentMode == AppMode.CLIENT && client != null && !client.fueLeido(n);
         modelTree.setCellRenderer(rendererArbol);
+        // El CDC deducido lleva un tooltip que lo aclara
+        ToolTipManager.sharedInstance().registerComponent(modelTree);
         modelTree.setDragEnabled(true);
         ModelTreeBuilder.agruparDo = PREFS_UI.getBoolean(PREF_AGRUPAR, true);
         rendererArbol.mostrarDescripciones = PREFS_UI.getBoolean(PREF_DESCRIPCIONES, true);
@@ -4971,6 +4975,7 @@ public class IEDNavigatorApp extends JFrame {
         ServerModel model = server.getServerModel();
         if (model == null) { log(I18n.t("log.app.servermodelnull")); return; }
         log(I18n.t("log.app.servermodellds", model.getChildren().size()));
+        if (rendererArbol != null) rendererArbol.olvidarCdc();
         buildTree(model);
     }
 
@@ -4978,6 +4983,7 @@ public class IEDNavigatorApp extends JFrame {
         ServerModel model = client.getServerModel();
         if (model == null) { log(I18n.t("log.app.clientmodelnull")); return; }
         log(I18n.t("log.app.clientmodellds", model.getChildren().size()));
+        if (rendererArbol != null) rendererArbol.olvidarCdc();
         buildTree(model);
     }
 

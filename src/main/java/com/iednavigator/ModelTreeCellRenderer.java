@@ -113,13 +113,13 @@ class ModelTreeCellRenderer extends DefaultTreeCellRenderer {
             return lnIcon(name, iconCache);
         }
 
-        if (prefix.equals("DO")) {
+        if (prefix.equals("DO") || prefix.equals("SDO")) {
             if (name.equals("POS") || name.equals("BLKOPN") || name.equals("BLKCLS"))
                 return iconCache.get("breaker_intermediate");
             return iconCache.get("do");
         }
 
-        if (prefix.equals("DA") || prefix.equals("SDO")) {
+        if (prefix.equals("DA") || prefix.equals("BDA")) {
             if (name.equalsIgnoreCase("stVal") && info.value != null) {
                 String v = info.value.toLowerCase();
                 String label = v.contains("[") && v.contains("]")

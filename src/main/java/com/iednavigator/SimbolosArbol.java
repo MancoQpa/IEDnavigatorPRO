@@ -89,12 +89,12 @@ final class SimbolosArbol {
         String pre = info.prefix != null ? info.prefix : "";
         if (pre.equals("LD")) return iconos.get("ld");
         if (pre.equals("LN")) return ModelTreeCellRenderer.lnIcon(nombre.toUpperCase(Locale.ROOT), iconos);
-        if (pre.equals("DO")) {
+        if (pre.equals("DO") || pre.equals("SDO")) {
             if (nombre.equalsIgnoreCase("Pos")) return iconoInterruptor(posicionDelDo(info), iconos);
             if (nombre.equalsIgnoreCase("BlkOpn") || nombre.equalsIgnoreCase("BlkCls")) return iconos.get("breaker_intermediate");
             return iconos.get("do");
         }
-        if (pre.equals("DA") || pre.equals("SDO")) {
+        if (pre.equals("DA") || pre.equals("BDA")) {
             if (info.node instanceof BdaDoubleBitPos && "stVal".equalsIgnoreCase(nombre)) {
                 return iconoInterruptor(estadoDe(info), iconos);
             }

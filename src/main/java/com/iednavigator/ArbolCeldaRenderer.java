@@ -16,10 +16,15 @@ import java.util.function.Supplier;
 /**
  * Fila del arbol del modelo (rediseño de 2026-11). Orden fijo:
  *
- *   marca de tipo · nombre · FC · valor · descripcion
+ *   marca de tipo · nombre · etiqueta · valor · descripcion
  *
  *   LN  PDOP1  Sobrepotencia direccional
- *   DA  stVal  ST  = on
+ *   DO  Beh    ENS
+ *   DA  stVal  ST  = 1 · on
+ *   DO  Str    ACD*            (CDC deducido: no lo dijo el SCL)
+ *
+ * La etiqueta es el CDC en los DO y SDO (del SCL si lo trae; si no, deducido de sus atributos
+ * y con asterisco; nada si no se puede deducir) y la FC en los DA.
  *
  * - Simbolo: el icono del tipo de nodo y del grupo de la clase de LN; el de interruptor para
  *   una posicion (Pos y su stVal), segun su estado. Iconos y colores salen de SimbolosArbol,
@@ -55,6 +60,17 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
     private final JLabel tipo = new JLabel();
     private final JLabel nombre = new JLabel();
     private final Insignia fc = new Insignia(Estilo.mono(Font.PLAIN, 10)).alto(14);
+    private final Insignia cdc = new Insignia(Estilo.mono(Font.PLAIN, 10)).alto(14);
+    private static final Color FONDO_CDC = new Color(0xEEF0F3), TEXTO_CDC = new Color(0x3F4752);
+    /** CDC por referencia del DO: {cdc, "scl" | "deducido"} (null si no se pudo). */
+    private final Map<String, String[]> cdcs = new HashMap<>();
+    /** Modo Servidor: un 0 en Beh/Mod viene del archivo y significa "no configurado". */
+    java.util.function.BooleanSupplier modoServidor = () -> false;
+    /**
+     * Cliente: el atributo todavía no se leyó del IED (la lectura es diferida) y el modelo
+     * tiene su valor por defecto. Ese valor no se muestra: un 0 o un 1970 no son datos.
+     */
+    java.util.function.Predicate<ModelNode> sinLeer = n -> false;
     private final JLabel valor = new JLabel();
     private final JLabel desc = new JLabel();
     private final Component sepFc = Box.createHorizontalStrut(UIScale.scale(6)),
@@ -91,6 +107,7 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
         celda.add(nombre);
         celda.add(sepFc);
         celda.add(fc);
+        celda.add(cdc);
         celda.add(sepValor);
         celda.add(valor);
         celda.add(sepDesc);
@@ -113,6 +130,8 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
                                                   boolean leaf, int row, boolean hasFocus) {
         Object uo = value instanceof DefaultMutableTreeNode ? ((DefaultMutableTreeNode) value).getUserObject() : value;
         fc.setVisible(false);
+        cdc.setVisible(false);
+        celda.setToolTipText(null);
         valor.setVisible(false);
         desc.setVisible(false);
         sepFc.setVisible(false);
@@ -129,7 +148,9 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
         NodeInfo info = (NodeInfo) uo;
         tipo.setVisible(true);
         String pre = info.prefix == null ? "" : info.prefix;
-        boolean esDa = "DA".equals(pre) || "SDO".equals(pre);
+        boolean esDa = "DA".equals(pre) || "BDA".equals(pre);
+        boolean esDo = "DO".equals(pre) || "SDO".equals(pre);
+        asegurarScl(f -> tree.repaint());
         tipo.setIcon(SimbolosArbol.icono(info, iconos));
 
         nombre.setText(info.name != null ? info.name : info.toString());
@@ -142,8 +163,11 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
                 sepFc.setVisible(true);
             }
             ponerValor(info);
-        } else if (mostrarDescripciones) {
-            boolean mostrar = !"DO".equals(pre) || sel || Objects.equals(tree.getClientProperty(ArbolUI.FILA_HOVER), row);
+        } else {
+            if (esDo) ponerCdc(info);
+        }
+        if (!esDa && mostrarDescripciones) {
+            boolean mostrar = !esDo || sel || Objects.equals(tree.getClientProperty(ArbolUI.FILA_HOVER), row);
             String d = mostrar ? descripcion(info, tree) : null;
             if (d != null && !d.isEmpty() && !repiteNombre(d, info.name)) {
                 desc.setText(d);
@@ -164,6 +188,7 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
     /** "= valor" en acento; q solo si no es good (en aviso); t solo la hora. */
     private void ponerValor(NodeInfo info) {
         ModelNode n = info.node;
+        if (n instanceof BasicDataAttribute && sinLeer.test(n)) return;
         String texto = null;
         Color estado = SimbolosArbol.colorEstado(SimbolosArbol.estadoDe(info));
         Color color = estado != null ? estado : Estilo.ACENTO;
@@ -171,22 +196,87 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
             texto = calidadNoBuena((BdaQuality) n);
             color = SimbolosArbol.VALOR_ADVERTENCIA;
         } else if (n instanceof BdaTimestamp) {
+            // Vacío o 1970: nunca se actualizó o el equipo no tiene hora. Reloj sin sincronizar:
+            // la hora, en aviso. Mismo criterio que ConformidadIec61850.
             try {
-                java.time.Instant i = ((BdaTimestamp) n).getInstant();
-                if (i != null) texto = hora.format(Date.from(i));
+                BdaTimestamp ts = (BdaTimestamp) n;
+                java.time.Instant i = ts.getInstant();
+                if (i == null || i.getEpochSecond() == 0) {
+                    texto = I18n.t("tree.t.nosync");
+                    color = SimbolosArbol.VALOR_ADVERTENCIA;
+                } else {
+                    texto = hora.format(Date.from(i));
+                    if (ts.getClockNotSynchronized()) color = SimbolosArbol.VALOR_ADVERTENCIA;
+                }
             } catch (Exception e) {
                 texto = info.value;
             }
         } else if (info.value != null && !info.value.isEmpty()) {
-            texto = info.value;
+            texto = textoValor(info);
+            if (texto.endsWith(")") && texto.contains("· (")) color = SimbolosArbol.VALOR_ADVERTENCIA;
         }
         if (texto == null || texto.isEmpty()) return;
-        valor.setText(n instanceof BdaQuality ? texto : "= " + texto);
+        boolean sinSigno = n instanceof BdaQuality || (n instanceof BdaTimestamp && color == SimbolosArbol.VALOR_ADVERTENCIA
+                && texto.equals(I18n.t("tree.t.nosync")));
+        valor.setText(sinSigno ? texto : "= " + texto);
         valor.setForeground(color);
         // Un valor que expresa un estado va en negrita, como en la leyenda
         valor.setFont(Estilo.mono(estado != null || n instanceof BdaQuality ? Font.BOLD : Font.PLAIN, 11));
         valor.setVisible(true);
         sepValor.setVisible(true);
+    }
+
+    /**
+     * El valor como se lee: un enumerado "1 [on]" pasa a "1 · on". Un número fuera del
+     * enumerado estándar (Beh, Mod, Health, ctlModel…) se marca: en Servidor un 0 viene del
+     * archivo y significa "no configurado" (CLAUDE.md); en Cliente es un valor fuera de rango.
+     */
+    String textoValor(NodeInfo info) {
+        String v = info.value.trim();
+        java.util.regex.Matcher m = ENUM.matcher(v);
+        if (m.matches()) return m.group(1) + " · " + m.group(2);
+        if (info.node instanceof BasicDataAttribute && v.matches("-?\\d+")) {
+            BasicDataAttribute bda = (BasicDataAttribute) info.node;
+            String ref = bda.getReference().toString();
+            String clase = CatalogoIec61850.claseEnumerado(ref, bda.getFc());
+            if (clase != null) {
+                long n = Long.parseLong(v);
+                String nombre = CatalogoIec61850.nombreEnumerado(ref, bda.getFc(), n);
+                if (nombre != null) return n + " · " + nombre.substring(0, nombre.lastIndexOf(" (")).trim();
+                if (n == 0 && modoServidor.getAsBoolean()) return "0 · (" + I18n.t("tree.enum.unset") + ")";
+                return v + " · (" + I18n.t("tree.enum.out") + ")";
+            }
+        }
+        return v;
+    }
+
+    private static final java.util.regex.Pattern ENUM = java.util.regex.Pattern.compile("^(-?\\d+) \\[(.+)\\]$");
+
+    /** El CDC del DO como etiqueta gris; con asterisco si es deducido. */
+    private void ponerCdc(NodeInfo info) {
+        if (!(info.node instanceof FcDataObject)) return;
+        String ref = info.node.getReference().toString();
+        String[] c = cdcs.get(ref);
+        if (c == null && !cdcs.containsKey(ref)) {
+            String delArchivo = null;
+            DescripcionesScl ds = delScl;
+            if (ds != null) {
+                try { delArchivo = ds.cdc(ref); } catch (Exception ignorada) { }
+            }
+            if (delArchivo != null) {
+                c = new String[]{delArchivo, "scl"};
+            } else {
+                String d = TiposIec61850.cdcDe((FcDataObject) info.node);
+                c = d == null ? null : new String[]{d, "deducido"};
+            }
+            cdcs.put(ref, c);
+        }
+        if (c == null) return;
+        boolean deducido = "deducido".equals(c[1]);
+        cdc.poner(deducido ? c[0] + "*" : c[0], FONDO_CDC, TEXTO_CDC, null);
+        cdc.setVisible(true);
+        sepFc.setVisible(true);
+        celda.setToolTipText(I18n.t(deducido ? "tree.cdc.inferred.tip" : "tree.cdc.scl.tip", c[0]));
     }
 
     /** "invalid", "questionable", "test", "test · blocked"…, o null si es good y sin marcas. */
@@ -225,27 +315,37 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
     }
 
     /** Descripcion corta: la del SCL si la trae; si no, el nombre de la clase o del DO en la norma. */
+    /**
+     * Lee en segundo plano las descripciones y los CDC del SCL vigente (un SCD grande tarda).
+     * Si cambió el archivo, vacía los cachés y repinta cuando termina.
+     */
+    private void asegurarScl(java.util.function.Consumer<File> repintar) {
+        File f = scl.get();
+        if (f == sclDeLasDescripciones) return;
+        descripciones.clear();
+        cdcs.clear();
+        sclDeLasDescripciones = f;
+        delScl = null;
+        if (f == null) return;
+        Thread t = new Thread(() -> {
+            DescripcionesScl ds = DescripcionesScl.de(f);
+            SwingUtilities.invokeLater(() -> {
+                if (f != sclDeLasDescripciones) return;
+                delScl = ds;
+                descripciones.clear();
+                cdcs.clear();
+                repintar.accept(f);
+            });
+        }, "descripciones-scl");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Se cambió el modelo (otro IED u otro archivo): los CDC se vuelven a calcular. */
+    void olvidarCdc() { cdcs.clear(); }
+
     private String descripcion(NodeInfo info, JTree tree) {
         if (info.node == null) return null;
-        File f = scl.get();
-        if (f != sclDeLasDescripciones) {
-            descripciones.clear();
-            sclDeLasDescripciones = f;
-            delScl = null;
-            if (f != null) {
-                Thread t = new Thread(() -> {
-                    DescripcionesScl ds = DescripcionesScl.de(f);
-                    SwingUtilities.invokeLater(() -> {
-                        if (f != sclDeLasDescripciones) return;
-                        delScl = ds;
-                        descripciones.clear();
-                        tree.repaint();
-                    });
-                }, "descripciones-scl");
-                t.setDaemon(true);
-                t.start();
-            }
-        }
         String ref = info.node.getReference().toString();
         if (descripciones.containsKey(ref)) return descripciones.get(ref);
         String d = null;
@@ -256,7 +356,7 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
         if (d == null || d.isEmpty() || d.length() > 60) {
             Iec61850Dictionary.Entry e = Iec61850Dictionary.lookup(info.name);
             boolean tipoOk = e != null && (("LN".equals(info.prefix) && e.type == Iec61850Dictionary.EntryType.LOGICAL_NODE)
-                    || ("DO".equals(info.prefix) && e.type == Iec61850Dictionary.EntryType.DATA_OBJECT));
+                    || (("DO".equals(info.prefix) || "SDO".equals(info.prefix)) && e.type == Iec61850Dictionary.EntryType.DATA_OBJECT));
             if (tipoOk) {
                 String n = I18n.currentTag().startsWith("es") ? e.fullNameES : e.fullNameEN;
                 if (n != null && !n.isEmpty()) d = n;
