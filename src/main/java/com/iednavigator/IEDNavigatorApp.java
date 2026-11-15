@@ -114,6 +114,10 @@ public class IEDNavigatorApp extends JFrame {
     private BarraContexto barraContexto;
     /** Arbol o estado vacio ("no hay SCL" / "sin conexion"). */
     private JPanel panelArbol;
+    /** Panel Propiedades debajo del arbol, y el split vertical que los separa. */
+    private PanelPropiedades panelPropiedades;
+    private JSplitPane splitIzquierda;
+    private JCheckBoxMenuItem miPropiedades;
     private final CardLayout cardsArbol = new CardLayout();
     private final JLabel vacioTitulo = new JLabel();
     private final JLabel vacioTexto = new JLabel();
@@ -524,9 +528,8 @@ public class IEDNavigatorApp extends JFrame {
         rightTabbedPane.addTab(I18n.t("tab.datasets"),
             new DatasetPanel(this, this::log, panelModelSupplier, panelClientSupplier,
                 backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        // Data Model, Comparar SCL y Mapa GOOSE: ventanas propias desde Herramientas.
-        panelesHerramienta.put("tab.datamodel",
-            new DataModelPanel(this, this::log, panelModelSupplier, iconCache).createPanel());
+        // Comparar SCL y Mapa GOOSE: ventanas propias desde Herramientas. El Explorador del
+        // Data Model se reemplazo por el panel Propiedades, debajo del arbol.
         panelesHerramienta.put("tab.sclcmp", new SclComparePanel(this, this::log).createPanel());
         panelesHerramienta.put("tab.goosemap", new GooseMapPanel(this, this::log).createPanel());
         rightTabbedPane.setTabPlacement(JTabbedPane.TOP);
@@ -574,7 +577,26 @@ public class IEDNavigatorApp extends JFrame {
                 @Override public void mouseReleased(MouseEvent e) { recordarAltoRegistro(); }
             });
         }
-        JSplitPane mainSplit = separador(JSplitPane.HORIZONTAL_SPLIT, panelArbol, derecha);
+        // Propiedades del nodo seleccionado, debajo del arbol: plegable y con su alto recordado
+        panelPropiedades = new PanelPropiedades(rendererArbol);
+        JPanel tarjetaPropiedades = tarjeta(null, panelPropiedades);
+        tarjetaPropiedades.setMinimumSize(new Dimension(200, 30));
+        splitIzquierda = separador(JSplitPane.VERTICAL_SPLIT, panelArbol, tarjetaPropiedades);
+        splitIzquierda.setResizeWeight(1.0);
+        splitIzquierda.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) { ajustarAltoPropiedades(); }
+        });
+        if (splitIzquierda.getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI) {
+            ((javax.swing.plaf.basic.BasicSplitPaneUI) splitIzquierda.getUI()).getDivider().addMouseListener(new MouseAdapter() {
+                @Override public void mouseReleased(MouseEvent e) { recordarAltoPropiedades(); }
+            });
+        }
+        panelPropiedades.alPlegar(p -> {
+            PREFS_UI.putBoolean(PREF_PROPS_PLEGADO, p);
+            if (miPropiedades != null) miPropiedades.setSelected(!p);
+            SwingUtilities.invokeLater(this::ajustarAltoPropiedades);
+        });
+        JSplitPane mainSplit = separador(JSplitPane.HORIZONTAL_SPLIT, splitIzquierda, derecha);
         splitPrincipal = mainSplit;
         mainSplit.setResizeWeight(0.3);
         mainSplit.setDividerLocation(380);
@@ -586,7 +608,11 @@ public class IEDNavigatorApp extends JFrame {
         barraContexto = new BarraContexto(estadoParaBarra(), accionesDeBarra());
         mainPanel.add(barraContexto, BorderLayout.NORTH);
         // La barra y el estado vacio leen el estado de la ventana: un reloj liviano los refresca.
-        new javax.swing.Timer(400, e -> refrescarContexto()).start();
+        new javax.swing.Timer(400, e -> {
+            refrescarContexto();
+            if (panelPropiedades != null) panelPropiedades.refrescar();
+        }).start();
+        SwingUtilities.invokeLater(() -> panelPropiedades.ponerPlegado(PREFS_UI.getBoolean(PREF_PROPS_PLEGADO, false)));
 
         // Barra de estado inferior: ya no se muestra (la placa del IED esta en la barra de
         // contexto; el reloj y "Listo" no aportaban). Se arma igual porque lblIedInfo y
@@ -612,6 +638,7 @@ public class IEDNavigatorApp extends JFrame {
     private JMenuItem miInterruptorVirtual;
 
     // Preferencias de Ver, guardadas como el idioma (Preferences de com/iednavigator)
+    private static final String PREF_PROPS_PLEGADO = "view.props.collapsed", PREF_PROPS_ALTO = "view.props.height";
     private static final String PREF_REGISTRO = "view.log", PREF_AGRUPAR = "view.groupdo",
             PREF_DESCRIPCIONES = "view.descriptions", PREF_COMPACTA = "view.compact";
 
@@ -705,9 +732,13 @@ public class IEDNavigatorApp extends JFrame {
         miRegistroVisible.addActionListener(e -> mostrarRegistro(miRegistroVisible.isSelected()));
         JCheckBoxMenuItem miArbol = new JCheckBoxMenuItem(I18n.t("menu.view.tree"), true);
         miArbol.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_1, ctrl));
-        miArbol.addActionListener(e -> mostrarPanel(panelArbol, miArbol.isSelected()));
+        miArbol.addActionListener(e -> mostrarPanel(splitIzquierda, miArbol.isSelected()));
+        miPropiedades = new JCheckBoxMenuItem(I18n.t("menu.view.props"), !PREFS_UI.getBoolean(PREF_PROPS_PLEGADO, false));
+        miPropiedades.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl));
+        miPropiedades.addActionListener(e -> panelPropiedades.ponerPlegado(!miPropiedades.isSelected()));
         menuView.add(miRegistroVisible);
         menuView.add(miArbol);
+        menuView.add(miPropiedades);
         menuView.addSeparator();
         menuView.add(item(I18n.t("menu.view.expand"), null, e -> expandirArbol()));
         menuView.add(item(I18n.t("menu.view.collapse"), null, e -> contraerArbol()));
@@ -747,7 +778,6 @@ public class IEDNavigatorApp extends JFrame {
         menuTools.addSeparator();
         menuTools.add(item(I18n.t("menu.tools.sclcmp"), KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrl), e -> abrirHerramienta("tab.sclcmp")));
         menuTools.add(item(I18n.t("menu.tools.goosemap"), KeyStroke.getKeyStroke(KeyEvent.VK_G, ctrl), e -> abrirHerramienta("tab.goosemap")));
-        menuTools.add(item(I18n.t("menu.tools.datamodel"), KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl), e -> abrirHerramienta("tab.datamodel")));
         menuTools.addSeparator();
         menuTools.add(menuIdioma());
         menuTools.add(item(I18n.t("menu.tools.prefs"), KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, ctrl), e -> mostrarPreferencias()));
@@ -1113,6 +1143,10 @@ public class IEDNavigatorApp extends JFrame {
         // Ruta del seleccionado: LD › LN › DO › DA
         modelTree.addTreeSelectionListener(e -> {
             TreePath tp = modelTree.getSelectionPath();
+            if (panelPropiedades != null) {
+                Object sel = tp == null ? null : ((DefaultMutableTreeNode) tp.getLastPathComponent()).getUserObject();
+                panelPropiedades.mostrar(sel instanceof NodeInfo ? (NodeInfo) sel : null);
+            }
             if (tp == null) { lblRuta.setText(" "); return; }
             java.util.List<String> partes = new java.util.ArrayList<>();
             for (Object o : tp.getPath()) {
@@ -1456,6 +1490,23 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     /** Ver > Arbol / Registro: muestra u oculta el panel; el divisor se acomoda solo. */
+    /** Plegado: solo la cabecera. Desplegado: el alto recordado (por defecto 220 px). */
+    private void ajustarAltoPropiedades() {
+        if (splitIzquierda == null || panelPropiedades == null || splitIzquierda.getHeight() <= 0) return;
+        int total = splitIzquierda.getHeight();
+        int div = splitIzquierda.getDividerSize();
+        int alto = panelPropiedades.plegado() ? panelPropiedades.altoCabecera()
+                : PREFS_UI.getInt(PREF_PROPS_ALTO, com.formdev.flatlaf.util.UIScale.scale(220));
+        alto = Math.max(panelPropiedades.altoCabecera(), Math.min(alto, total - 150));
+        splitIzquierda.setDividerLocation(total - alto - div);
+    }
+
+    private void recordarAltoPropiedades() {
+        if (splitIzquierda == null || panelPropiedades == null || panelPropiedades.plegado()) return;
+        int alto = splitIzquierda.getHeight() - splitIzquierda.getDividerLocation() - splitIzquierda.getDividerSize();
+        if (alto > panelPropiedades.altoCabecera() + 20) PREFS_UI.putInt(PREF_PROPS_ALTO, alto);
+    }
+
     private void mostrarPanel(JComponent panel, boolean visible) {
         if (panel == null) return;
         panel.setVisible(visible);
@@ -1509,8 +1560,7 @@ public class IEDNavigatorApp extends JFrame {
         if (d == null) {
             JComponent panel = panelesHerramienta.get(clave);
             if (panel == null) return;
-            String menu = "tab.datamodel".equals(clave) ? "menu.tools.datamodel"
-                    : "tab.sclcmp".equals(clave) ? "menu.tools.sclcmp" : "menu.tools.goosemap";
+            String menu = "tab.sclcmp".equals(clave) ? "menu.tools.sclcmp" : "menu.tools.goosemap";
             d = new JDialog(this, I18n.t(menu).replace("…", "").replace("...", "").trim(), false);
             d.setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
             JPanel fondo = new JPanel(new BorderLayout());
@@ -1632,7 +1682,7 @@ public class IEDNavigatorApp extends JFrame {
             {"Ctrl+1", I18n.t("menu.view.tree")},
             {"Ctrl+D", I18n.t("menu.tools.sclcmp")},
             {"Ctrl+G", I18n.t("menu.tools.goosemap")},
-            {"Ctrl+M", I18n.t("menu.tools.datamodel")},
+            {"Ctrl+M", I18n.t("menu.view.props")},
             {"Ctrl+,", I18n.t("menu.tools.prefs")},
             {"F1", I18n.t("menu.help.docs")},
         };

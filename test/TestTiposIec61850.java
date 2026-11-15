@@ -68,16 +68,16 @@ public class TestTiposIec61850 {
         BasicDataAttribute stVal = (BasicDataAttribute) beh.getChild("stVal");
         chk("*Beh.stVal -> " + TiposIec61850.tipoDe(stVal), "ENUMERATED (BehaviourModeKind)".equals(TiposIec61850.tipoDe(stVal)));
         ((BdaInt8) stVal).setValue((byte) 1);
-        chk("*valor Beh=1 -> " + DataModelNodeInfo.valorMostrado(stVal, true), "on (1)".equals(DataModelNodeInfo.valorMostrado(stVal, true)));
+        chk("*valor Beh=1 -> " + valorPanel(stVal), "1 · on".equals(valorPanel(stVal)));
         ((BdaInt8) stVal).setValue((byte) 0);
-        String fuera = DataModelNodeInfo.valorMostrado(stVal, true);
-        chk("*valor Beh=0 -> " + fuera, fuera.startsWith("0 (") && fuera.contains("BehaviourModeKind"));
+        String fuera = valorPanel(stVal);
+        chk("*valor Beh=0 -> " + fuera, fuera.equals("0 · (" + I18n.t("tree.enum.out") + ")"));
         chk("*q -> " + TiposIec61850.tipoDe(beh.getChild("q")), "Quality".equals(TiposIec61850.tipoDe(beh.getChild("q"))));
         chk("*t -> " + TiposIec61850.tipoDe(beh.getChild("t")), "TimeStamp".equals(TiposIec61850.tipoDe(beh.getChild("t"))));
 
-        chk("*stVal es DA", "DA".equals(DataModelPanel.getDataModelNodeType(stVal)));
-        chk("*Beh es DO", "DO".equals(DataModelPanel.getDataModelNodeType(beh)));
-        String mms = DataModelPanel.referenciaMms(stVal.getReference().toString(), "ST");
+        chk("*stVal es DA", "DA".equals(ModelTreeBuilder.getNodePrefix(stVal)));
+        chk("*Beh es DO", "DO".equals(ModelTreeBuilder.getNodePrefix(beh)));
+        String mms = PanelPropiedades.referenciaMms(stVal.getReference().toString(), "ST");
         chk("*referencia MMS " + mms, mms.endsWith("/LLN0$ST$Beh$stVal"));
 
         // Un DA construido y su componente: Oper es DA, Oper.ctlVal es BDA
@@ -86,11 +86,11 @@ public class TestTiposIec61850 {
             if (h.getName().equals("Pos") && ((FcDataObject) h).getFc() == Fc.CO) posCo = (FcDataObject) h;
         if (posCo != null) {
             ModelNode oper = posCo.getChild("Oper");
-            chk("*Oper -> " + TiposIec61850.tipoDe(oper) + " / " + DataModelPanel.getDataModelNodeType(oper),
-                    "Operate".equals(TiposIec61850.tipoDe(oper)) && "DA".equals(DataModelPanel.getDataModelNodeType(oper)));
+            chk("*Oper -> " + TiposIec61850.tipoDe(oper) + " / " + ModelTreeBuilder.getNodePrefix(oper),
+                    "Operate".equals(TiposIec61850.tipoDe(oper)) && "DA".equals(ModelTreeBuilder.getNodePrefix(oper)));
             ModelNode origin = oper.getChild("origin");
-            chk("*Oper.origin -> " + TiposIec61850.tipoDe(origin) + " / " + DataModelPanel.getDataModelNodeType(origin),
-                    "Originator".equals(TiposIec61850.tipoDe(origin)) && "BDA".equals(DataModelPanel.getDataModelNodeType(origin)));
+            chk("*Oper.origin -> " + TiposIec61850.tipoDe(origin) + " / " + ModelTreeBuilder.getNodePrefix(origin),
+                    "Originator".equals(TiposIec61850.tipoDe(origin)) && "BDA".equals(ModelTreeBuilder.getNodePrefix(origin)));
         }
 
         // Ninguna propiedad mostrada lleva clases de Java, en todos los nodos del modelo
@@ -100,15 +100,18 @@ public class TestTiposIec61850 {
         while (!pila.isEmpty()) {
             ModelNode n = pila.pop();
             nodos++;
-            DataModelNodeInfo info = new DataModelNodeInfo(n, DataModelPanel.getDataModelNodeType(n));
-            for (String[] fila : DataModelPanel.propiedades(info)) {
-                if (fila[0].equals(I18n.t("dm.prop.name")) || fila[0].equals(I18n.t("dm.prop.ref"))
-                        || fila[0].equals(I18n.t("dm.prop.mmsref"))) continue;
+            NodeInfo info = new NodeInfo();
+            info.node = n;
+            info.name = n.getName();
+            info.prefix = ModelTreeBuilder.getNodePrefix(n);
+            for (PanelPropiedades.Fila fila : PanelPropiedades.filas(info, RENDERER)) {
+                if (fila.clave.equals(I18n.t("props.ref")) || fila.clave.equals(I18n.t("props.mmsref"))
+                        || fila.clave.equals(I18n.t("props.of"))) continue;
                 for (String j : JAVA) {
-                    if (fila[1].matches(".*\\b" + j + "(\\b|[A-Z0-9]).*") && !fila[1].startsWith("VISIBLE STRING")
-                            && !fila[1].startsWith("UNICODE STRING") && !fila[1].startsWith("OCTET STRING")
-                            && !(j.equals("Fc") && fila[0].equals(I18n.t("dm.prop.fc")))) {
-                        if (malos.size() < 5) malos.add(n.getReference() + ": " + fila[0] + "=" + fila[1]);
+                    if (fila.valor.matches(".*\\b" + j + "(\\b|[A-Z0-9]).*") && !fila.valor.startsWith("VISIBLE STRING")
+                            && !fila.valor.startsWith("UNICODE STRING") && !fila.valor.startsWith("OCTET STRING")
+                            && !(j.equals("Fc") && fila.clave.equals(I18n.t("props.fc")))) {
+                        if (malos.size() < 5) malos.add(n.getReference() + ": " + fila.clave + "=" + fila.valor);
                     }
                 }
             }
@@ -119,6 +122,16 @@ public class TestTiposIec61850 {
         System.out.println(ok + " pasaron, " + mal + " fallaron");
         if (mal == 0) System.out.println("TODO OK");
         System.exit(mal == 0 ? 0 : 1);
+    }
+
+    static final ArbolCeldaRenderer RENDERER = new ArbolCeldaRenderer(new HashSet<>(), () -> null, new HashMap<>());
+
+    /** El valor como lo muestran el árbol y el panel Propiedades. */
+    static String valorPanel(BasicDataAttribute bda) {
+        NodeInfo i = new NodeInfo();
+        i.node = bda;
+        i.value = ValorBda.texto(bda);
+        return RENDERER.textoValor(i);
     }
 
     static final Map<String, Integer> PARES = new TreeMap<>();

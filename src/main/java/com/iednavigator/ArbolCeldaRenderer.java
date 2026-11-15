@@ -254,7 +254,21 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
 
     /** El CDC del DO como etiqueta gris; con asterisco si es deducido. */
     private void ponerCdc(NodeInfo info) {
-        if (!(info.node instanceof FcDataObject)) return;
+        String[] c = cdcDe(info);
+        if (c == null) return;
+        boolean deducido = "deducido".equals(c[1]);
+        cdc.poner(deducido ? c[0] + "*" : c[0], FONDO_CDC, TEXTO_CDC, null);
+        cdc.setVisible(true);
+        sepFc.setVisible(true);
+        celda.setToolTipText(I18n.t(deducido ? "tree.cdc.inferred.tip" : "tree.cdc.scl.tip", c[0]));
+    }
+
+    /**
+     * CDC de un DO o SDO: {cdc, "scl"} si lo declara el SCL vigente, {cdc, "deducido"} si se
+     * deduce de sus atributos, o null. Lo usan el árbol y el panel Propiedades.
+     */
+    String[] cdcDe(NodeInfo info) {
+        if (info == null || !(info.node instanceof FcDataObject)) return null;
         String ref = info.node.getReference().toString();
         String[] c = cdcs.get(ref);
         if (c == null && !cdcs.containsKey(ref)) {
@@ -271,12 +285,7 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
             }
             cdcs.put(ref, c);
         }
-        if (c == null) return;
-        boolean deducido = "deducido".equals(c[1]);
-        cdc.poner(deducido ? c[0] + "*" : c[0], FONDO_CDC, TEXTO_CDC, null);
-        cdc.setVisible(true);
-        sepFc.setVisible(true);
-        celda.setToolTipText(I18n.t(deducido ? "tree.cdc.inferred.tip" : "tree.cdc.scl.tip", c[0]));
+        return c;
     }
 
     /** "invalid", "questionable", "test", "test · blocked"…, o null si es good y sin marcas. */
@@ -343,6 +352,9 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
 
     /** Se cambió el modelo (otro IED u otro archivo): los CDC se vuelven a calcular. */
     void olvidarCdc() { cdcs.clear(); }
+
+    /** La descripción del nodo (del SCL o del diccionario), sin depender de que se muestre. */
+    String descripcionDe(NodeInfo info) { return descripcion(info, null); }
 
     private String descripcion(NodeInfo info, JTree tree) {
         if (info.node == null) return null;

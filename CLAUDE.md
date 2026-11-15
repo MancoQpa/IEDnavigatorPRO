@@ -135,10 +135,15 @@ centered, so the monitor value/time cells and the host:port field add top margin
 
 - Menu bar: Archivo (load, recent, export monitor/log, exit); Simulación in Server / Conexión in
   Client (title and items follow the mode: start/stop or connect F5; port, check, release; polling,
-  interval, read all, timeout; mode radios); Ver (log Ctrl+L, tree, expand/collapse, group DO by FC,
-  descriptions, compact density, theme: saved in Preferences `view.*`); Herramientas (get/save
-  CID, HTML report, Compare SCL, GOOSE map and Data Model in their own non-modal `JDialog`, created
-  once and hidden on close; Language submenu; Preferences); Ayuda. Mnemonics come from the
+  interval, read all, timeout; mode radios); Ver (log Ctrl+L, tree, properties Ctrl+M,
+  expand/collapse, group DO by FC, descriptions, compact density, theme: saved in Preferences
+  `view.*`); Herramientas (get/save CID, HTML report, Compare SCL and GOOSE map in their own
+  non-modal `JDialog`, created once and hidden on close; Language submenu; Preferences); Ayuda.
+- `PanelPropiedades` (2026-11-15), under the tree in a vertical split, collapsible and with its
+  height remembered (`view.props.*`): the selected node in the standard's terms (CDC with its
+  origin, type, FC, value, quality, time). It replaced the Data Model explorer (a second tree of
+  the same model whose Export XML wrote nothing); its CDC and descriptions come from
+  `ArbolCeldaRenderer`, so the tree and the panel agree. Mnemonics come from the
   bundles (`menu.x.mn`). Simulación › Modo test del IED and Herramientas › Interruptor virtual…
   call `alternarModoTest()` / `abrirInterruptorVirtual()` (main was merged in on 2026-11-14).
 - `BarraContexto`: one 48 px row. Left (grows): IED, "model · vendor · cfg", a fixed 220 px slot
