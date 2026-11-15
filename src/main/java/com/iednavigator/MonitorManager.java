@@ -48,14 +48,9 @@ class MonitorManager {
                 String fullRef = ref + "$" + fc.toString();
 
                 if (!ctx.getMonitorItems().containsKey(fullRef)) {
-                    String type = "";
-                    if (info.node instanceof BasicDataAttribute) {
-                        type = info.node.getClass().getSimpleName().replace("Bda", "");
-                    } else {
-                        type = info.node.getClass().getSimpleName()
-                            .replace("FcDataObject", "DO")
-                            .replace("ConstructedDataAttribute", "SDO");
-                    }
+                    // Tipo de la norma (CDC del DO, tipo básico o construido del DA), no la
+                    // clase de Java de la biblioteca ("Int8", "FcDataObject").
+                    String type = TiposIec61850.tipoCorto(info.node);
 
                     String displayName = formatReference(ref);
                     MonitorItem item = new MonitorItem(ref, displayName, fc.toString(), type, fcNode);

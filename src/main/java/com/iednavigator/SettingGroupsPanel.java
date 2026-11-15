@@ -188,7 +188,7 @@ class SettingGroupsPanel {
                 prefix + node.getName(),
                 ValorBda.texto(bda),
                 bda.getFc().toString(),
-                bda.getClass().getSimpleName().replace("Bda", "")
+                TiposIec61850.tipoCorto(bda)
             });
         }
         for (ModelNode child : node.getChildren()) {

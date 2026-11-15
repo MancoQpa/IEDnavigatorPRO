@@ -67,7 +67,7 @@ class DataModelPanel {
         JScrollPane treeScroll = new JScrollPane(dataModelTree);
         treeScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("tree.structure")));
 
-        String[] attrColumns = {"Propiedad", "Valor", "Tipo"};
+        String[] attrColumns = {I18n.t("dm.col.prop"), I18n.t("dm.col.value")};
         dataModelAttrTableModel = new DefaultTableModel(attrColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -118,12 +118,21 @@ class DataModelPanel {
         }
     }
 
-    private String getDataModelNodeType(ModelNode node) {
+    /**
+     * Elemento según la norma y el SCL: DO (de un LN), SDO (de un DO), DA (atributo de un DO,
+     * simple o construido) y BDA (componente de un DA construido, como {@code mag.f}).
+     */
+    static String getDataModelNodeType(ModelNode node) {
         if (node instanceof LogicalDevice)           return "LD";
         if (node instanceof LogicalNode)             return "LN";
-        if (node instanceof FcDataObject)            return "DO";
-        if (node instanceof ConstructedDataAttribute) return "DA";
-        if (node instanceof BasicDataAttribute)      return "BDA";
+        if (node instanceof FcDataObject) {
+            return node.getParent() instanceof FcDataObject ? "SDO" : "DO";
+        }
+        if (node instanceof ConstructedDataAttribute || node instanceof BasicDataAttribute
+                || node instanceof Array) {
+            ModelNode padre = node.getParent();
+            return padre instanceof FcDataObject || padre == null ? "DA" : "BDA";
+        }
         return "NODE";
     }
 
@@ -133,30 +142,89 @@ class DataModelPanel {
         TreePath path = dataModelTree.getSelectionPath();
         if (path == null) return;
 
-        DefaultMutableTreeNode treeNode = (DefaultMutableTreeNode) path.getLastPathComponent();
-        Object userObj = treeNode.getUserObject();
-
-        if (userObj instanceof DataModelNodeInfo) {
-            DataModelNodeInfo info = (DataModelNodeInfo) userObj;
-            ModelNode node = info.node;
-
-            dataModelAttrTableModel.addRow(new Object[]{"Nombre",     node.getName(),                   "String"});
-            dataModelAttrTableModel.addRow(new Object[]{"Referencia", node.getReference().toString(),   "ObjectReference"});
-            dataModelAttrTableModel.addRow(new Object[]{"Tipo",       info.type,                        "String"});
-
-            if (node instanceof FcModelNode) {
-                FcModelNode fcNode = (FcModelNode) node;
-                dataModelAttrTableModel.addRow(new Object[]{"Functional Constraint", fcNode.getFc().toString(), "Fc"});
-            }
-
-            if (node instanceof BasicDataAttribute) {
-                BasicDataAttribute bda = (BasicDataAttribute) node;
-                dataModelAttrTableModel.addRow(new Object[]{"Valor",     ValorBda.texto(bda),              bda.getClass().getSimpleName()});
-                dataModelAttrTableModel.addRow(new Object[]{"Clase BDA", bda.getClass().getSimpleName(),   "Class"});
-            }
-
-            dataModelAttrTableModel.addRow(new Object[]{"Hijos", node.getChildren().size(), "int"});
+        Object userObj = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
+        if (!(userObj instanceof DataModelNodeInfo)) return;
+        for (String[] fila : propiedades((DataModelNodeInfo) userObj)) {
+            dataModelAttrTableModel.addRow(fila);
         }
+    }
+
+    /**
+     * Propiedades de un nodo en términos de la norma: elemento, tipo (CDC, tipo construido o
+     * tipo básico de IEC 61850-7-2/7-3), referencias, FC y valor. Nunca el nombre de la clase
+     * de Java de la biblioteca MMS.
+     */
+    static java.util.List<String[]> propiedades(DataModelNodeInfo info) {
+        java.util.List<String[]> f = new java.util.ArrayList<>();
+        ModelNode node = info.node;
+
+        f.add(new String[]{I18n.t("dm.prop.name"), node.getName()});
+        f.add(new String[]{I18n.t("dm.prop.element"), elemento(info.type)});
+
+        String tipo = TiposIec61850.tipoDe(node);
+        if (node instanceof FcDataObject) {
+            String cdc = TiposIec61850.cdcDe((FcDataObject) node);
+            tipo = cdc == null ? I18n.t("dm.cdc.unknown") : "CDC " + cdc + nombreEnDiccionario(cdc);
+        } else if (node instanceof LogicalNode && tipo.startsWith("LN ")) {
+            tipo = tipo + nombreEnDiccionario(tipo.substring(3));
+        }
+        if (!tipo.isEmpty()) f.add(new String[]{I18n.t("dm.prop.type"), tipo});
+        if (node instanceof FcDataObject && tipo.startsWith("CDC ")) {
+            f.add(new String[]{I18n.t("dm.prop.cdcsrc"), I18n.t("dm.cdc.inferred")});
+        }
+
+        f.add(new String[]{I18n.t("dm.prop.ref"), node.getReference().toString()});
+
+        if (node instanceof FcModelNode) {
+            FcModelNode fcNode = (FcModelNode) node;
+            String fc = String.valueOf(fcNode.getFc());
+            f.add(new String[]{I18n.t("dm.prop.mmsref"), referenciaMms(node.getReference().toString(), fc)});
+            f.add(new String[]{I18n.t("dm.prop.fc"), fc + nombreEnDiccionario(fc)});
+            if (node instanceof FcDataObject) {
+                f.add(new String[]{I18n.t("dm.prop.fcs"), TiposIec61850.fcsDe((FcDataObject) node)});
+            }
+        }
+
+        if (node instanceof BasicDataAttribute) {
+            BasicDataAttribute bda = (BasicDataAttribute) node;
+            f.add(new String[]{I18n.t("dm.prop.value"), DataModelNodeInfo.valorMostrado(bda, true)});
+            String mms = TiposIec61850.bType(bda.getBasicType());
+            if (!mms.equals(tipo)) f.add(new String[]{I18n.t("dm.prop.mms"), mms});
+        }
+
+        if (!(node instanceof BasicDataAttribute)) {
+            f.add(new String[]{I18n.t("dm.prop.children"), String.valueOf(node.getChildren().size())});
+        }
+        for (String[] fila : f) if (fila[1] == null) fila[1] = "";
+        return f;
+    }
+
+    private static String elemento(String tipo) {
+        switch (tipo) {
+            case "LD":  return I18n.t("dm.elem.ld");
+            case "LN":  return I18n.t("dm.elem.ln");
+            case "DO":  return I18n.t("dm.elem.do");
+            case "SDO": return I18n.t("dm.elem.sdo");
+            case "DA":  return I18n.t("dm.elem.da");
+            case "BDA": return I18n.t("dm.elem.bda");
+            default:    return I18n.t("dm.elem.node");
+        }
+    }
+
+    /** " — Estado (Status)" para un término del diccionario (FC, CDC, clase de LN), o "". */
+    private static String nombreEnDiccionario(String termino) {
+        Iec61850Dictionary.Entry e = Iec61850Dictionary.lookup(termino);
+        if (e == null) return "";
+        String n = I18n.currentTag().startsWith("es") ? e.fullNameES : e.fullNameEN;
+        return n == null || n.isEmpty() ? "" : " — " + n;
+    }
+
+    /** "LD/LN.DO.DA" con FC "ST" → "LD/LN$ST$DO$DA" (el nombre que viaja por MMS). */
+    static String referenciaMms(String ref, String fc) {
+        int barra = ref.indexOf('/');
+        int punto = ref.indexOf('.', barra + 1);
+        if (barra < 0 || punto < 0) return ref;
+        return ref.substring(0, punto) + "$" + fc + "$" + ref.substring(punto + 1).replace('.', '$');
     }
 
     private void expandAllDataModel() {

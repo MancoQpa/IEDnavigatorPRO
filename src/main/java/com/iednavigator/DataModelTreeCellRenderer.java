@@ -37,6 +37,7 @@ class DataModelTreeCellRenderer extends DefaultTreeCellRenderer {
                                 info.node.getName().toUpperCase(), iconCache));
                         break;
                     case "DO":
+                    case "SDO":
                         setIcon(iconCache.get("do"));
                         break;
                     case "DA":

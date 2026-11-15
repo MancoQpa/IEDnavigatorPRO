@@ -945,33 +945,7 @@ public final class SclExporter {
 
     /** BdaType de iec61850bean → bType de SCL (IEC 61850-6 tabla de tipos básicos). */
     private String mapBType(BdaType t) {
-        if (t == null) return "Struct";
-        switch (t) {
-            case BOOLEAN:        return "BOOLEAN";
-            case INT8:           return "INT8";
-            case INT16:          return "INT16";
-            case INT32:          return "INT32";
-            case INT64:          return "INT64";
-            case INT128:         return "INT128";
-            case INT8U:          return "INT8U";
-            case INT16U:         return "INT16U";
-            case INT32U:         return "INT32U";
-            case FLOAT32:        return "FLOAT32";
-            case FLOAT64:        return "FLOAT64";
-            case OCTET_STRING:   return "Octet64";
-            case VISIBLE_STRING: return "VisString255";
-            case UNICODE_STRING: return "Unicode255";
-            case TIMESTAMP:      return "Timestamp";
-            case ENTRY_TIME:     return "EntryTime";
-            case CHECK:          return "Check";
-            case QUALITY:        return "Quality";
-            case DOUBLE_BIT_POS: return "Dbpos";
-            case TAP_COMMAND:    return "Tcmd";
-            case OPTFLDS:            return "OptFlds";
-            case TRIGGER_CONDITIONS: return "TrgOps";
-            case REASON_FOR_INCLUSION: return "ReasonForInclusion";
-            default:             return "Struct";
-        }
+        return TiposIec61850.bType(t);
     }
 
     /**
@@ -980,99 +954,14 @@ public final class SclExporter {
      * ningún patrón se registran en {@link Result#uncertainCdc}.
      */
     private String inferCdc(String doName, Map<String, DaInfo> das, java.util.Set<String> sdoNames) {
-        // ── 1. Agregados cuyos miembros son sub-data-objects ──────────────────
-        if (das.containsKey("seqT")) return "SEQ";                       // SEQ: seqT + c1/c2/c3
-        if (sdoNames.contains("phsA") || sdoNames.contains("phsB") || sdoNames.contains("phsC"))
-            return "WYE";
-        if (sdoNames.contains("phsAB") || sdoNames.contains("phsBC") || sdoNames.contains("phsCA"))
-            return "DEL";
-
-        // ── 2. Controlables ──────────────────────────────────────────────────
-        // La presencia de ctlModel basta: un DO con ctlModel=status-only sigue siendo de una
-        // clase controlable (ENC/SPC/DPC), sólo que no expone Oper. Sin esto, todos los DO de
-        // modo con ctlModel=status-only se clasificaban como ENS en vez de ENC.
-        boolean controllable = das.containsKey("Oper") || das.containsKey("SBOw")
-                            || das.containsKey("ctlVal") || das.containsKey("ctlModel");
-        if (controllable) {
-            String t = ctlValType(das);
-            if (t == null && das.containsKey("stVal")) t = das.get("stVal").bType(this);
-            if ("Dbpos".equals(t))                          return "DPC";
-            if ("BOOLEAN".equals(t))
-                return isDbpos(das, "stVal") ? "DPC" : "SPC";
-            // En SCL los enumerados son bType="Enum", pero por MMS llegan como INT8; los
-            // enteros propiamente dichos usan INT32. De ahí ENC (enum) frente a INC (entero).
-            if ("INT8".equals(t) || "INT16".equals(t))      return "ENC";
-            if ("INT32".equals(t) || "INT32U".equals(t))    return "INC";
-            if ("FLOAT32".equals(t) || "FLOAT64".equals(t)) return "APC";
-            if ("Tcmd".equals(t))                           return "BSC";
-            if (isDbpos(das, "stVal"))                      return "DPC";
-            return "SPC";
-        }
-
-        // ── 3. Medidas ───────────────────────────────────────────────────────
-        // SAV (valor muestreado) trae instMag pero no mag, y suele declarar sVC.
-        if (das.containsKey("sVC")) return "SAV";
-        if (das.containsKey("instMag") && !das.containsKey("mag")) return "SAV";
-        if (das.containsKey("mag"))                                return "MV";
-        if (das.containsKey("cVal") || das.containsKey("instCVal")) return "CMV";
-        if (das.containsKey("actVal") || das.containsKey("frVal"))  return "BCR";
-
-        // ── 4. Estados de arranque/disparo ───────────────────────────────────
-        if (das.containsKey("general")
-                && (das.containsKey("dirGeneral") || das.containsKey("dirPhsA"))) return "ACD";
-        if (das.containsKey("general")) return "ACT";
-
-        // ── 5. Estados simples ───────────────────────────────────────────────
-        if (das.containsKey("stVal")) {
-            if (isDbpos(das, "stVal")) return "DPS";
-            String t = das.get("stVal").bType(this);
-            if ("BOOLEAN".equals(t))                     return "SPS";
-            if ("INT8".equals(t) || "INT16".equals(t))   return "ENS";   // enumerado
-            if ("INT32".equals(t) || "INT32U".equals(t)) return "INS";
-            if (t != null && t.startsWith("VisString"))  return "VSS";
-            return "INS";
-        }
-
-        // ── 6. Seguimiento de servicios (IEC 61850-7-2 Ed.2) ─────────────────
-        if (das.containsKey("objRef") && das.containsKey("serviceType")) {
-            if (das.containsKey("numOfSG") || das.containsKey("actSG")) return "STS";
-            return "CST";
-        }
-
-        // ── 7. Nameplates: DPL (equipo físico) antes que LPL (nodo lógico) ───
-        if (das.containsKey("hwRev") || das.containsKey("serNum")
-                || das.containsKey("model") || das.containsKey("location")) return "DPL";
-        if (das.containsKey("configRev") || das.containsKey("ldNs")
-                || das.containsKey("lnNs") || das.containsKey("vendor")
-                || das.containsKey("swRev")) return "LPL";
-
-        // ── 8. Ajustes ───────────────────────────────────────────────────────
-        if (das.containsKey("setCal"))    return "TSG";
-        if (das.containsKey("setSrcRef")) return "ORG";
-        if (das.containsKey("setMag"))    return "ASG";
-        if (das.containsKey("setCharact")) return "CURVE";
-        if (das.containsKey("setVal")) {
-            String t = das.get("setVal").bType(this);
-            if ("BOOLEAN".equals(t))                     return "SPG";
-            if ("FLOAT32".equals(t) || "FLOAT64".equals(t)) return "ASG";
-            if ("INT8".equals(t) || "INT16".equals(t))   return "ENG";   // enumerado
-            if (t != null && t.startsWith("INT"))        return "ING";
-            if (t != null && t.startsWith("VisString"))  return "VSG";
-            return "SPG";
-        }
-
-        // ── 9. Descripción suelta ────────────────────────────────────────────
-        if (das.size() == 1 && das.containsKey("val")) return "VSD";
-
+        Map<String, String> tipos = new LinkedHashMap<>();
+        for (Map.Entry<String, DaInfo> e : das.entrySet()) tipos.put(e.getKey(), e.getValue().bType(this));
+        String cdc = TiposIec61850.inferirCdc(tipos, sdoNames, ctlValType(das), doName);
+        if (cdc != null) return cdc;
         uncertainCdc.add(doName + " {" + String.join(",", das.keySet())
                 + (sdoNames.isEmpty() ? "" : " | SDO: " + String.join(",", sdoNames)) + "}");
         // Fallback conservador: contenedor de estado sin miembro reconocible.
         return das.isEmpty() && !sdoNames.isEmpty() ? "WYE" : "INS";
-    }
-
-    private boolean isDbpos(Map<String, DaInfo> das, String name) {
-        DaInfo d = das.get(name);
-        return d != null && "Dbpos".equals(d.bType(this));
     }
 
     /** Tipo del ctlVal, esté suelto o dentro de Oper/SBOw. */
