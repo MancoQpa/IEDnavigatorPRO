@@ -927,7 +927,8 @@ public class IEDNavigatorApp extends JFrame {
         if (currentMode == AppMode.SERVER && loadedSclFile != null) partes.add(loadedSclFile.getName());
         else if (currentMode == AppMode.CLIENT && hostEnPantalla != null && !hostEnPantalla.isEmpty()) partes.add(hostEnPantalla);
         partes.add(Version.etiqueta());
-        setTitle("IED Navigator PRO \u2014 " + String.join(" \u00b7 ", partes));
+        String titulo = "IED Navigator PRO \u2014 " + String.join(" \u00b7 ", partes);
+        if (!titulo.equals(getTitle())) setTitle(titulo);
     }
 
     // ── Barra de contexto y distribucion (rediseño, etapa 2) ─────────────────
@@ -1023,6 +1024,10 @@ public class IEDNavigatorApp extends JFrame {
 
     /** Refresco de la barra de contexto y del estado vacio (reloj de 400 ms). */
     private void refrescarContexto() {
+        // El titulo depende del archivo cargado, que cambia por varios caminos (cargar,
+        // cancelar la eleccion del IED, cambiar de modo): se recalcula aca y solo se
+        // escribe si cambio.
+        actualizarTitulo();
         if (barraContexto != null) barraContexto.refrescar();
         if (panelWatchlist != null) panelWatchlist.setVisible(currentMode == AppMode.CLIENT);
         if (panelArbol == null) return;
@@ -1338,9 +1343,17 @@ public class IEDNavigatorApp extends JFrame {
             return;
         }
         boolean servidor = currentMode == AppMode.SERVER;
+        // Dos archivos con el mismo nombre en carpetas distintas se veian iguales: a esos se
+        // les agrega la carpeta que los contiene.
+        java.util.Map<String, Integer> repetidos = new java.util.HashMap<>();
+        for (String ruta : l) repetidos.merge(new File(ruta).getName().toLowerCase(java.util.Locale.ROOT), 1, Integer::sum);
         for (String ruta : l) {
             File f = new File(ruta);
-            JMenuItem mi = new JMenuItem(f.getName());
+            String etiqueta = f.getName();
+            if (repetidos.get(f.getName().toLowerCase(java.util.Locale.ROOT)) > 1 && f.getParentFile() != null) {
+                etiqueta += "  (" + f.getParentFile().getName() + ")";
+            }
+            JMenuItem mi = new JMenuItem(etiqueta);
             mi.setToolTipText(servidor ? ruta : I18n.t("menu.file.recent.server"));
             mi.setEnabled(servidor);
             mi.addActionListener(e -> {

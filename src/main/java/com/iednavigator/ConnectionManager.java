@@ -813,12 +813,14 @@ class ConnectionManager {
                             SwingUtilities.invokeLater(() -> {
                                 espera.terminar();
                                 ctx.updateStatus(false, I18n.t("status.loadcancelled"));
-                                ctx.setLblFileName("");
-                                // Se había detenido la simulación para este archivo y no se
-                                // cargó nada: el modelo anterior sigue, se la reanuda.
+                                // No se cargó nada: vuelve el archivo anterior (o ninguno). Antes
+                                // quedaba el cancelado, y el título y la barra lo mostraban como
+                                // cargado sin serlo.
+                                ctx.setLoadedSclFile(anterior);
+                                ctx.setLblFileName(anterior != null ? anterior.getName() : "");
+                                // Se había detenido la simulación para este archivo: el modelo
+                                // anterior sigue, se la reanuda.
                                 if (reiniciar && !ctx.isServerRunning()) {
-                                    ctx.setLoadedSclFile(anterior);
-                                    if (anterior != null) ctx.setLblFileName(anterior.getName());
                                     ctx.log(I18n.t("log.cm.reloadwhilesim.resumed"));
                                     toggleServer();
                                 }
