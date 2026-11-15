@@ -1869,6 +1869,14 @@ public class IEC61850Client implements ClientEventListener {
         return new LecturaDataSets(recuperados, omitidos, motivos);
     }
 
+    /** Bytes en hexadecimal ("0006AFA157F00002"), como muestran las EntryID los clientes. */
+    public static String hex(byte[] b) {
+        if (b == null) return "";
+        StringBuilder sb = new StringBuilder(b.length * 2);
+        for (byte x : b) sb.append(String.format("%02X", x & 0xFF));
+        return sb.toString();
+    }
+
     /** Mensaje util de una excepcion lanzada por reflexion. */
     private static String causa(Exception e) {
         Throwable t = (e instanceof java.lang.reflect.InvocationTargetException)
@@ -1891,6 +1899,39 @@ public class IEC61850Client implements ClientEventListener {
      * Solo escribe rptEna y trgOps para evitar ServiceError en servidores que no
      * permiten modificar datSet, optFlds o bufTm mientras el RCB se habilita.
      */
+    /**
+     * Última EntryID recibida de cada BRCB, por IED y RptID ("host:puerto|RptID"). Estática para
+     * que sobreviva a la reconexión (cada conexión crea su cliente). Al volver a habilitar el BRCB
+     * se escribe antes de RptEna: el IED manda desde la entrada siguiente lo que guardó mientras
+     * no había asociación (IEC 61850-7-2, resincronización de un BRCB).
+     */
+    private static final Map<String, byte[]> ultimaEntryId = new ConcurrentHashMap<>();
+
+    private String claveEntry(String rptId) {
+        return host + ":" + port + "|" + rptId;
+    }
+
+    /** La última EntryID recibida de ese RptID en este IED, o null. Para pruebas y para la GUI. */
+    public byte[] ultimaEntryIdDe(String rptId) {
+        byte[] b = rptId == null ? null : ultimaEntryId.get(claveEntry(rptId));
+        return b == null ? null : b.clone();
+    }
+
+    /** Resultado de la resincronización al habilitar un BRCB. */
+    public enum Retoma { NINGUNA, RETOMADO, RECHAZADO }
+
+    /**
+     * Habilita un RCB. Si es un BRCB del que ya se recibieron reportes en este IED, primero le
+     * escribe la última EntryID recibida para retomar desde ahí; si el IED la rechaza (no la
+     * tiene más en su buffer), se habilita igual y el IED decide desde dónde manda.
+     */
+    public Retoma enableReportingRetomando(Rcb rcb, ReportListener listener) throws IOException {
+        enableReporting(rcb, listener);
+        return ultimaRetoma;
+    }
+
+    private volatile Retoma ultimaRetoma = Retoma.NINGUNA;
+
     public void enableReporting(Rcb rcb, ReportListener listener) throws IOException {
         if (!isConnected() || association == null) {
             throw new IOException("Not connected");
@@ -1908,6 +1949,18 @@ public class IEC61850Client implements ClientEventListener {
                 enableRcb(urcb);
             } else if (rcb instanceof Brcb) {
                 Brcb brcb = (Brcb) rcb;
+                ultimaRetoma = Retoma.NINGUNA;
+                String rptId = brcb.getRptId() != null ? brcb.getRptId().getStringValue() : null;
+                byte[] ultima = rptId == null ? null : ultimaEntryId.get(claveEntry(rptId));
+                boolean habilitado = brcb.getRptEna() != null && brcb.getRptEna().getValue();
+                if (ultima != null && !habilitado && brcb.getEntryId() != null) {
+                    brcb.getEntryId().setValue(ultima.clone());
+                    List<ServiceError> errores = mms().setRcbValues(brcb,
+                            false, false, false, false, false, false, false, true);
+                    ultimaRetoma = errores.isEmpty() || errores.get(0) == null
+                            ? Retoma.RETOMADO : Retoma.RECHAZADO;
+                    logDiag("[BRCB] " + rptId + ": EntryID " + hex(ultima) + " -> " + ultimaRetoma);
+                }
                 enableRcb(brcb);
             }
 
@@ -1965,6 +2018,10 @@ public class IEC61850Client implements ClientEventListener {
 
     @Override
     public void newReport(Report report) {
+        if (report.getEntryId() != null && report.getRptId() != null) {
+            byte[] id = report.getEntryId().getValue();
+            if (id != null && id.length > 0) ultimaEntryId.put(claveEntry(report.getRptId()), id.clone());
+        }
         // Notificar al listener externo (panel de Reports)
         if (externalReportListener != null) {
             externalReportListener.onReportReceived(report);

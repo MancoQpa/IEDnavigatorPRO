@@ -157,7 +157,10 @@ class ReportsPanel {
         JPanel dataPanel = new JPanel(new BorderLayout());
         dataPanel.setBorder(BorderFactory.createTitledBorder(I18n.t("reports.datatitle")));
 
-        String[] dataColumns = {"Timestamp", "RCB", "SeqNum", "Referencia", "Valor Anterior", "Valor Nuevo", "Razon"};
+        // Las dos ultimas son de los BRCB: la hora en que el IED guardo la entrada (en un reporte
+        // retomado tras una desconexion difiere de la de recepcion) y su EntryID.
+        String[] dataColumns = {"Timestamp", "RCB", "SeqNum", "Referencia", "Valor Anterior", "Valor Nuevo", "Razon",
+                I18n.t("reports.col.entrytime"), I18n.t("reports.col.entryid")};
         reportDataTableModel = new DefaultTableModel(dataColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -179,6 +182,8 @@ class ReportsPanel {
         reportDataTable.getColumnModel().getColumn(4).setPreferredWidth(100);
         reportDataTable.getColumnModel().getColumn(5).setPreferredWidth(100);
         reportDataTable.getColumnModel().getColumn(6).setPreferredWidth(80);
+        reportDataTable.getColumnModel().getColumn(7).setPreferredWidth(90);
+        reportDataTable.getColumnModel().getColumn(8).setPreferredWidth(130);
 
         reportDataTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
@@ -249,8 +254,7 @@ class ReportsPanel {
                 final int rowIdx = i;
                 try {
                     if (enable) {
-                        cl.enableReporting(rcb, report ->
-                            SwingUtilities.invokeLater(() -> handleReportReceived(report)));
+                        habilitar(cl, rcb, rcbName);
                     } else {
                         cl.disableReporting(rcb);
                     }
@@ -401,8 +405,7 @@ class ReportsPanel {
         backgroundExecutor.submit(() -> {
             try {
                 if (enable) {
-                    cl.enableReporting(rcb, report ->
-                        SwingUtilities.invokeLater(() -> handleReportReceived(report)));
+                    habilitar(cl, rcb, rcbName);
                     SwingUtilities.invokeLater(() -> {
                         reportsTableModel.setValueAt("Habilitado", tableRow, 5);
                         log.accept("Report habilitado: " + rcbName);
@@ -422,6 +425,24 @@ class ReportsPanel {
         });
     }
 
+    /**
+     * Habilita un RCB. En un BRCB del que ya llegaron reportes, el cliente le escribe antes la
+     * ultima EntryID recibida para que el IED mande lo que guardo mientras no habia asociacion;
+     * se avisa en el registro si retomo o si el IED ya no la tenia.
+     */
+    private void habilitar(IEC61850Client cl, Rcb rcb, String rcbName) throws java.io.IOException {
+        String rptId = rcb.getRptId() != null ? rcb.getRptId().getStringValue() : null;
+        byte[] antes = rcb instanceof Brcb ? cl.ultimaEntryIdDe(rptId) : null;
+        IEC61850Client.Retoma r = cl.enableReportingRetomando(rcb, report ->
+            SwingUtilities.invokeLater(() -> handleReportReceived(report)));
+        if (antes == null || r == IEC61850Client.Retoma.NINGUNA) return;
+        String hex = IEC61850Client.hex(antes);
+        String msg = r == IEC61850Client.Retoma.RETOMADO
+                ? I18n.t("log.rep.resync", rcbName, hex)
+                : I18n.t("log.rep.resync.rechazada", rcbName, hex);
+        SwingUtilities.invokeLater(() -> log.accept(msg));
+    }
+
     private void handleReportReceived(Report report) {
         try {
             String timestamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
@@ -430,6 +451,16 @@ class ReportsPanel {
 
             List<FcModelNode> values = report.getValues();
             List<BdaReasonForInclusion> reasons = report.getReasonCodes();
+            String entryTime = "";
+            if (report.getTimeOfEntry() != null) {
+                long ms = report.getTimeOfEntry().getTimestampValue();
+                if (ms > 0) entryTime = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(ms));
+            }
+            String entryId = report.getEntryId() != null
+                    ? IEC61850Client.hex(report.getEntryId().getValue()) : "";
+            if (Boolean.TRUE.equals(report.getBufOvfl())) {
+                log.accept(I18n.t("log.rep.bufovfl", rcbRef));
+            }
 
             if (values != null) {
                 for (int i = 0; i < values.size(); i++) {
@@ -450,7 +481,7 @@ class ReportsPanel {
                     }
 
                     reportDataTableModel.insertRow(0, new Object[]{
-                        timestamp, rcbRef, seqNum, ref, prevValue, newValue, reason
+                        timestamp, rcbRef, seqNum, ref, prevValue, newValue, reason, entryTime, entryId
                     });
                     previousReportValues.put(ref, newValue);
                     onNodeUpdate.accept(ref);
