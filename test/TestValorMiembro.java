@@ -51,6 +51,17 @@ public class TestValorMiembro {
         chk("DO con mag.f: " + v2, v2 != null && v2.startsWith("12.5"));
         ModelNode st = m.findModelNode("VMLD0/LLN0.Cnt.stVal", Fc.ST);
         chk("un atributo suelto da su valor", "42".equals(ReportsPanel.valorDeMiembro(st)));
+
+        // El Report trae los nodos del modelo del cliente; el reporte siguiente los reescribe.
+        BdaInt32 nodo = (BdaInt32) ((BdaInt32) st).copy();
+        nodo.setValue(1);
+        Report r = new Report("VM/rcb", 1, null, false, null, Boolean.FALSE, null, null, null,
+                new boolean[] {true}, java.util.Collections.<FcModelNode>singletonList(nodo), null);
+        ReportsPanel.Captura c = new ReportsPanel.Captura(r);
+        nodo.setValue(2);   // llega el reporte siguiente antes de que la interfaz muestre el primero
+        chk("la captura guarda el valor del momento: " + c.filas.get(0)[1], "1".equals(c.filas.get(0)[1]));
+        chk("BufOvfl false no avisa", !c.bufOvfl);
+
         System.out.println(ok + " pasaron, " + mal + " fallaron");
         if (mal == 0) System.out.println("TODO OK");
         System.exit(mal == 0 ? 0 : 1);

@@ -484,7 +484,10 @@ class ReportsPanel {
      */
     private void habilitar(IEC61850Client cl, Rcb rcb, String rcbName) throws java.io.IOException {
         IEC61850Client.Retoma r = cl.enableReportingRetomando(rcb, report ->
-            SwingUtilities.invokeLater(() -> handleReportReceived(report)));
+            {
+                Captura c = new Captura(report);
+                SwingUtilities.invokeLater(() -> handleReportReceived(c));
+            });
         byte[] id = cl.entryIdRetomada();
         if (id == null || r == IEC61850Client.Retoma.NINGUNA) return;
         String hex = IEC61850Client.hex(id);
@@ -494,52 +497,62 @@ class ReportsPanel {
         SwingUtilities.invokeLater(() -> log.accept(msg));
     }
 
-    private void handleReportReceived(Report report) {
-        try {
-            String timestamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
-            String rcbRef = report.getRptId();
-            String seqNum = report.getSqNum() != null ? String.valueOf(report.getSqNum()) : "";
+    /**
+     * Lo que se muestra de un reporte, tomado en el hilo que lo recibe. Los valores de un Report
+     * son los nodos del modelo del cliente, que el reporte siguiente vuelve a escribir: si se
+     * leían recién en el hilo de la interfaz, dos reportes seguidos (el intermedio y el final de
+     * una maniobra) salían los dos con el valor del segundo.
+     */
+    static final class Captura {
+        final String hora, rcb, seqNum, horaEntrada, entryId;
+        final boolean bufOvfl;
+        final List<String[]> filas = new ArrayList<>();   // {ref, valor, motivo}
 
-            List<FcModelNode> values = report.getValues();
-            List<BdaReasonForInclusion> reasons = report.getReasonCodes();
-            String entryTime = "";
+        Captura(Report report) {
+            hora = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
+            rcb = report.getRptId();
+            seqNum = report.getSqNum() != null ? String.valueOf(report.getSqNum()) : "";
+            String he = "";
             if (report.getTimeOfEntry() != null) {
                 long ms = report.getTimeOfEntry().getTimestampValue();
-                if (ms > 0) entryTime = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(ms));
+                if (ms > 0) he = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(ms));
             }
-            String entryId = report.getEntryId() != null
-                    ? IEC61850Client.hex(report.getEntryId().getValue()) : "";
-            if (Boolean.TRUE.equals(report.getBufOvfl())) {
-                log.accept(I18n.t("log.rep.bufovfl", rcbRef));
-            }
-
-            if (values != null) {
-                for (int i = 0; i < values.size(); i++) {
-                    FcModelNode node = values.get(i);
-                    String ref = node.getReference().toString();
-                    String newValue = extractNodeValue(node);
-
-                    String prevValue = previousReportValues.getOrDefault(ref, "");
-
-                    String reason = "";
-                    if (reasons != null && i < reasons.size()) {
-                        BdaReasonForInclusion r = reasons.get(i);
-                        if (r.isDataChange())           reason = "dchg";
-                        else if (r.isQualityChange())   reason = "qchg";
-                        else if (r.isDataUpdate())      reason = "dupd";
-                        else if (r.isIntegrity())       reason = "intg";
-                        else if (r.isGeneralInterrogation()) reason = "gi";
-                    }
-
-                    reportDataTableModel.insertRow(0, new Object[]{
-                        timestamp, rcbRef, seqNum, ref, prevValue, newValue, reason, entryTime, entryId
-                    });
-                    previousReportValues.put(ref, newValue);
-                    onNodeUpdate.accept(ref);
+            horaEntrada = he;
+            entryId = report.getEntryId() != null ? IEC61850Client.hex(report.getEntryId().getValue()) : "";
+            bufOvfl = Boolean.TRUE.equals(report.getBufOvfl());
+            List<FcModelNode> values = report.getValues();
+            List<BdaReasonForInclusion> reasons = report.getReasonCodes();
+            if (values == null) return;
+            for (int i = 0; i < values.size(); i++) {
+                FcModelNode node = values.get(i);
+                String reason = "";
+                if (reasons != null && i < reasons.size()) {
+                    BdaReasonForInclusion r = reasons.get(i);
+                    if (r.isDataChange())           reason = "dchg";
+                    else if (r.isQualityChange())   reason = "qchg";
+                    else if (r.isDataUpdate())      reason = "dupd";
+                    else if (r.isIntegrity())       reason = "intg";
+                    else if (r.isGeneralInterrogation()) reason = "gi";
                 }
+                filas.add(new String[]{node.getReference().toString(), extractNodeValue(node), reason});
             }
-            log.accept("Report recibido: " + rcbRef + " (SeqNum: " + seqNum
-                + ", " + (values != null ? values.size() : 0) + " valores)");
+        }
+    }
+
+    private void handleReportReceived(Captura c) {
+        try {
+            if (c.bufOvfl) log.accept(I18n.t("log.rep.bufovfl", c.rcb));
+            for (String[] f : c.filas) {
+                String ref = f[0], newValue = f[1];
+                String prevValue = previousReportValues.getOrDefault(ref, "");
+                reportDataTableModel.insertRow(0, new Object[]{
+                    c.hora, c.rcb, c.seqNum, ref, prevValue, newValue, f[2], c.horaEntrada, c.entryId
+                });
+                previousReportValues.put(ref, newValue);
+                onNodeUpdate.accept(ref);
+            }
+            log.accept("Report recibido: " + c.rcb + " (SeqNum: " + c.seqNum
+                + ", " + c.filas.size() + " valores)");
         } catch (Exception e) {
             log.accept("Error procesando report: " + e.getMessage());
         }
@@ -567,7 +580,7 @@ class ReportsPanel {
     }
 
     /** Recursively extract a readable value string from any ModelNode. */
-    private String extractNodeValue(ModelNode node) {
+    static String extractNodeValue(ModelNode node) {
         if (node instanceof BasicDataAttribute) {
             return ValorBda.texto((BasicDataAttribute) node);
         }
