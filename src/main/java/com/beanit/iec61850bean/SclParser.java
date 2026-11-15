@@ -31,6 +31,9 @@
  * FCDA ... not found in Model": tanto el CID exportado por la app como un CID de fabricante.
  * Ahora cada DA con fc="SG" se crea también con fc="SE", con los mismos valores.
  *
+ * configRef (2026-11-15): el OptFields del SCL ya no pierde configRef; el Urcb lo arma en el
+ * reporte. dataRef sigue sin leerse porque el Urcb no manda las referencias.
+ *
  * La clase se resuelve antes que la del jar porque el classpath de ejecución es
  * "classes;lib\*.jar" y maven-assembly-plugin da precedencia a las clases del proyecto.
  */
@@ -583,10 +586,14 @@ public class SclParser {
               } else if (nodeName.equals("entryID")) {
                 optFields.setEntryId(node.getNodeValue().equalsIgnoreCase("true"));
               }
-              // not supported for now:
-              // else if (nodeName.equals("configRef")) {
-              // optFields.setConfigRevision(node.getNodeValue().equals("true"));
-              // }
+              // PARCHE IEDNavigator (2026-11-15): configRef se respeta. El Urcb de la biblioteca
+              // sí arma conf-rev en el reporte; el parser lo descartaba y el RCB quedaba sin el
+              // campo que pide el CID (el simulador de OMICRON IEDScout sí lo manda).
+              // dataRef sigue sin leerse: el Urcb no arma las referencias, y anunciarlas sin
+              // mandarlas dejaría el reporte corrido para cualquier cliente.
+              else if (nodeName.equals("configRef")) {
+                optFields.setConfigRevision(node.getNodeValue().equalsIgnoreCase("true"));
+              }
             }
           }
         } else if ("RptEnabled".equals(childNode.getNodeName())) {

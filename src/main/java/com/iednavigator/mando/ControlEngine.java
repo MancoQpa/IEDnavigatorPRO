@@ -363,6 +363,10 @@ public final class ControlEngine {
             }
         }
 
+        // Mando directo sobre el aparato (XCBR/XSWI controlable): cuenta en su OpCnt
+        if (n instanceof BdaDoubleBitPos || n instanceof BdaBoolean) {
+            EstadoLocal.contarManiobra(model, raiz, cerrar, cambiados);
+        }
         if (n instanceof BdaDoubleBitPos) {
             // Posicion de doble punto: 1=off (abierto), 2=on (cerrado)
             // La libreria expone el doble punto como enum, no como byte crudo.

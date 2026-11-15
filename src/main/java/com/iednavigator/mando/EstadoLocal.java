@@ -250,6 +250,7 @@ public final class EstadoLocal {
         List<BasicDataAttribute> cambiados = new ArrayList<>();
         if (model == null || ref == null) return cambiados;
 
+        contarManiobra(model, ref, cerrar, cambiados);
         ModelNode st = model.findModelNode(ref + ".stVal", Fc.ST);
         if (st instanceof BdaDoubleBitPos) {
             BdaDoubleBitPos p = (BdaDoubleBitPos) copiaDe(st);
@@ -1052,6 +1053,7 @@ public final class EstadoLocal {
 
     static void aplicarPosicion(ServerModel model, String doRef, boolean cerrar,
                                 List<BasicDataAttribute> cambiados) {
+        contarManiobra(model, doRef, cerrar, cambiados);
         ModelNode st = model.findModelNode(doRef + ".stVal", Fc.ST);
         if (st instanceof BdaDoubleBitPos) {
             BdaDoubleBitPos p = (BdaDoubleBitPos) copiaDe(st);
@@ -1068,6 +1070,46 @@ public final class EstadoLocal {
         }
         calidadBuena(model, doRef, cambiados, true);
         estampar(model, doRef, cambiados, true);
+    }
+
+    /**
+     * Cuenta la maniobra en el OpCnt del aparato (XCBR o XSWI), como un IED real: solo si la
+     * posicion cambia de verdad (un cierre sobre algo cerrado no cuenta) y solo en el LN del
+     * aparato, no en los CSWI que lo comandan. Hasta 2026-11-15 el contador quedaba en 0
+     * (lo vio OMICRON IEDScout leyendo un reporte con los OpCnt de un CID real).
+     */
+    static void contarManiobra(ServerModel model, String doRef, boolean cerrar,
+                               List<BasicDataAttribute> cambiados) {
+        int barra = doRef.indexOf('/');
+        int punto = doRef.indexOf('.', barra + 1);
+        if (barra < 0 || punto < 0) return;
+        String clase = ControlPolicy.classOf(doRef.substring(barra + 1, punto));
+        if (!"XCBR".equals(clase) && !"XSWI".equals(clase)) return;
+        ModelNode st = model.findModelNode(doRef + ".stVal", Fc.ST);
+        boolean yaEsta;
+        if (st instanceof BdaDoubleBitPos) {
+            BdaDoubleBitPos.DoubleBitPos actual = ((BdaDoubleBitPos) st).getDoubleBitPos();
+            yaEsta = actual == (cerrar ? BdaDoubleBitPos.DoubleBitPos.ON : BdaDoubleBitPos.DoubleBitPos.OFF);
+        } else if (st instanceof BdaBoolean) {
+            yaEsta = ((BdaBoolean) st).getValue() == cerrar;
+        } else {
+            return;
+        }
+        if (yaEsta) return;
+        String lnRef = doRef.substring(0, punto);
+        ModelNode cnt = model.findModelNode(lnRef + ".OpCnt.stVal", Fc.ST);
+        if (cnt instanceof BdaInt32) {
+            BdaInt32 c = (BdaInt32) copiaDe(cnt);
+            c.setValue(c.getValue() + 1);
+            cambiados.add(c);
+        } else if (cnt instanceof BdaInt32U) {
+            BdaInt32U c = (BdaInt32U) copiaDe(cnt);
+            c.setValue(c.getValue() + 1);
+            cambiados.add(c);
+        } else {
+            return;
+        }
+        estampar(model, lnRef + ".OpCnt", cambiados, true);
     }
 
     // ------------------------------------------------------------ normalizar
