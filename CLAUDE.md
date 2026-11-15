@@ -342,6 +342,17 @@ because `classes` comes first in the classpath). Each file says why and what cha
   them; hooked in `ServerAssociation.sendAnMmsPdu`, `test/TestReferenciasReporte`).
   `SclParser` also reads `dataRef`/`configRef` and creates the SGCB from `<SettingControl>`
   (`test/TestSgcbSimulador`).
+- `ReportadorBrcb` (2026-11-15, own class): buffered reports. The library's `Brcb` holds data
+  only: RptEna=true was accepted and nothing was ever sent. `ServerAssociation.getWriteResult`
+  sends every FC=BR write to it (`fc == Fc.BR` branch) and `cleanUpConnection` tells it the
+  association closed (RptEna goes false, buffering goes on). It extends `Urcb` only to sit in the
+  library's `chgRcbs`/`dupdRcbs` lists. Buffer of 1000 entries (BufOvfl when an unsent entry is
+  dropped), 8-byte EntryID, resync from the last sent entry or the EntryID the client writes,
+  PurgeBuf, GI, IntgPd, BufTm. Engines live in `ServerModel.reportadoresBrcb`. The same commit
+  fixed the URCB OptFlds write, which checked the current value instead of the written one and
+  rejected every write once the SCL set dataRef/configRef. `test/TestBrcb`; checked with IEDScout
+  (GI, dchg and resync after reconnect). SqNum stays INT8U as the library models it (8-1 says
+  INT16U for a BRCB).
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.

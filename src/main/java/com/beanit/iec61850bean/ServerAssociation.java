@@ -420,6 +420,9 @@ final class ServerAssociation {
           rsvdUrcb.getResv().setValue(false);
         }
       }
+      // PARCHE IEDNavigator (2026-11-15): los BRCB de esta asociación quedan con RptEna=false
+      // y siguen guardando en el buffer. Ver ReportadorBrcb.
+      ReportadorBrcb.asociacionCerrada(this, serverModel);
     }
   }
 
@@ -1534,6 +1537,40 @@ final class ServerAssociation {
         // pasar y decide ControlEngine. Ver PARCHES-LIBRERIA.md.
         return null;
       }
+    } else if (fc == Fc.BR) {
+      // PARCHE IEDNavigator (2026-11-15): reportes con buffer. La biblioteca dejaba pasar
+      // estas escrituras por la ruta genérica (aceptadas, sin efecto) y nunca mandaba un
+      // reporte de un BRCB. Ver ReportadorBrcb.
+      if (modelNode instanceof Rcb || !(modelNode.getParent() instanceof Brcb)) {
+        writeResponse.setFailure(new DataAccessError(3L));
+        return writeResponse;
+      }
+      FcModelNode copiaBr = (FcModelNode) modelNode.copy();
+      try {
+        copiaBr.setValueFromMmsDataObj(mmsData);
+      } catch (ServiceError e) {
+        writeResponse.setFailure(new DataAccessError(serviceErrorToMmsError(e)));
+        return writeResponse;
+      }
+      String campo = modelNode.getName();
+      DataSet ds = null;
+      if (campo.equals("DatSet")) {
+        String ref = ((BdaVisibleString) copiaBr).getStringValue().replace('$', '.');
+        if (!ref.isEmpty()) {
+          ds = serverModel.getDataSet(ref);
+          if (ds == null) {
+            ds = nonPersistentDataSets.get(ref);
+          }
+        }
+      }
+      int r = ReportadorBrcb.de((Brcb) modelNode.getParent(), serverModel)
+          .escribir(this, campo, copiaBr, ds);
+      if (r == ReportadorBrcb.OK) {
+        return writeSuccess;
+      }
+      writeResponse.setFailure(new DataAccessError((long) r));
+      return writeResponse;
+
     } else if (fc == Fc.RP) {
 
       if (modelNode instanceof Rcb) {
@@ -1658,18 +1695,16 @@ final class ServerAssociation {
           }
         } else if (nodeName.equals("OptFlds")) {
           if ((urcb.reserved == null || urcb.reserved == this) && !urcb.enabled) {
-            if (!((BdaOptFlds) modelNode).isBufferOverflow()
-                && !((BdaOptFlds) modelNode).isConfigRevision()
-                && !((BdaOptFlds) modelNode).isDataReference()
-                && !((BdaOptFlds) modelNode).isEntryId()) {
-              ((BasicDataAttribute) modelNode).setValueFrom((BasicDataAttribute) fcModelNodeCopy);
-              return writeSuccess;
-            } else {
-              logger.info("Client tried to write OptFlds with usupported field set to true.");
-              // 3 indicates error "object_access_denied"
-              writeResponse.setFailure(new DataAccessError(3L));
-              return writeResponse;
-            }
+            // PARCHE IEDNavigator (2026-11-15): el original miraba el OptFlds actual
+            // (modelNode) y no el que escribe el cliente, y rechazaba config-revision y
+            // data-reference, que ahora se mandan (ReferenciasEnReporte). Con un SCL que los
+            // trae, toda escritura de OptFlds fallaba. Ahora se acepta lo que escribe el
+            // cliente; buffer-overflow y entryID no existen en un URCB y se apagan.
+            BdaOptFlds nuevo = (BdaOptFlds) fcModelNodeCopy;
+            nuevo.setBufferOverflow(false);
+            nuevo.setEntryId(false);
+            ((BasicDataAttribute) modelNode).setValueFrom(nuevo);
+            return writeSuccess;
           } else {
             logger.info(
                 "Client tried to write RCB parameter even though URCB is reserved by other client or already enabled.");

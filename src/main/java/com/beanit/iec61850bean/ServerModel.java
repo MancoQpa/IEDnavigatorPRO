@@ -52,6 +52,9 @@ public final class ServerModel extends ModelNode {
   private final Map<String, Urcb> urcbs = new HashMap<>();
   private final Map<String, Brcb> brcbs = new HashMap<>();
 
+  // PARCHE IEDNavigator (2026-11-15): motor de cada BRCB (reportes con buffer). Ver ReportadorBrcb.
+  final Map<Brcb, ReportadorBrcb> reportadoresBrcb = new java.util.IdentityHashMap<>();
+
   public ServerModel(List<LogicalDevice> logicalDevices, Collection<DataSet> dataSets) {
     children = new LinkedHashMap<>();
     objectReference = null;
