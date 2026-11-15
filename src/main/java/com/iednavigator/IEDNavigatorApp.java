@@ -997,7 +997,8 @@ public class IEDNavigatorApp extends JFrame {
             // server.usage trae <small> (era para el panel viejo): aca va a 12 px
             vacioPasos.setText(srv ? I18n.t("server.usage").replace("<small>", "").replace("</small>", "") : "");
             vacioPasos.setVisible(srv);
-            vacioBoton.setText(I18n.t(srv ? "menu.file.open" : "ctx.btn.connect"));
+            boolean cancelando = !srv && connectionManager != null && connectionManager.cancelable();
+            vacioBoton.setText(I18n.t(srv ? "menu.file.open" : cancelando ? "ctx.btn.cancel" : "ctx.btn.connect"));
             vacioBoton.setEnabled(srv || (btnConnect != null && btnConnect.isEnabled()));
         }
         cardsArbol.show(cartasArbol, hayModelo ? "arbol" : "vacio");
@@ -1223,6 +1224,8 @@ public class IEDNavigatorApp extends JFrame {
                 Integer m = server.modoIed();
                 return m != null && (m == 3 || m == 4);
             }
+            public String etapa() { return connectionManager == null ? null : connectionManager.etapa(); }
+            public String etapaDetalle() { return connectionManager == null ? "" : connectionManager.etapaDetalle(); }
             public boolean accionHabilitada() {
                 JButton b = currentMode == AppMode.SERVER ? btnStartStop : btnConnect;
                 return b != null && b.isEnabled();
@@ -2672,8 +2675,12 @@ public class IEDNavigatorApp extends JFrame {
 
     private void setupListeners() {
         // Cambio de modo
-        rbServer.addActionListener(e -> switchToServerMode());
-        rbClient.addActionListener(e -> switchToClientMode());
+        rbServer.addActionListener(e -> {
+            if (confirmarCambioDeModo(true)) switchToServerMode(); else volverAlModoActual();
+        });
+        rbClient.addActionListener(e -> {
+            if (confirmarCambioDeModo(false)) switchToClientMode(); else volverAlModoActual();
+        });
 
         // Servidor
         btnSelectFile.addActionListener(e -> selectSclFile());
@@ -3394,6 +3401,44 @@ public class IEDNavigatorApp extends JFrame {
     // --- SECTION: CONNECTION MANAGEMENT (F7: delegado a ConnectionManager.java) ---
     // F26: delegado a ConnectionManager.java (misma lógica)
     private void handleDisconnect() { connectionManager.handleDisconnect(); }
+
+    /**
+     * Cambiar de modo detiene la simulación o cierra la conexión, y eso no se puede deshacer:
+     * si hay algo activo se pide confirmación, con Cancelar como botón por defecto (Enter).
+     * Sin nada activo el cambio es directo.
+     */
+    private boolean confirmarCambioDeModo(boolean aServidor) {
+        boolean desdeServidor = currentMode == AppMode.SERVER;
+        if (aServidor == desdeServidor) return true;
+        String mensaje, accion;
+        if (desdeServidor) {
+            if (!isServerRunning) return true;
+            String ied = iedEnPantalla != null && !iedEnPantalla.isEmpty() ? iedEnPantalla : I18n.t("ctx.noied");
+            String dest = connectionManager.getCurrentHost() + ":" + connectionManager.getCurrentPort();
+            mensaje = I18n.t("mode.confirm.srv", ied, dest);
+            accion = I18n.t("mode.confirm.srv.btn");
+        } else {
+            boolean conectando = connectionManager.cancelable();
+            if (!isConnected && !conectando) return true;
+            String dest = isConnected
+                    ? connectionManager.getCurrentHost() + ":" + connectionManager.getCurrentPort()
+                    : tfHost.getText().trim() + ":" + tfClientPort.getText().trim();
+            mensaje = I18n.t(isConnected ? "mode.confirm.cli" : "mode.confirm.cli.connecting", dest);
+            accion = I18n.t("mode.confirm.cli.btn");
+        }
+        Object[] opciones = {I18n.t("mode.confirm.cancel"), accion};
+        int r = JOptionPane.showOptionDialog(this, mensaje, I18n.t("mode.confirm.title"),
+                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, opciones, opciones[0]);
+        return r == 1;
+    }
+
+    /** El usuario canceló el cambio: el selector vuelve al modo vigente sin tocar nada. */
+    private void volverAlModoActual() {
+        if (currentMode == AppMode.SERVER) rbServer.setSelected(true); else rbClient.setSelected(true);
+        log(I18n.t("log.mode.change.cancelled"));
+        refrescarContexto();
+        actualizarMenuModo();
+    }
 
     private void switchToServerMode()  { connectionManager.switchToServerMode(); }
     private void switchToClientMode()  { connectionManager.switchToClientMode(); }

@@ -111,6 +111,9 @@ final class PanelRegistro extends JPanel {
         enc.add(izq, BorderLayout.WEST);
         JPanel der = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         der.setOpaque(false);
+        JButton limpiarBtn = enlace(I18n.t("log.clear"));
+        limpiarBtn.setToolTipText(I18n.t("log.clear.tip"));
+        limpiarBtn.addActionListener(e -> limpiar());
         JButton copiar = enlace(I18n.t("log.copy"));
         copiar.addActionListener(e -> copiar());
         JButton exp = enlace(I18n.t("log.export"));
@@ -120,6 +123,7 @@ final class PanelRegistro extends JPanel {
         cerrarBtn.setToolTipText(I18n.t("log.close"));
         cerrarBtn.getAccessibleContext().setAccessibleName(I18n.t("log.close"));
         cerrarBtn.addActionListener(e -> cerrar.run());
+        der.add(limpiarBtn);
         der.add(copiar);
         der.add(exp);
         der.add(cerrarBtn);
@@ -184,9 +188,16 @@ final class PanelRegistro extends JPanel {
         actualizarContadores();
     }
 
+    /**
+     * Borra la vista, no el registro de la sesión ({@code SessionLog} ya escribió cada línea en
+     * disco). Sin confirmación: no se pierde nada. También pone a cero el badge del botón.
+     */
     void limpiar() {
         entradas.clear();
+        avisosNuevos = 0;
+        erroresNuevos = 0;
         reconstruir();
+        alCambiarPendientes.run();
     }
 
     /** Todo el registro como texto, con el ×N de los repetidos (para Exportar y Copiar). */

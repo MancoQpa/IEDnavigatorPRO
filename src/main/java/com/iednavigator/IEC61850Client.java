@@ -21,7 +21,7 @@ import javax.net.SocketFactory;
 public class IEC61850Client implements ClientEventListener {
 
     private ClientSap clientSap;
-    private ClientAssociation association;
+    private volatile ClientAssociation association;
     private ServerModel serverModel;
     private String host;
     private int port;
@@ -32,6 +32,50 @@ public class IEC61850Client implements ClientEventListener {
     // associationClosed() por cada una; sin este flag la GUI mostraba "Desconectado"
     // en medio de una conexión que iba a terminar bien.
     private volatile boolean connectInProgress = false;
+
+    // Cancelación de una conexión en curso (botón Cancelar). La asociación y la lectura del
+    // modelo de iec61850bean son bloqueantes: la única forma confiable de cortarlas es cerrar
+    // el socket desde otro hilo. Con la bandera puesta, connect() no reintenta, no arranca el
+    // keep-alive y termina con una IOException que empieza con CANCELADA.
+    private volatile boolean cancelada = false;
+    private volatile Future<ClientAssociation> asociacionEnCurso;
+    private volatile Runnable alAsociar;
+    static final String CANCELADA = "CANCELADA";
+
+    /** Se llama cuando la asociación MMS quedó establecida y empieza la lectura del modelo. */
+    public void setAlAsociar(Runnable r) { alAsociar = r; }
+
+    /** ¿La última conexión terminó por {@link #cancelarConexion()}? */
+    public boolean fueCancelada() { return cancelada; }
+
+    /**
+     * Corta una conexión en curso desde otro hilo: cancela la asociación pendiente y cierra el
+     * socket de la que ya existe, con lo que retrieveModel() termina con error enseguida.
+     * connect() ve la bandera y no intenta las rutas de respaldo.
+     */
+    public void cancelarConexion() {
+        if (!connectInProgress) return;
+        cancelada = true;
+        Future<ClientAssociation> f = asociacionEnCurso;
+        if (f != null) f.cancel(true);
+        ClientAssociation a = association;
+        if (a != null) {
+            try { a.disconnect(); } catch (Exception ignorada) { }
+        }
+        logDiag("[INFO] Conexion cancelada por el usuario");
+    }
+
+    private void siCancelada() throws IOException {
+        if (!cancelada) return;
+        ClientAssociation a = association;
+        association = null;
+        if (a != null) {
+            try { a.disconnect(); } catch (Exception ignorada) { }
+        }
+        serverModel = null;
+        connected = false;
+        throw new IOException(CANCELADA);
+    }
 
     // Cache de valores leidos
     private final Map<String, CachedValue> valueCache = new ConcurrentHashMap<>();
@@ -181,6 +225,7 @@ public class IEC61850Client implements ClientEventListener {
         // con iec61850bean al hacer conexión TCP previa al puerto MMS
 
         connectInProgress = true;
+        cancelada = false;
         try {
             System.out.println("[INFO] Creating ClientSap...");
             clientSap = new ClientSap();
@@ -196,11 +241,17 @@ public class IEC61850Client implements ClientEventListener {
 
             // Usar Future con timeout para la conexión
             Future<ClientAssociation> future = connectionExecutor.submit(() -> {
-                return clientSap.associate(address, port, null, IEC61850Client.this);
+                ClientAssociation a = clientSap.associate(address, port, null, IEC61850Client.this);
+                // Si se canceló mientras se asociaba, esta asociación ya no tiene dueño
+                if (cancelada) { try { a.disconnect(); } catch (Exception ignorada) { } }
+                return a;
             });
+            asociacionEnCurso = future;
 
             try {
                 association = future.get(connectionTimeoutMs, TimeUnit.MILLISECONDS);
+            } catch (CancellationException e) {
+                throw new IOException(CANCELADA);
             } catch (TimeoutException e) {
                 future.cancel(true);
                 throw new IOException("Connection timeout after " + connectionTimeoutMs + "ms");
@@ -215,6 +266,10 @@ public class IEC61850Client implements ClientEventListener {
                 throw new IOException("Connection interrupted");
             }
 
+            asociacionEnCurso = null;
+            siCancelada();
+            Runnable aviso = alAsociar;
+            if (aviso != null) { try { aviso.run(); } catch (Exception ignorada) { } }
             System.out.println("[INFO] Connected to MMS server! Retrieving model...");
             System.out.println("[INFO] This may take a moment - the model contains DataSets and Reports");
 
@@ -228,6 +283,7 @@ public class IEC61850Client implements ClientEventListener {
                 modelPath = "directo";
                 System.out.println("[INFO] Model retrieved successfully - " + countNodes(serverModel) + " nodes");
             } catch (ServiceError serviceEx) {
+                siCancelada();
                 logDiag("[WARN] ServiceError during model retrieval: code=" + serviceEx.getErrorCode()
                     + " message=" + serviceEx.getMessage());
                 String msg = serviceEx.getMessage() != null ? serviceEx.getMessage() : "";
@@ -264,9 +320,10 @@ public class IEC61850Client implements ClientEventListener {
                 }
             } catch (Exception modelEx) {
                 if (modelEx instanceof IOException && modelEx.getMessage() != null
-                        && modelEx.getMessage().startsWith("SCL_FALLBACK:")) {
+                        && (modelEx.getMessage().startsWith("SCL_FALLBACK:") || modelEx.getMessage().equals(CANCELADA))) {
                     throw (IOException) modelEx;
                 }
+                siCancelada();
                 logDiag("[ERROR] Model retrieval failed: " + modelEx.getClass().getName()
                     + " message=" + modelEx.getMessage());
                 modelEx.printStackTrace();
@@ -287,6 +344,7 @@ public class IEC61850Client implements ClientEventListener {
                 }
             }
 
+            siCancelada();
             connected = true;
             // Una sola línea por conexión, después de que cualquiera de las rutas haya dejado
             // el modelo puesto: así la salida es comparable entre equipos y entre rutas.
@@ -309,6 +367,7 @@ public class IEC61850Client implements ClientEventListener {
             throw new IOException("Connection error: " + e.getMessage(), e);
         } finally {
             connectInProgress = false;
+            asociacionEnCurso = null;
         }
     }
 

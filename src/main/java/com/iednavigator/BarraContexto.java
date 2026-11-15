@@ -50,6 +50,10 @@ final class BarraContexto extends JPanel {
         boolean modoTestDisponible();
         /** El IED simulado esta en test (LLN0.Mod de todos los LD). */
         boolean enModoTest();
+        /** Clave I18n de la etapa de una conexion en curso ("Conectando…", "Leyendo modelo…"), o null. */
+        default String etapa() { return null; }
+        /** Detalle de la etapa: host:puerto o el avance de la lectura. */
+        default String etapaDetalle() { return ""; }
     }
 
     /** Lo que la barra hace; lo resuelve la ventana principal. */
@@ -204,7 +208,8 @@ final class BarraContexto extends JPanel {
 
         int anchoPildora = Math.max(UIScale.scale(290),
                 maxAncho(Estilo.ui(Font.BOLD, 13), "ctx.srv.running", "ctx.srv.stopped", "ctx.cli.connected",
-                        "ctx.cli.disconnected", "ctx.cli.connecting", "ctx.error") + UIScale.scale(140));
+                        "ctx.cli.disconnected", "ctx.cli.connecting", "ctx.cli.readingmodel", "ctx.cli.readingvalues",
+                        "ctx.cli.cancelling", "ctx.error") + UIScale.scale(140));
         fijar(pildora, anchoPildora, UIScale.scale(32));
         g.gridx = 2;
         add(pildora, g);
@@ -215,7 +220,8 @@ final class BarraContexto extends JPanel {
         btnAccion.setIconTextGap(UIScale.scale(8));
         btnAccion.addActionListener(e -> acciones.accionPrincipal());
         int anchoBoton = Math.max(UIScale.scale(190),
-                maxAncho(Estilo.ui(Font.BOLD, 13), "ctx.btn.start", "ctx.btn.stop", "ctx.btn.connect", "ctx.btn.disconnect")
+                maxAncho(Estilo.ui(Font.BOLD, 13), "ctx.btn.start", "ctx.btn.stop", "ctx.btn.connect", "ctx.btn.disconnect",
+                        "ctx.btn.cancel")
                         + UIScale.scale(14 + 8 + 12 + 12 + 34));
         fijar(btnAccion, anchoBoton, UIScale.scale(34));
         g.gridx = 3;
@@ -270,7 +276,11 @@ final class BarraContexto extends JPanel {
 
         // Pildora de estado
         String err = estado.error();
-        if (err != null) {
+        String etapa = srv ? null : estado.etapa();
+        if (etapa != null) {
+            String det = estado.etapaDetalle();
+            pildora.poner(Estilo.AVISO, I18n.t(etapa), det == null || det.isEmpty() ? destino : det);
+        } else if (err != null) {
             pildora.poner(Estilo.ERROR, I18n.t("ctx.error"), err);
         } else if (srv) {
             boolean corre = estado.servidorCorriendo();
@@ -286,11 +296,14 @@ final class BarraContexto extends JPanel {
                     I18n.t(con ? "ctx.cli.connected" : "ctx.cli.disconnected"), con ? destino : "");
         }
 
-        // Accion principal: rellena con el acento al iniciar o conectar, con contorno al detener
-        boolean activo = srv ? estado.servidorCorriendo() : estado.conectado();
-        btnAccion.setText(I18n.t(srv ? (activo ? "ctx.btn.stop" : "ctx.btn.start")
-                                     : (activo ? "ctx.btn.disconnect" : "ctx.btn.connect")));
-        btnAccion.setEnabled(estado.accionHabilitada());
+        // Accion principal: rellena con el acento al iniciar o conectar, con contorno al detener.
+        // Mientras se conecta o se leen los valores dice Cancelar (mismo ancho, con contorno).
+        boolean cancelable = etapa != null;
+        boolean activo = cancelable || (srv ? estado.servidorCorriendo() : estado.conectado());
+        btnAccion.setText(I18n.t(cancelable ? "ctx.btn.cancel"
+                : srv ? (activo ? "ctx.btn.stop" : "ctx.btn.start")
+                      : (activo ? "ctx.btn.disconnect" : "ctx.btn.connect")));
+        btnAccion.setEnabled(cancelable || estado.accionHabilitada());
         btnAccion.putClientProperty("FlatLaf.style", activo
                 ? "arc:7; focusWidth:0; innerFocusWidth:0; borderWidth:1; borderColor:#C9CFD7; margin:0,12,0,12;"
                   + " background:#FFFFFF; hoverBackground:#F4F6F8; pressedBackground:#EEF0F3; foreground:#1B1F24"
