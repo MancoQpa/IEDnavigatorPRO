@@ -468,10 +468,12 @@ public class GooseSubscriber {
                     type = "Boolean";
                     value = (offset < data.length && data[offset] != 0);
                     break;
-                case 0x84: // bit-string
-                    type = "BitString";
-                    value = fieldLen > 0 ? String.format("0x%02X", data[offset] & 0xFF) : "0x00";
+                case 0x84: { // bit-string: antes se mostraba el byte de relleno, no el valor
+                    Object[] tv = decodificarBitString(data, offset, fieldLen);
+                    type = (String) tv[0];
+                    value = tv[1];
                     break;
+                }
                 case 0x85: // integer
                     type = "Integer";
                     value = parseInteger(data, offset, fieldLen);
@@ -520,6 +522,40 @@ public class GooseSubscriber {
         for (int i = 0; i < length && (offset + i) < data.length; i++) {
             sb.append(String.format("%02X", data[offset + i] & 0xFF));
         }
+        return sb.toString();
+    }
+
+    /**
+     * Valor de un bit-string GOOSE. El primer byte es la cantidad de bits de relleno.
+     *   2 bits  -> posicion de doble bit (Dbpos): 0 intermedio, 1 OFF, 2 ON, 3 malo;
+     *   13 bits -> calidad: "good", "invalid", "questionable" y las marcas (test, ...);
+     *   otro    -> los bits en hexadecimal con su cantidad.
+     * @return {tipo, valor}
+     */
+    static Object[] decodificarBitString(byte[] data, int offset, int len) {
+        if (len < 2 || offset + len > data.length) return new Object[]{"BitString", "0x00"};
+        int relleno = data[offset] & 0xFF;
+        int nbits = (len - 1) * 8 - relleno;
+        if (nbits == 2) return new Object[]{"Dbpos", (data[offset + 1] >> 6) & 0x03};
+        if (nbits == 13) {
+            int q = 0;
+            for (int i = 0; i < 13; i++) {
+                if ((data[offset + 1 + i / 8] & (0x80 >> (i % 8))) != 0) q |= 1 << i;
+            }
+            return new Object[]{"Quality", textoCalidad(q)};
+        }
+        StringBuilder sb = new StringBuilder("0x");
+        for (int i = 1; i < len; i++) sb.append(String.format("%02X", data[offset + i] & 0xFF));
+        return new Object[]{"BitString", sb + " (" + nbits + " bits)"};
+    }
+
+    /** Calidad con la numeracion de IEC 61850-7-3 (bit n = 1 << n): "good", "invalid · test"... */
+    static String textoCalidad(int q) {
+        String[] validez = {"good", "reserved", "invalid", "questionable"};
+        StringBuilder sb = new StringBuilder(validez[q & 0x03]);
+        String[] marcas = {null, null, "overflow", "outOfRange", "badReference", "oscillatory", "failure",
+                "oldData", "inconsistent", "inaccurate", "substituted", "test", "operatorBlocked"};
+        for (int i = 2; i < 13; i++) if (((q >> i) & 1) != 0) sb.append(" · ").append(marcas[i]);
         return sb.toString();
     }
 

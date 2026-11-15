@@ -482,9 +482,9 @@ public class GoosePublisher {
                     writeTagLengthValue(data, 0x87, encodeFloat((Float) dv.value));
                     break;
                 case BITSTRING:
-                    // Bitstring: first byte is padding bits count
-                    int bits = ((Number) dv.value).intValue();
-                    writeTagLengthValue(data, 0x84, new byte[]{0x00, (byte) bits});
+                    // Calidad (q): bit-string de 13 bits (IEC 61850-8-1). Antes salia en un byte,
+                    // con 8 bits, y lo que pasaba del octavo bit se perdia (test, operatorBlocked).
+                    writeTagLengthValue(data, 0x84, codificarCalidad(((Number) dv.value).intValue()));
                     break;
                 case DBPOS:
                     // DoubleBitPos as bitstring (2 bits): 00=intermediate, 01=off, 10=on, 11=bad
@@ -498,6 +498,20 @@ public class GoosePublisher {
         }
 
         return data.toByteArray();
+    }
+
+    /**
+     * Calidad como bit-string de 13 bits: un byte de relleno (3) y dos de datos. El entero usa la
+     * numeracion de bits de IEC 61850-7-3 (la de libiec61850): el bit n de la norma es 1 << n.
+     * Asi 0x0002 = invalid, 0x0003 = questionable, 0x0400 = substituted, 0x0800 = test,
+     * 0x1000 = operatorBlocked. En la trama el bit 0 de la norma es el mas alto del primer byte.
+     */
+    static byte[] codificarCalidad(int q) {
+        byte[] b = new byte[]{0x03, 0, 0};
+        for (int i = 0; i < 13; i++) {
+            if (((q >> i) & 1) != 0) b[1 + i / 8] |= (byte) (0x80 >> (i % 8));
+        }
+        return b;
     }
 
     private void writeTagLengthValue(ByteArrayOutputStream baos, int tag, byte[] value) {

@@ -547,9 +547,16 @@ class GoosePanel {
                             JMenuItem miGood = new JMenuItem("GOOD (0x0000)");
                             miGood.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0));
                             memberMenu.add(miGood);
-                            JMenuItem miBad = new JMenuItem("INVALID (0x0004)");
-                            miBad.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 4));
+                            // Numeracion de bits de IEC 61850-7-3 (bit n = 1 << n): 0x0004 era overflow
+                            JMenuItem miBad = new JMenuItem("INVALID (0x0002)");
+                            miBad.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0x0002));
                             memberMenu.add(miBad);
+                            JMenuItem miQuest = new JMenuItem("QUESTIONABLE (0x0003)");
+                            miQuest.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0x0003));
+                            memberMenu.add(miQuest);
+                            JMenuItem miTest = new JMenuItem("GOOD · TEST (0x0800)");
+                            miTest.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0x0800));
+                            memberMenu.add(miTest);
                         } else {
                             JMenuItem miCustom = new JMenuItem(I18n.t("ctx.customvalue"));
                             miCustom.addActionListener(ev -> {
