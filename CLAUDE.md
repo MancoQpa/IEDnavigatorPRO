@@ -357,7 +357,11 @@ because `classes` comes first in the classpath). Each file says why and what cha
   (static map keyed `host:port|RptID`, so it survives a reconnect) and writes it before RptEna
   (`enableReportingRetomando` returns `Retoma` NINGUNA/RETOMADO/RECHAZADO; a rejected EntryID
   still enables). The Reports tab adds Entry time and EntryID columns, logs the resync and
-  warns on BufOvfl. `test/TestBrcbCliente`.
+  warns on BufOvfl. `test/TestBrcbCliente`. The RCB table reads each RCB's values in the
+  background when loaded (`IEC61850Client.leerRcb`; before, DatSet/TrgOps showed defaults until
+  enabled). A report's values are captured in the receiving thread (`ReportsPanel.Captura`):
+  they are the client model's nodes and the next report overwrites them. A member that is a
+  whole DO shows its main value (stVal, general, mag...). `test/TestValorMiembro`.
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.
