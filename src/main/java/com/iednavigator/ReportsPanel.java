@@ -34,6 +34,8 @@ class ReportsPanel {
     private DefaultTableModel reportDataTableModel;
     private Map<String, Rcb> rcbMap = new HashMap<>();
     private Map<String, String> previousReportValues = new HashMap<>();
+    /** Sube con cada carga de la tabla: una lectura en curso de una carga vieja no la pisa. */
+    private volatile int generacion = 0;
 
     ReportsPanel(Component parent,
                  Consumer<String> log,
@@ -277,6 +279,7 @@ class ReportsPanel {
     private void refreshReportControlBlocks() {
         reportsTableModel.setRowCount(0);
         rcbMap.clear();
+        final int gen = ++generacion;
 
         ServerModel model = modelSupplier.get();
         if (model == null) {
@@ -317,9 +320,58 @@ class ReportsPanel {
             }
             log.accept(I18n.t("log.rep.rcbfound", String.valueOf(rcbMap.size())));
             if (rcbMap.isEmpty()) log.accept(rcbAbsenceMessage(lds, ldsConLln0));
+            else leerValoresRcb(gen);
         } catch (Exception e) {
             log.accept(I18n.t("log.rep.error", String.valueOf(e.getMessage())));
         }
+    }
+
+    /**
+     * En modo cliente el modelo trae los RCB sin sus valores (Dataset vacío, TrgOps por
+     * defecto) hasta que alguien los lee. Se leen en segundo plano, uno por pedido, y cada fila
+     * se completa al llegar su respuesta. Con cientos de RCB en un IED real tarda unos
+     * segundos; la tabla se puede usar mientras tanto.
+     */
+    private void leerValoresRcb(int gen) {
+        IEC61850Client cl = clientSupplier.get();
+        if (cl == null || !cl.isConnected()) return;
+        List<String> nombres = new ArrayList<>();
+        for (int i = 0; i < reportsTableModel.getRowCount(); i++) {
+            nombres.add((String) reportsTableModel.getValueAt(i, 0));
+        }
+        final Map<String, Rcb> rcbs = new HashMap<>(rcbMap);
+        backgroundExecutor.submit(() -> {
+            int fallas = 0;
+            for (int i = 0; i < nombres.size() && gen == generacion; i++) {
+                Rcb rcb = rcbs.get(nombres.get(i));
+                if (rcb == null) continue;
+                try {
+                    cl.leerRcb(rcb);
+                } catch (Exception e) {
+                    fallas++;
+                    continue;
+                }
+                final int fila = i;
+                final Object[] valores = filaDe(rcb);
+                SwingUtilities.invokeLater(() -> {
+                    if (gen != generacion || fila >= reportsTableModel.getRowCount()) return;
+                    for (int c = 2; c <= 5; c++) reportsTableModel.setValueAt(valores[c], fila, c);
+                });
+            }
+            if (fallas > 0) {
+                final int f = fallas;
+                SwingUtilities.invokeLater(() -> log.accept(I18n.t("log.rep.rcb.noleidos", String.valueOf(f))));
+            }
+        });
+    }
+
+    /** Las columnas de un RCB tal como están en el modelo. */
+    private Object[] filaDe(Rcb rcb) {
+        String dataset = rcb.getDatSet() != null ? rcb.getDatSet().getStringValue() : "";
+        boolean enabled = rcb.getRptEna() != null && rcb.getRptEna().getValue();
+        String intgPd = rcb.getIntgPd() != null ? String.valueOf(rcb.getIntgPd().getValue()) : "";
+        return new Object[]{null, rcb instanceof Brcb ? "BRCB" : "URCB", dataset,
+                buildTrgOpsString(rcb.getTrgOps()), intgPd, enabled ? "Habilitado" : "Deshabilitado"};
     }
 
     /**
@@ -493,11 +545,34 @@ class ReportsPanel {
         }
     }
 
+    /** Atributos que dan el valor de un DO, en orden de preferencia (IEC 61850-7-3). */
+    private static final String[] VALOR_PRINCIPAL =
+            {"stVal", "general", "mag", "cVal", "instMag", "setVal", "setMag", "ctlVal", "f", "i"};
+
+    /**
+     * Texto del valor de un miembro de reporte. Si el miembro es un DO entero (FCD), muestra su
+     * valor principal (stVal, general, mag...) y no la lista de todos sus atributos, que en un
+     * Pos empezaba por origin= y dejaba el stVal fuera de la celda.
+     */
+    static String valorDeMiembro(ModelNode node) {
+        if (node instanceof BasicDataAttribute) return ValorBda.texto((BasicDataAttribute) node);
+        for (String n : VALOR_PRINCIPAL) {
+            ModelNode h = node.getChild(n);
+            if (h != null && h != node) {
+                String v = valorDeMiembro(h);
+                if (v != null && !v.isEmpty()) return v;
+            }
+        }
+        return null;
+    }
+
     /** Recursively extract a readable value string from any ModelNode. */
     private String extractNodeValue(ModelNode node) {
         if (node instanceof BasicDataAttribute) {
             return ValorBda.texto((BasicDataAttribute) node);
         }
+        String principal = valorDeMiembro(node);
+        if (principal != null) return principal;
         StringBuilder sb = new StringBuilder();
         for (ModelNode child : node) {
             if (sb.length() > 0) sb.append(", ");

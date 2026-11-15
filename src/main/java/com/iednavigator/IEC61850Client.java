@@ -1917,6 +1917,12 @@ public class IEC61850Client implements ClientEventListener {
         return b == null ? null : b.clone();
     }
 
+    /** Lee los atributos de un RCB (DatSet, TrgOps, IntgPd, RptEna...) en el modelo local. */
+    public void leerRcb(Rcb rcb) throws ServiceError, IOException {
+        if (!isConnected() || association == null) throw new IOException("Not connected");
+        mms().getRcbValues(rcb);
+    }
+
     /** Resultado de la resincronización al habilitar un BRCB. */
     public enum Retoma { NINGUNA, RETOMADO, RECHAZADO }
 
