@@ -34,8 +34,8 @@
  * SGCB (2026-11-15): un &lt;SettingControl&gt; en LN0 crea LLN0$SP$SGCB (crearSgcb); antes no
  * existia por MMS.
  *
- * configRef (2026-11-15): el OptFields del SCL ya no pierde configRef; el Urcb lo arma en el
- * reporte. dataRef sigue sin leerse porque el Urcb no manda las referencias.
+ * configRef y dataRef (2026-11-15): el OptFields del SCL ya no los pierde. El Urcb arma
+ * conf-rev; las referencias las agrega ServerAssociation (ReferenciasEnReporte).
  *
  * La clase se resuelve antes que la del jar porque el classpath de ejecución es
  * "classes;lib\*.jar" y maven-assembly-plugin da precedencia a las clases del proyecto.
@@ -626,11 +626,11 @@ public class SclParser {
                 optFields.setDataSetName(node.getNodeValue().equalsIgnoreCase("true"));
 
               }
-              // not supported for now
-              // else if (nodeName.equals("dataRef")) {
-              // optFields.setDataReference(node.getNodeValue().equals("true"));
-              //
-              // }
+              // PARCHE IEDNavigator (2026-11-15): dataRef se respeta; ServerAssociation agrega
+              // las referencias al reporte (ReferenciasEnReporte).
+              else if (nodeName.equals("dataRef")) {
+                optFields.setDataReference(node.getNodeValue().equalsIgnoreCase("true"));
+              }
               else if (nodeName.equals("bufOvfl")) {
                 optFields.setBufferOverflow(node.getNodeValue().equalsIgnoreCase("true"));
 
@@ -640,8 +640,6 @@ public class SclParser {
               // PARCHE IEDNavigator (2026-11-15): configRef se respeta. El Urcb de la biblioteca
               // sí arma conf-rev en el reporte; el parser lo descartaba y el RCB quedaba sin el
               // campo que pide el CID (el simulador de OMICRON IEDScout sí lo manda).
-              // dataRef sigue sin leerse: el Urcb no arma las referencias, y anunciarlas sin
-              // mandarlas dejaría el reporte corrido para cualquier cliente.
               else if (nodeName.equals("configRef")) {
                 optFields.setConfigRevision(node.getNodeValue().equalsIgnoreCase("true"));
               }

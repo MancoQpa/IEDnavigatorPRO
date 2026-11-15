@@ -335,6 +335,14 @@ because `classes` comes first in the classpath). Each file says why and what cha
   sends 6. The class size stays 7 so the client still **accepts** 6 and 7 bits
   (`setValueFromMmsDataObj` rejects a longer bit-string). `test/TestMotivoReporte`.
 
+- Own classes in the same package (not shadows), 2026-11-15: `NodoFcDeLn` (reading a whole
+  FC of an LN, `LLN0$ST`, which IEDScout does on discovery; hooked in `ServerModel`,
+  `test/TestLecturaFcDeLn`) and `ReferenciasEnReporte` (inserts the data references when a
+  report's OptFlds asks for data-reference; the library's Urcb announced them without sending
+  them; hooked in `ServerAssociation.sendAnMmsPdu`, `test/TestReferenciasReporte`).
+  `SclParser` also reads `dataRef`/`configRef` and creates the SGCB from `<SettingControl>`
+  (`test/TestSgcbSimulador`).
+
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.
 

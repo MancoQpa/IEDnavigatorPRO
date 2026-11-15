@@ -425,6 +425,10 @@ final class ServerAssociation {
 
   boolean sendAnMmsPdu(MMSpdu mmsResponsePdu) {
 
+    // PARCHE IEDNavigator (2026-11-15): un reporte con data-reference sale con las
+    // referencias de los datos (el Urcb de la biblioteca las omitía). Ver ReferenciasEnReporte.
+    ReferenciasEnReporte.agregar(mmsResponsePdu, serverModel);
+
     synchronized (reverseOStream) {
       reverseOStream.reset();
       try {
