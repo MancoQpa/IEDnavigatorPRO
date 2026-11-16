@@ -66,7 +66,7 @@ class ModelTreeBuilder {
             rootNode.setUserObject(I18n.t("tree.root.count", nodeCount));
 
             int ldIdx = 0;
-            for (ModelNode ld : model.getChildren()) {
+            for (ModelNode ld : ldsOrdenados(model)) {
                 ldIdx++;
                 DefaultMutableTreeNode ldNode = createTreeNode(ld, "LD", enumFormatter);
                 rootNode.add(ldNode);
@@ -283,6 +283,18 @@ class ModelTreeBuilder {
             return node.getParent() instanceof FcDataObject || node.getParent() == null ? "DA" : "BDA";
         }
         return "";
+    }
+
+    /**
+     * Los LD en orden alfabético, como los entrega un IED por MMS (GetNameList devuelve los
+     * nombres ordenados). Sin esto el árbol de Servidor seguía el orden del CID (LD0, PROT,
+     * MONT, CTRL...) y el de Cliente el del relé (CTRL, LD0, MEAS...): reporte de usuarios,
+     * 2026-11-16.
+     */
+    static java.util.List<ModelNode> ldsOrdenados(ServerModel model) {
+        java.util.List<ModelNode> lds = new java.util.ArrayList<>(model.getChildren());
+        lds.sort(java.util.Comparator.comparing(ModelNode::getName));
+        return lds;
     }
 
     static int countNodes(ServerModel model) {
