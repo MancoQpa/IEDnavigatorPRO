@@ -54,6 +54,13 @@ public class TestAparatoDeLn {
         return i;
     }
 
+    static NodeInfo sinClase() {
+        NodeInfo i = new NodeInfo();
+        i.name = "ZZZZ1";
+        i.prefix = "LN";
+        return i;
+    }
+
     public static void main(String[] a) throws Exception {
         I18n.setLocale(java.util.Locale.forLanguageTag("es"));
         File f = File.createTempFile("aparatoln", ".cid");
@@ -73,11 +80,16 @@ public class TestAparatoDeLn {
             String d = AparatoDeLn.descripcion(m.findModelNode(c[0], null));
             chk(c[0] + " -> " + d, c[1].equals(d));
             String arbol = ArbolCeldaRenderer.descripcionLn(info(m, c[0]), c[2]);
-            String esperado = c[2] == null ? c[1] : c[1] + " · " + c[2];
+            String esperado = c[1];   // igual en Servidor (con desc del SCL) y en Cliente (sin)
             chk("   en el árbol: " + arbol, esperado.equals(arbol));
         }
         chk("CSWI sin pistas: nombre genérico de la clase",
                 "Controlador de maniobra".equals(ArbolCeldaRenderer.descripcionLn(info(m, "APAOTRO/CSWI7"), null)));
+        chk("misma descripción con y sin desc del SCL (Servidor = Cliente)",
+                ArbolCeldaRenderer.descripcionLn(info(m, "APACTRL/DSCSWI1"), "DS01")
+                        .equals(ArbolCeldaRenderer.descripcionLn(info(m, "APACTRL/DSCSWI1"), null)));
+        chk("clase fuera del diccionario: usa la desc del SCL",
+                "Algo propio".equals(ArbolCeldaRenderer.descripcionLn(sinClase(), "Algo propio")));
         String xcbr = ArbolCeldaRenderer.descripcionLn(info(m, "APACTRL/CBXCBR1"), null);
         chk("XCBR: la descripción de su clase (" + xcbr + ")", xcbr != null && !xcbr.contains("·"));
         System.out.println(ok + " pasaron, " + mal + " fallaron");

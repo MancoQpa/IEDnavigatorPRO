@@ -351,10 +351,12 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
     }
 
     /**
-     * Un LN se describe igual en Servidor y en Cliente: primero qué es (la clase de la norma; un
-     * CSWI o CILO dice si es de interruptor o de seccionador, ver AparatoDeLn) y después, si
-     * agrega algo, la desc del SCL ("Controlador de seccionador · DS01"). Antes en Servidor
-     * salía solo la desc del archivo, que en muchos CID es un código corto ("CB", "DS01").
+     * Un LN se describe igual en Servidor y en Cliente: qué es según la norma (un CSWI o CILO
+     * dice si es de interruptor o de seccionador, ver AparatoDeLn). La desc del SCL no va en el
+     * árbol: en Cliente solo existe si el IED entrega su CID, y los dos modos se veían distintos
+     * ("I/O Genérico · VTS" contra "I/O Genérico", reporte de usuarios 2026-11-16). Se muestra
+     * en el panel Propiedades (descripcionSclDe). Si la clase no está en el diccionario, el árbol
+     * usa la desc del SCL, que es lo único que hay.
      */
     static String descripcionLn(NodeInfo info, String delScl) {
         String que = info.node != null ? AparatoDeLn.descripcion(info.node) : null;
@@ -369,7 +371,22 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
         boolean sclUtil = scl != null && !scl.isEmpty() && scl.length() <= 60
                 && !repiteNombre(scl, info.name) && (que == null || !scl.equalsIgnoreCase(que));
         if (que == null) return sclUtil ? scl : null;
-        return sclUtil ? que + " · " + scl : que;
+        return que;
+    }
+
+    /**
+     * La desc del SCL de un LD, LN o DO cuando el árbol muestra otra cosa (lo que dice la norma),
+     * para el panel Propiedades; null si no hay o si es la misma que ya se ve.
+     */
+    String descripcionSclDe(NodeInfo info) {
+        if (info == null || info.node == null) return null;
+        DescripcionesScl ds = delScl;
+        if (ds == null) return null;
+        String scl;
+        try { scl = ds.descripcion(info.node.getReference().toString()); } catch (Exception e) { return null; }
+        if (scl == null || scl.trim().isEmpty() || repiteNombre(scl, info.name)) return null;
+        String visto = descripcionDe(info);
+        return scl.trim().equalsIgnoreCase(visto) ? null : scl.trim();
     }
 
     /** Se cambió el modelo (otro IED u otro archivo): los CDC se vuelven a calcular. */
@@ -392,18 +409,20 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
             descripciones.put(ref, d);
             return d;
         }
-        if (d == null || d.isEmpty() || d.length() > 60) {
-            Iec61850Dictionary.Entry e = Iec61850Dictionary.lookup(info.name);
-            boolean tipoOk = e != null && (("LN".equals(info.prefix) && e.type == Iec61850Dictionary.EntryType.LOGICAL_NODE)
-                    || (("DO".equals(info.prefix) || "SDO".equals(info.prefix)) && e.type == Iec61850Dictionary.EntryType.DATA_OBJECT));
-            if (tipoOk) {
-                String n = I18n.currentTag().startsWith("es") ? e.fullNameES : e.fullNameEN;
-                if (n != null && !n.isEmpty()) d = n;
-            } else if ("LD".equals(info.prefix)) {
-                String ld = Iec61850Dictionary.describeLogicalDevice(info.name);
-                if (ld != null && ld.length() <= 60) d = ld;
-            }
+        // LD y DO, igual que los LN: primero lo que dice la norma, así Servidor y Cliente se ven
+        // iguales; la desc del SCL solo si no hay otra cosa (y siempre en Propiedades).
+        String norma = null;
+        Iec61850Dictionary.Entry e = Iec61850Dictionary.lookup(info.name);
+        if (e != null && ("DO".equals(info.prefix) || "SDO".equals(info.prefix))
+                && e.type == Iec61850Dictionary.EntryType.DATA_OBJECT) {
+            String n = I18n.currentTag().startsWith("es") ? e.fullNameES : e.fullNameEN;
+            if (n != null && !n.isEmpty()) norma = n;
+        } else if ("LD".equals(info.prefix)) {
+            String ld = Iec61850Dictionary.describeLogicalDevice(info.name);
+            if (ld != null && ld.length() <= 60) norma = ld;
         }
+        if (norma != null) d = norma;
+        else if (d != null && (d.isEmpty() || d.length() > 60)) d = null;
         descripciones.put(ref, d);
         return d;
     }

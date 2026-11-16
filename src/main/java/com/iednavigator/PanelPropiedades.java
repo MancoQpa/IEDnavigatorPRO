@@ -186,6 +186,8 @@ final class PanelPropiedades extends JPanel {
                 f.add(new Fila(I18n.t("props.element"), I18n.t("dm.elem.ld"), false, false, false));
                 String d = r == null ? null : r.descripcionDe(info);
                 if (d != null && !d.isEmpty()) f.add(new Fila(I18n.t("props.desc"), d, false, false, false));
+                String dScl2 = r == null ? null : r.descripcionSclDe(info);
+                if (dScl2 != null) f.add(new Fila(I18n.t("props.desc.scl"), dScl2, false, false, false));
                 f.add(new Fila(I18n.t("props.lns"), String.valueOf(n.getChildren().size()), false, false, false));
                 break;
             }
@@ -198,6 +200,9 @@ final class PanelPropiedades extends JPanel {
                 if (d != null && !d.isEmpty() && !ArbolCeldaRenderer.repiteNombre(d, n.getName())) {
                     f.add(new Fila(I18n.t("props.desc"), d, false, false, false));
                 }
+                // La desc del archivo, que el árbol no muestra en los LN (ver descripcionLn)
+                String dScl = r == null ? null : r.descripcionSclDe(info);
+                if (dScl != null) f.add(new Fila(I18n.t("props.desc.scl"), dScl, false, false, false));
                 Set<String> dos = new LinkedHashSet<>();
                 for (ModelNode h : n.getChildren()) dos.add(h.getName());
                 f.add(new Fila(I18n.t("props.dos"), String.valueOf(dos.size()), false, false, false));
@@ -213,6 +218,8 @@ final class PanelPropiedades extends JPanel {
                         false, false, false));
                 String d = r == null ? null : r.descripcionDe(info);
                 if (d != null && !d.isEmpty()) f.add(new Fila(I18n.t("props.desc"), d, false, false, false));
+                String dScl2 = r == null ? null : r.descripcionSclDe(info);
+                if (dScl2 != null) f.add(new Fila(I18n.t("props.desc.scl"), dScl2, false, false, false));
                 if (n instanceof FcDataObject) {
                     f.add(new Fila(I18n.t("props.fcs"), TiposIec61850.fcsDe((FcDataObject) n), false, true, false));
                     Set<String> atr = new LinkedHashSet<>();
