@@ -551,16 +551,8 @@ final class ServerAssociation {
     ListOfIdentifier listOfIdentifier = new ListOfIdentifier();
     List<Identifier> identifiers = listOfIdentifier.getIdentifier();
 
-    // PARCHE IEDNavigator (2026-11-16): los LD en orden alfabético, como los devuelve un IED
-    // real (MMS ordena los nombres de GetNameList; continueAfter depende de ese orden). La
-    // librería respondía en el orden del SCL y un cliente veía los LD distinto que con el relé.
-    List<String> nombres = new ArrayList<>();
     for (ModelNode ld : serverModel) {
-      nombres.add(ld.getName());
-    }
-    java.util.Collections.sort(nombres);
-    for (String n : nombres) {
-      identifiers.add(new Identifier(n.getBytes(UTF_8)));
+      identifiers.add(new Identifier(ld.getName().getBytes(UTF_8)));
     }
 
     GetNameListResponse getNameListResponse = new GetNameListResponse();

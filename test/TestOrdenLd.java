@@ -11,12 +11,13 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Orden de los LD igual en Servidor y Cliente (reporte de usuarios, 2026-11-16): un relé
- * devuelve los LD ordenados alfabéticamente (GetNameList de MMS) y el árbol de Cliente los
- * mostraba así, mientras que el de Servidor seguía el orden del CID.
+ * Orden de los LD: el de descubrimiento (pedido de usuarios, 2026-11-16). Un intento previo los
+ * ordenaba alfabéticamente en los dos modos; los usuarios quieren el orden en que se encuentran.
  *
- *   1. El árbol ordena los LD alfabéticamente (ModelTreeBuilder.ldsOrdenados).
- *   2. El simulador responde la lista de LD ordenada, como un relé: un cliente los recibe así.
+ *   1. El árbol de Servidor muestra los LD en el orden del archivo SCL.
+ *   2. El simulador los entrega en ese mismo orden: un cliente conectado a él ve el mismo árbol.
+ *
+ * En Cliente, el orden es el que entrega el IED (un relé real suele entregarlos ordenados).
  *
  * Uso: java -cp "classes;lib\*;test" com.iednavigator.TestOrdenLd
  */
@@ -39,7 +40,7 @@ public class TestOrdenLd {
         + "<DataTypeTemplates><LNodeType id='LLN0_T' lnClass='LLN0'><DO name='Beh' type='INS_T'/></LNodeType>"
         + "<DOType id='INS_T' cdc='INS'><DA name='stVal' fc='ST' bType='INT32'/></DOType></DataTypeTemplates></SCL>";
 
-    static final List<String> ESPERADO = Arrays.asList("ORDCTRL", "ORDLD0", "ORDMEAS", "ORDMONT", "ORDPROT");
+    static final List<String> ESPERADO = Arrays.asList("ORDLD0", "ORDPROT", "ORDMONT", "ORDCTRL", "ORDMEAS");
 
     static List<String> nombres(Iterable<ModelNode> lds) {
         List<String> r = new ArrayList<>();
@@ -55,8 +56,8 @@ public class TestOrdenLd {
         chk("carga el SCL", srv.loadSclFile(f.getAbsolutePath()));
         ServerModel m = srv.getServerModel();
         System.out.println("       orden del archivo: " + nombres(m.getChildren()));
-        List<String> arbol = nombres(ModelTreeBuilder.ldsOrdenados(m));
-        chk("1. árbol de Servidor: " + arbol, arbol.equals(ESPERADO));
+        List<String> arbol = nombres(m.getChildren());
+        chk("1. árbol de Servidor en el orden del archivo: " + arbol, arbol.equals(ESPERADO));
 
         chk("servidor iniciado", srv.start(23190));
         ClientAssociation as = new ClientSap().associate(InetAddress.getByName("127.0.0.1"), 23190, null,
@@ -65,7 +66,7 @@ public class TestOrdenLd {
                     public void associationClosed(java.io.IOException e) { }
                 });
         List<String> cliente = nombres(as.retrieveModel().getChildren());
-        chk("2. el cliente los recibe ordenados: " + cliente, cliente.equals(ESPERADO));
+        chk("2. el cliente los recibe en ese mismo orden: " + cliente, cliente.equals(ESPERADO));
         as.close();
         srv.stop();
         System.out.println(ok + " pasaron, " + mal + " fallaron");
