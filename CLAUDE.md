@@ -273,8 +273,10 @@ foreign source MAC (pass its IP and its permanent MAC while Windows uses a rando
 
 ### Connection keep-alive
 
-Some IEDs abort the MMS association after a period with no requests (measured: 90 s).
-`IEC61850Client` sends a minimal read after 60 s of silence. Every request to the IED
+Some IEDs abort the MMS association after a period with no requests (measured: 90 s on an
+Ingeteam; a feeder relay reported on 2026-11-16 cut with RST about a minute after the 60 s
+read). `IEC61850Client` sends a minimal read after 20 s of silence (`KEEPALIVE_MS`;
+`test/TestInactividadEquipo` puts a proxy that cuts after 45 s idle in between). Every request to the IED
 must go through `mms()`, `leer()` or `escribir()` in that class: they record the time of
 the last traffic, and the keep-alive only fires in silence. Concurrent requests from
 different threads are safe since the shadow `ClientAssociation` serializes them.

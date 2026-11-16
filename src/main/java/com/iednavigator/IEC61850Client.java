@@ -832,15 +832,32 @@ public class IEC61850Client implements ClientEventListener {
      * asociación seguía viva a los 200 s.
      *
      * Con el polling apagado la aplicación queda muda después de conectar, así que ese
-     * temporizador corta siempre. 60 s deja 30 de margen contra los 90 de fábrica.
+     * temporizador corta siempre.
+     *
+     * 2026-11-16: bajado de 60 s a 20 s. Un usuario con un relé de alimentador perdía la
+     * conexión a los dos minutos: la lectura de los 60 s salió bien y la siguiente encontró la
+     * conexión cerrada por el equipo (RST). Con un temporizador de 60 s, una lectura "cada 60 s
+     * de silencio" (más el intervalo de chequeo) llega justo cuando el equipo ya cortó. 20 s
+     * cubre temporizadores de 30 s en adelante; son tres lecturas de un atributo por minuto.
      */
-    static final long KEEPALIVE_MS = 60_000;
+    static final long KEEPALIVE_MS = 20_000;
 
     /** Cada cuánto se mira si hace falta la lectura. El silencio real llega a KEEPALIVE_MS + esto. */
     private static final long KEEPALIVE_CHEQUEO_MS = 5_000;
 
     /** Último pedido MMS enviado o respondido. Lo usa el mantenimiento para no pisar tráfico. */
     private volatile long ultimoTraficoMs = System.currentTimeMillis();
+
+    /**
+     * Última vez que el IED contestó (lectura, escritura o reporte). Para explicar un corte: el
+     * tráfico se marca también al fallar, y el log decía "tras 0 s sin pedidos" justo cuando el
+     * equipo llevaba un minuto sin oír nada útil.
+     */
+    private volatile long ultimaRespuestaMs = System.currentTimeMillis();
+
+    private void marcarRespuesta() {
+        ultimaRespuestaMs = System.currentTimeMillis();
+    }
 
     private ScheduledExecutorService mantenimiento;
     private volatile boolean mantenimientoAvisado = false;
@@ -966,6 +983,7 @@ public class IEC61850Client implements ClientEventListener {
         marcarTrafico();
         try {
             association.getDataValues(n);
+            marcarRespuesta();
             marcarLeido(n);
         } finally {
             marcarTrafico();
@@ -996,6 +1014,7 @@ public class IEC61850Client implements ClientEventListener {
         marcarTrafico();
         try {
             association.setDataValues(n);
+            marcarRespuesta();
         } finally {
             marcarTrafico();
         }
@@ -1004,6 +1023,7 @@ public class IEC61850Client implements ClientEventListener {
     private synchronized void iniciarMantenimiento() {
         detenerMantenimiento();
         marcarTrafico();
+        marcarRespuesta();
         mantenimientoAvisado = false;
         mantenimiento = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "mantenimiento-asociacion");
@@ -1044,12 +1064,14 @@ public class IEC61850Client implements ClientEventListener {
      * Sin esto el usuario ve "Received an ABORT SPDU" y no tiene cómo saber que no es la red.
      */
     private String explicarCierre(IOException e) {
-        long silencioS = (System.currentTimeMillis() - ultimoTraficoMs) / 1000;
+        long silencioS = (System.currentTimeMillis() - ultimaRespuestaMs) / 1000;
         String msg = (e != null && e.getMessage() != null) ? e.getMessage() : "";
-        StringBuilder sb = new StringBuilder("[ENLACE] Asociacion cerrada tras ")
-            .append(silencioS).append(" s sin pedidos del cliente");
-        if (msg.contains("ABORT") && silencioS >= 20) {
-            sb.append(". El IED envio ABORT: probable temporizador de inactividad del equipo");
+        StringBuilder sb = new StringBuilder("[ENLACE] Asociacion cerrada; la ultima respuesta del IED fue hace ")
+            .append(silencioS).append(" s");
+        boolean cortoElEquipo = msg.contains("ABORT") || msg.contains("reset") || msg.contains("closed");
+        if (cortoElEquipo && silencioS >= 15) {
+            sb.append(". El IED cerro la conexion (").append(msg.contains("ABORT") ? "ABORT" : "RST")
+              .append("): probable temporizador de inactividad del equipo");
             if (tieneAplicTmsIngeteam()) {
                 sb.append(" (en Ingeteam: genIPRV1.AplicTms, \"Time Out para desconexion\")");
             }
@@ -2031,6 +2053,7 @@ public class IEC61850Client implements ClientEventListener {
 
     @Override
     public void newReport(Report report) {
+        marcarRespuesta();
         if (report.getEntryId() != null && report.getRptId() != null) {
             byte[] id = report.getEntryId().getValue();
             if (id != null && id.length > 0) ultimaEntryId.put(claveEntry(report.getRptId()), id.clone());
