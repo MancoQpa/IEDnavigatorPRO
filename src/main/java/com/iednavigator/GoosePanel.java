@@ -83,6 +83,9 @@ class GoosePanel {
     private Map<String, PcapNetworkInterface> interfaceMap = new HashMap<>();
     private Map<Integer, GooseSubscriber.GooseMessage> gooseMessages = new LinkedHashMap<>();
     private JComboBox<String> cbGooseState;
+    /** Maniobra con recorrido: ON/OFF pasan por INTERMEDIATE con su propio stNum. */
+    private JCheckBox cbIntermedio;
+    private JSpinner spTransito;
 
     private NativeGooseSubscriber nativeGooseSubscriber;
 
@@ -359,6 +362,17 @@ class GoosePanel {
         btnGooseStateChange.addActionListener(e -> publishGooseStateChange());
         btnGooseStateChange.setEnabled(false);
         row2.add(btnGooseStateChange);
+
+        cbIntermedio = new JCheckBox(I18n.t("goose.transit"), true);
+        cbIntermedio.setToolTipText(I18n.t("goose.transit.tip"));
+        row2.add(cbIntermedio);
+        spTransito = new JSpinner(new SpinnerNumberModel(
+                (int) GoosePublisher.TRANSITO_POR_DEFECTO_MS, 1, 10000, 10));
+        spTransito.setPreferredSize(new Dimension(70, 24));
+        spTransito.setToolTipText(I18n.t("goose.transit.tip"));
+        row2.add(spTransito);
+        row2.add(new JLabel("ms"));
+        cbIntermedio.addActionListener(e -> spTransito.setEnabled(cbIntermedio.isSelected()));
 
         topPanel.add(row2, BorderLayout.SOUTH);
 
@@ -1126,6 +1140,30 @@ class GoosePanel {
         return pub;
     }
 
+    /** Tiempo de recorrido elegido, o 0 si la maniobra no pasa por intermedio. */
+    private long transitoMs() {
+        if (cbIntermedio == null || !cbIntermedio.isSelected()) return 0;
+        return ((Number) spTransito.getValue()).longValue();
+    }
+
+    /** "ON"/"TRUE" 2, "OFF"/"FALSE" 1, "INTERMEDIATE" 0, "BAD" 3. */
+    static int dbposDe(String estado) {
+        switch (estado == null ? "" : estado.toUpperCase()) {
+            case "ON": case "TRUE": return 2;
+            case "INTERMEDIATE": return 0;
+            case "BAD": return 3;
+            default: return 1;
+        }
+    }
+
+    /** Después del recorrido, el modelo del servidor recibe también la posición final. */
+    private void sincronizarAlFinal(int gcbIndex, long transito) {
+        if (transito <= 0) return;
+        javax.swing.Timer t = new javax.swing.Timer((int) transito + 50, e -> syncPublisherToServerModel(gcbIndex, 0));
+        t.setRepeats(false);
+        t.start();
+    }
+
     private void changeGoCBState(int gcbIndex, String state) {
         GoosePublisher pub = activePublishers.get(gcbIndex);
         if (pub == null || !pub.isPublishing()) {
@@ -1137,36 +1175,30 @@ class GoosePanel {
         if (values.isEmpty()) return;
 
         GoosePublisher.DataValue firstVal = values.get(0);
+        long transito = 0;
         switch (firstVal.type) {
-            case BOOLEAN:
-                pub.setDataValue(0, "ON".equalsIgnoreCase(state) || "TRUE".equalsIgnoreCase(state));
-                break;
-            case DBPOS:
-                int dbpos;
-                switch (state.toUpperCase()) {
-                    case "ON": dbpos = 2; break;
-                    case "OFF": dbpos = 1; break;
-                    case "INTERMEDIATE": dbpos = 0; break;
-                    case "BAD": dbpos = 3; break;
-                    default: dbpos = 1;
-                }
-                pub.setDataValue(0, dbpos);
+            case BOOLEAN: case DBPOS:
+                // Dbpos: ON/OFF pasan por INTERMEDIATE con su propio stNum (publicarManiobra)
+                transito = firstVal.type == GoosePublisher.DataValue.Type.DBPOS ? transitoMs() : 0;
+                pub.publicarManiobra(0, dbposDe(state), transito);
                 break;
             case INTEGER: case UNSIGNED:
                 try { pub.setDataValue(0, Integer.parseInt(state)); }
                 catch (NumberFormatException e) { pub.setDataValue(0, "ON".equalsIgnoreCase(state) ? 1 : 0); }
+                pub.publishStateChange();
                 break;
             default:
                 pub.setDataValue(0, "ON".equalsIgnoreCase(state));
+                pub.publishStateChange();
         }
 
-        pub.publishStateChange();
         List<SclGoCB> sclGoCBs = ctx.getSclGoCBs();
         SclGoCB gcb = gcbIndex < sclGoCBs.size() ? sclGoCBs.get(gcbIndex) : null;
         String gcbName = gcb != null ? gcb.toString() : "#" + gcbIndex;
         logGoose(I18n.t("log.goose.gcbstatechange", gcbName, state.toUpperCase(), pub.getStNum()));
 
         syncPublisherToServerModel(gcbIndex, 0);
+        sincronizarAlFinal(gcbIndex, transito);
     }
 
     private void setPublisherDataValue(int gcbIndex, int dataIndex, Object value) {
@@ -1495,22 +1527,24 @@ class GoosePanel {
             return;
         }
 
-        updatePublisherState();
-
         String stateName = (String) cbGooseState.getSelectedItem();
+        int dbpos = dbposDe(stateName);
+        long transito = transitoMs();
 
+        // ON/OFF pasan por INTERMEDIATE con su propio stNum, como un interruptor real; antes
+        // se saltaba de un estado al otro, y los GoCB del modelo recibían true/false aunque su
+        // primer dato fuera un Dbpos.
         if (goosePublisher.isPublishing()) {
-            goosePublisher.publishStateChange();
+            goosePublisher.publicarManiobra(0, dbpos, transito);
             logGoose(I18n.t("log.goose.statechangepublished", stateName, goosePublisher.getStNum()));
         }
 
         for (Map.Entry<Integer, GoosePublisher> entry : activePublishers.entrySet()) {
             GoosePublisher pub = entry.getValue();
             if (pub.isPublishing()) {
-                int selectedIndex = cbGooseState.getSelectedIndex();
-                boolean boolValue = (selectedIndex == 1);
-                pub.setDataValue(0, boolValue);
-                pub.publishStateChange();
+                pub.publicarManiobra(0, dbpos, transito);
+                syncPublisherToServerModel(entry.getKey(), 0);
+                sincronizarAlFinal(entry.getKey(), transito);
             }
         }
 
@@ -1521,6 +1555,12 @@ class GoosePanel {
         if (udpBridgeEnabled) {
             if (gooseUdpBridge.send(goosePublisher)) {
                 logGoose("[UDP] " + I18n.t("log.goose.udpbroadcastsent"));
+            }
+            if (transito > 0) {
+                // Por UDP sale también la posición final, después del recorrido
+                javax.swing.Timer t = new javax.swing.Timer((int) transito + 30, e -> gooseUdpBridge.send(goosePublisher));
+                t.setRepeats(false);
+                t.start();
             }
         }
 

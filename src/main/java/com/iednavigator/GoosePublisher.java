@@ -202,6 +202,47 @@ public class GoosePublisher {
         scheduler.schedule(() -> { synchronized (counterLock) { publishAndBump(); } }, 16, TimeUnit.MILLISECONDS);
     }
 
+    /** Tiempo de recorrido por defecto entre intermedio y posición final, en ms. */
+    public static final long TRANSITO_POR_DEFECTO_MS = 100;
+
+    /**
+     * Cambia la posición (Dbpos) del dato {@code indice} como lo hace un interruptor real: si
+     * va de abierto a cerrado o al revés, primero publica INTERMEDIATE (00) como un cambio de
+     * estado propio —stNum nuevo, con su retransmisión rápida— y al cabo de {@code transitoMs}
+     * la posición final, con otro stNum. Así lo publica el simulador de interruptor de
+     * referencia (2026-11-16: st 6 OFF, st 7 INTERMEDIATE, st 8 ON); antes la app saltaba de
+     * OFF a ON en un solo stNum.
+     *
+     * Sin recorrido (transitoMs 0, mismo estado, o un destino que no es ON/OFF: INTERMEDIATE o
+     * BAD elegidos a mano) publica el valor final en un solo cambio. Un dato BOOLEAN no tiene
+     * intermedio: recibe true para ON y false para el resto.
+     *
+     * @param dbposFinal 0 intermedio, 1 OFF, 2 ON, 3 BAD
+     */
+    public void publicarManiobra(int indice, int dbposFinal, long transitoMs) {
+        if (indice < 0 || indice >= dataValues.size()) return;
+        DataValue dv = dataValues.get(indice);
+        if (dv.type == DataValue.Type.BOOLEAN) {
+            setDataValue(indice, dbposFinal == 2);
+            publishStateChange();
+            return;
+        }
+        int actual = dv.value instanceof Number ? ((Number) dv.value).intValue() : -1;
+        boolean recorre = transitoMs > 0 && actual != dbposFinal
+                && (actual == 1 || actual == 2) && (dbposFinal == 1 || dbposFinal == 2);
+        if (!recorre) {
+            setDataValue(indice, dbposFinal);
+            publishStateChange();
+            return;
+        }
+        setDataValue(indice, 0);
+        publishStateChange();
+        scheduler.schedule(() -> {
+            setDataValue(indice, dbposFinal);
+            publishStateChange();
+        }, transitoMs, TimeUnit.MILLISECONDS);
+    }
+
     /** Momento del último latido (System.nanoTime), para detectar huecos. 0 = todavía ninguno. */
     private volatile long ultimoLatidoNs = 0;
 
