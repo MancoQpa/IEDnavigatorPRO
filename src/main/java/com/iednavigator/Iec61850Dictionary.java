@@ -101,7 +101,7 @@ public class Iec61850Dictionary {
            "LPHD1.NamPlt (fabricante/modelo), LPHD1.PhyHealth (estado del hardware)");
 
         // ── Control (C) ──────────────────────────────────────────────────────
-        ln("CSWI",  "Controlador de Interruptor",   "Switch Controller",
+        ln("CSWI",  "Controlador de maniobra",      "Switch Controller",
            "Controla la operación (apertura/cierre) de un interruptor o seccionador. " +
            "Recibe comandos SBO (Select-Before-Operate) o directos e interactúa con CILO " +
            "para verificar que el enclavamiento permita la maniobra.",

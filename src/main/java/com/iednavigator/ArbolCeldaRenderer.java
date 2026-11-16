@@ -350,6 +350,28 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
         t.start();
     }
 
+    /**
+     * Un LN se describe igual en Servidor y en Cliente: primero qué es (la clase de la norma; un
+     * CSWI o CILO dice si es de interruptor o de seccionador, ver AparatoDeLn) y después, si
+     * agrega algo, la desc del SCL ("Controlador de seccionador · DS01"). Antes en Servidor
+     * salía solo la desc del archivo, que en muchos CID es un código corto ("CB", "DS01").
+     */
+    static String descripcionLn(NodeInfo info, String delScl) {
+        String que = info.node != null ? AparatoDeLn.descripcion(info.node) : null;
+        if (que == null) {
+            Iec61850Dictionary.Entry e = Iec61850Dictionary.lookup(info.name);
+            if (e != null && e.type == Iec61850Dictionary.EntryType.LOGICAL_NODE) {
+                String n = I18n.currentTag().startsWith("es") ? e.fullNameES : e.fullNameEN;
+                if (n != null && !n.isEmpty()) que = n;
+            }
+        }
+        String scl = delScl == null ? null : delScl.trim();
+        boolean sclUtil = scl != null && !scl.isEmpty() && scl.length() <= 60
+                && !repiteNombre(scl, info.name) && (que == null || !scl.equalsIgnoreCase(que));
+        if (que == null) return sclUtil ? scl : null;
+        return sclUtil ? que + " · " + scl : que;
+    }
+
     /** Se cambió el modelo (otro IED u otro archivo): los CDC se vuelven a calcular. */
     void olvidarCdc() { cdcs.clear(); }
 
@@ -364,6 +386,11 @@ final class ArbolCeldaRenderer implements TreeCellRenderer {
         DescripcionesScl ds = delScl;
         if (ds != null) {
             try { d = ds.descripcion(ref); } catch (Exception ignorada) { }
+        }
+        if ("LN".equals(info.prefix)) {
+            d = descripcionLn(info, d);
+            descripciones.put(ref, d);
+            return d;
         }
         if (d == null || d.isEmpty() || d.length() > 60) {
             Iec61850Dictionary.Entry e = Iec61850Dictionary.lookup(info.name);
