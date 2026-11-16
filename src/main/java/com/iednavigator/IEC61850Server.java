@@ -595,8 +595,16 @@ public class IEC61850Server implements ServerEventListener {
      */
     private String extraerValorInvalido(String mensaje) {
         if (mensaje == null) return null;
-        final String marca = "configured value: ";
+        String marca = "configured value: ";
         int i = mensaje.indexOf(marca);
+        if (i < 0) {
+            // Enumerado con un valor que no está en su EnumType ("-" como "sin valor", visto en
+            // pulseConfig.cmdQual de una unidad de control): la librería dice "unknown enum
+            // value: -" y abortaba el archivo entero. Los ordinales numéricos ("004") ya los
+            // resuelve patchMissingEnumOrdinals antes de llegar acá.
+            marca = "unknown enum value: ";
+            i = mensaje.indexOf(marca);
+        }
         if (i < 0) return null;
         String valor = mensaje.substring(i + marca.length()).trim();
         return valor.isEmpty() ? null : valor;
