@@ -852,7 +852,9 @@ public final class EstadoLocal {
     //
     // Tiempos de maniobra: con tiempoAperturaMs / tiempoCierreMs mayores que 0, cada maniobra
     // pasa por intermedio (00) y llega a la posición final al cabo de ese tiempo, con la
-    // terminación positiva recién ahí. En 0 (por defecto) cambia en el acto, como antes.
+    // terminación positiva recién ahí. En 0 cambia en el acto. Por defecto 100 ms desde
+    // 2026-11-16, como el simulador de interruptor de referencia: cada maniobra publica el
+    // intermedio con su propio stNum por GOOSE y por reportes.
 
     /** Estado del gas aislante de un interruptor. */
     public enum Sf6 { NORMAL, ALARMA, BLOQUEO }
@@ -864,8 +866,9 @@ public final class EstadoLocal {
     /** CBOpCap de cada interruptor antes de la primera falla, para restituirlo. */
     private static final Map<String, Long> CBOPCAP_ORIGINAL = new java.util.concurrent.ConcurrentHashMap<>();
 
-    public static volatile long tiempoAperturaMs = 0;
-    public static volatile long tiempoCierreMs = 0;
+    public static final long TIEMPO_MANIOBRA_POR_DEFECTO_MS = 100;
+    public static volatile long tiempoAperturaMs = TIEMPO_MANIOBRA_POR_DEFECTO_MS;
+    public static volatile long tiempoCierreMs = TIEMPO_MANIOBRA_POR_DEFECTO_MS;
     /** Cuánto espera un mando con falla de mecanismo antes de terminar en negativo. */
     public static volatile long tiempoFallaMs = 2000;
 
@@ -1038,6 +1041,30 @@ public final class EstadoLocal {
             if (sincronismoEnFalla(v)) return true;
         }
         return false;
+    }
+
+    /**
+     * ¿El aparato (y los polos vinculados, si los hay) ya está en la posición pedida? Una orden
+     * así no mueve nada: ni recorrido ni intermedio ni OpCnt.
+     */
+    public static boolean yaEnPosicion(ServerModel model, String raiz, boolean cerrar) {
+        if (model == null) return false;
+        List<String> refs = new ArrayList<>();
+        refs.add(raiz);
+        refs.addAll(posicionesVinculadas(model, raiz));
+        boolean alguna = false;
+        for (String r : refs) {
+            ModelNode st = model.findModelNode(r + ".stVal", Fc.ST);
+            if (st instanceof BdaDoubleBitPos) {
+                BdaDoubleBitPos.DoubleBitPos p = ((BdaDoubleBitPos) st).getDoubleBitPos();
+                if (p != (cerrar ? BdaDoubleBitPos.DoubleBitPos.ON : BdaDoubleBitPos.DoubleBitPos.OFF)) return false;
+                alguna = true;
+            } else if (st instanceof BdaBoolean) {
+                if (((BdaBoolean) st).getValue() != cerrar) return false;
+                alguna = true;
+            }
+        }
+        return alguna;
     }
 
     /** Pone la posicion en intermedio (00), con calidad buena y hora nueva. */

@@ -31,7 +31,7 @@ public class TestBobinasGoose {
         ver(srv.start(10483), "servidor iniciado");
         srv.agregarObservadorMando((origen, texto, aceptado) ->
                 eventos.add(origen + "|" + (aceptado ? "+" : "-") + "|" + texto));
-        srv.ordenarAparato(XCBR, true, "Panel");
+        ordenar(true);
         ver("CERRADO".equals(estado()), "arranca cerrado");
 
         BobinasGoose b = new BobinasGoose(srv);
@@ -49,13 +49,13 @@ public class TestBobinasGoose {
         espera();
         ver("ABIERTO".equals(estado()), "flanco en la bobina de apertura: abre");
         ver(eventos.stream().anyMatch(e -> e.startsWith("GOOSE|+|")), "el registro anota la orden por GOOSE");
-        srv.ordenarAparato(XCBR, true, "Panel");
+        ordenar(true);
         b.recibir(trama(DISPARO, false, true, false)); // retransmisión
         espera();
         ver("CERRADO".equals(estado()), "retransmisión del true: no repite la apertura");
 
         // 3. Flanco de cierre
-        srv.ordenarAparato(XCBR, false, "Panel");
+        ordenar(false);
         b.recibir(trama(DISPARO, false, false, false));
         b.recibir(trama(DISPARO, false, false, true));
         espera();
@@ -87,7 +87,7 @@ public class TestBobinasGoose {
         srv.ponerResorteDescargado(XCBR, false);
 
         // 6. Quitar el enlace
-        srv.ordenarAparato(XCBR, true, "Panel");
+        ordenar(true);
         b.quitar(disparo);
         b.recibir(trama(DISPARO, false, false, false));
         b.recibir(trama(DISPARO, false, true, false));
@@ -114,7 +114,18 @@ public class TestBobinasGoose {
         return "?";
     }
 
-    static void espera() throws InterruptedException { Thread.sleep(80); }
+    /**
+     * Deja terminar el recorrido de la maniobra: desde 2026-11-16 el interruptor tarda 100 ms
+     * por defecto y pasa por intermedio (EstadoLocal.TIEMPO_MANIOBRA_POR_DEFECTO_MS).
+     */
+    static void espera() throws InterruptedException {
+        Thread.sleep(EstadoLocal.TIEMPO_MANIOBRA_POR_DEFECTO_MS + 200);
+    }
+
+    static void ordenar(boolean cerrar) throws InterruptedException {
+        srv.ordenarAparato(XCBR, cerrar, "Panel");
+        espera();
+    }
 
     static void ver(boolean c, String msg) {
         if (c) ok++; else fallas++;
