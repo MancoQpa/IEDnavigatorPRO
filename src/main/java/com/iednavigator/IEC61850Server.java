@@ -1170,6 +1170,7 @@ public class IEC61850Server implements ServerEventListener {
             // posiciones en intermedio, con calidad buena y con las banderas que habilitan la
             // maniobra—, ANTES de crear el ServerSap, para que el primer cliente ya lea un
             // modelo que se puede maniobrar.
+            com.iednavigator.mando.Sustitucion.limpiar();
             com.iednavigator.mando.EstadoLocal.inicializarModoYSalud(serverModel);
             com.iednavigator.mando.EstadoLocal.derivarComportamiento(serverModel);
             com.iednavigator.mando.EstadoLocal.olvidarSimulacion();
@@ -1271,6 +1272,14 @@ public class IEC61850Server implements ServerEventListener {
                             setBasicDataAttributeValue(copyBda, value);
                             List<BasicDataAttribute> changedData = new ArrayList<>();
                             changedData.add(copyBda);
+                            // Un dato sustituido no cambia lo publicado: se guarda como proceso
+                            changedData = com.iednavigator.mando.Sustitucion.filtrarProceso(changedData);
+                            if (changedData.isEmpty()) {
+                                String aviso = "[SERVER] " + cleanRef + " esta sustituido: el valor queda como valor de proceso";
+                                System.out.println(aviso);
+                                if (listener != null) listener.onLog(aviso);
+                                return true;
+                            }
                             serverSap.setValues(changedData);
                             System.out.println("[SERVER] Clients notified via reports for " + cleanRef);
                         } else {
@@ -1512,6 +1521,17 @@ public class IEC61850Server implements ServerEventListener {
 
         List<ServiceError> deSgcb = validarSgcb(bdas);
         if (deSgcb != null) return deSgcb;
+
+        // Sustitución (IEC 61850-7-3, FC=SV): con subEna el dato publica subVal/subMag y subQ
+        // marcada "substituted"; sin subEna vuelve el valor de proceso. Ver mando/Sustitucion.
+        List<BasicDataAttribute> sustitucion =
+                com.iednavigator.mando.Sustitucion.porEscritura(serverModel, bdas);
+        if (!sustitucion.isEmpty()) {
+            String aviso = "[SERVER] Sustitucion: " + sustitucion.size() + " atributo(s) publicados";
+            System.out.println(aviso);
+            if (listener != null) listener.onLog(aviso);
+            new Thread(() -> publicarSinFiltro(sustitucion), "publicar-sustitucion").start();
+        }
 
         for (BasicDataAttribute bda : bdas) {
             String ref = bda.getReference().toString();
@@ -1901,6 +1921,11 @@ public class IEC61850Server implements ServerEventListener {
     }
 
     private void publicarCambiosDeMando(List<BasicDataAttribute> cambiados) {
+        // Lo que el proceso cambia en un dato sustituido no sale: queda como valor de proceso
+        publicarSinFiltro(com.iednavigator.mando.Sustitucion.filtrarProceso(cambiados));
+    }
+
+    private void publicarSinFiltro(List<BasicDataAttribute> cambiados) {
         ServerSap sap = serverSap;
         if (sap == null) return;
         for (BasicDataAttribute b : cambiados) {

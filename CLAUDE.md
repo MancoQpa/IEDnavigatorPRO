@@ -114,6 +114,13 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     the tree, and from the server panel button "Modo test del IED" / the tree's right-click
     "Modo" submenus. A command on `Mod` itself skips the Beh/Test rules (otherwise an LN in
     test or off could not be brought back). `test/TestModoTest`. Same code in the simulator.
+  - Substitution (2026-11-16, IEC 61850-7-3 FC=SV): `mando/Sustitucion` (same file in the
+    simulator). With subEna the server publishes subVal/subMag/subCVal and subQ marked
+    "substituted"; process changes meanwhile are kept, not published, and come back with
+    subEna=false (`IEC61850Server.write`, `publicarCambiosDeMando`, `setDataValue`). The client
+    tree menu has "Sustituir valor…" (DOs with subEna) and "Escribir valor…" (attributes with FC
+    CF, DC, SP, SV, SE, BL; `IEC61850Client.escribirTexto` rejects text that does not fit the
+    type instead of writing the old value). `test/TestSustitucion`, `TestSustitucionCliente`.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
     pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
   - Sampled Values: not in the desktop app (the SV tab is commented out in

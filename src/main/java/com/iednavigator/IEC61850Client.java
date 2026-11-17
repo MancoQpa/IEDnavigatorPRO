@@ -1480,6 +1480,139 @@ public class IEC61850Client implements ClientEventListener {
     /**
      * Escribe un valor al servidor
      */
+    // ==================== SUSTITUCIÓN (IEC 61850-7-3, FC=SV) ====================
+
+    /** FC que la norma deja escribir a un cliente sobre atributos de dato (no ST/MX/CO). */
+    public static boolean fcEscribible(Fc fc) {
+        return fc == Fc.CF || fc == Fc.DC || fc == Fc.SP || fc == Fc.SV || fc == Fc.SE || fc == Fc.BL;
+    }
+
+    /** ¿El DO tiene sustitución (subEna en FC=SV)? */
+    public boolean admiteSustitucion(String doRef) {
+        return serverModel != null && serverModel.findModelNode(doRef + ".subEna", Fc.SV) instanceof BdaBoolean;
+    }
+
+    /**
+     * El atributo SV que lleva el valor sustituto y el dato que reemplaza: subVal -> stVal,
+     * subMag.f|i -> mag.f|i, subCVal.mag.f -> cVal.mag.f. {sub, dato} o null.
+     */
+    public BasicDataAttribute[] parSustitucion(String doRef) {
+        if (serverModel == null) return null;
+        String[][] pares = {{"subVal", "stVal", "ST"}, {"subMag.f", "mag.f", "MX"}, {"subMag.i", "mag.i", "MX"},
+                {"subCVal.mag.f", "cVal.mag.f", "MX"}, {"subCVal.mag.i", "cVal.mag.i", "MX"}};
+        for (String[] p : pares) {
+            ModelNode sub = serverModel.findModelNode(doRef + "." + p[0], Fc.SV);
+            ModelNode dato = serverModel.findModelNode(doRef + "." + p[1], Fc.fromString(p[2]));
+            if (sub instanceof BasicDataAttribute && dato instanceof BasicDataAttribute) {
+                return new BasicDataAttribute[] {(BasicDataAttribute) sub, (BasicDataAttribute) dato};
+            }
+        }
+        return null;
+    }
+
+    /** ¿La sustitución está activa en el IED? (lee subEna) */
+    public boolean sustitucionActiva(String doRef) throws IOException {
+        ModelNode ena = serverModel == null ? null : serverModel.findModelNode(doRef + ".subEna", Fc.SV);
+        if (!(ena instanceof BdaBoolean)) return false;
+        try {
+            leer((FcModelNode) ena);
+        } catch (ServiceError e) {
+            throw new IOException(e.getMessage(), e);
+        }
+        return ((BdaBoolean) ena).getValue();
+    }
+
+    /**
+     * Sustituye el valor de un DO: escribe el valor sustituto, subQ (con la validez pedida) y
+     * subID, y recién después subEna=true, en ese orden, como pide la norma para que el dato no
+     * pase por un valor intermedio.
+     */
+    public void sustituir(String doRef, String valor, BdaQuality.Validity validez, String subId) throws IOException {
+        BasicDataAttribute[] par = parSustitucion(doRef);
+        if (par == null) throw new IOException(doRef + ": no tiene valor de sustitucion conocido");
+        try {
+            ponerDesdeTexto(par[0], valor);
+            escribir((FcModelNode) par[0]);
+            ModelNode q = serverModel.findModelNode(doRef + ".subQ", Fc.SV);
+            if (q instanceof BdaQuality && validez != null) {
+                ((BdaQuality) q).setValidity(validez);
+                escribir((FcModelNode) q);
+            }
+            ModelNode id = serverModel.findModelNode(doRef + ".subID", Fc.SV);
+            if (id instanceof BdaVisibleString && subId != null) {
+                ((BdaVisibleString) id).setValue(subId);
+                escribir((FcModelNode) id);
+            }
+            BdaBoolean ena = (BdaBoolean) serverModel.findModelNode(doRef + ".subEna", Fc.SV);
+            ena.setValue(true);
+            escribir(ena);
+        } catch (ServiceError e) {
+            throw new IOException(I18n.t("sus.err.write", e.getMessage()), e);
+        }
+    }
+
+    /** subEna=false: el IED vuelve a publicar el valor de proceso. */
+    public void quitarSustitucion(String doRef) throws IOException {
+        ModelNode ena = serverModel == null ? null : serverModel.findModelNode(doRef + ".subEna", Fc.SV);
+        if (!(ena instanceof BdaBoolean)) throw new IOException(doRef + ": sin subEna");
+        try {
+            ((BdaBoolean) ena).setValue(false);
+            escribir((FcModelNode) ena);
+        } catch (ServiceError e) {
+            throw new IOException(I18n.t("sus.err.write", e.getMessage()), e);
+        }
+    }
+
+    /**
+     * Escribe un atributo a partir de texto, validando el valor: si no se puede convertir al
+     * tipo del atributo, falla en vez de escribir el valor que tenía.
+     */
+    public void escribirTexto(String reference, Fc fc, String texto) throws IOException {
+        if (!isConnected() || serverModel == null) throw new IOException("Not connected");
+        ModelNode node = serverModel.findModelNode(reference, fc);
+        if (!(node instanceof BasicDataAttribute)) throw new IOException(reference + " [" + fc + "] no es un atributo");
+        try {
+            ponerDesdeTexto((BasicDataAttribute) node, texto);
+            escribir((FcModelNode) node);
+        } catch (ServiceError e) {
+            throw new IOException(I18n.t("sus.err.write", e.getMessage()), e);
+        }
+    }
+
+    /** Valor de un atributo desde texto, o IOException si no corresponde a su tipo. */
+    static void ponerDesdeTexto(BasicDataAttribute bda, String v) throws IOException {
+        String t = v == null ? "" : v.trim();
+        try {
+            if (bda instanceof BdaBoolean) {
+                if (!t.matches("(?i)true|false|1|0")) throw new NumberFormatException(t);
+                ((BdaBoolean) bda).setValue(t.equalsIgnoreCase("true") || t.equals("1"));
+            } else if (bda instanceof BdaInt8) ((BdaInt8) bda).setValue(Byte.parseByte(t));
+            else if (bda instanceof BdaInt16) ((BdaInt16) bda).setValue(Short.parseShort(t));
+            else if (bda instanceof BdaInt32) ((BdaInt32) bda).setValue(Integer.parseInt(t));
+            else if (bda instanceof BdaInt64) ((BdaInt64) bda).setValue(Long.parseLong(t));
+            else if (bda instanceof BdaInt8U) ((BdaInt8U) bda).setValue(Short.parseShort(t));
+            else if (bda instanceof BdaInt16U) ((BdaInt16U) bda).setValue(Integer.parseInt(t));
+            else if (bda instanceof BdaInt32U) ((BdaInt32U) bda).setValue(Long.parseLong(t));
+            else if (bda instanceof BdaFloat32) ((BdaFloat32) bda).setFloat(Float.parseFloat(t.replace(',', '.')));
+            else if (bda instanceof BdaFloat64) ((BdaFloat64) bda).setDouble(Double.parseDouble(t.replace(',', '.')));
+            else if (bda instanceof BdaVisibleString) ((BdaVisibleString) bda).setValue(t);
+            else if (bda instanceof BdaDoubleBitPos) {
+                String l = t.toLowerCase();
+                BdaDoubleBitPos.DoubleBitPos p =
+                        l.matches("off|01|1") ? BdaDoubleBitPos.DoubleBitPos.OFF
+                        : l.matches("on|10|2") ? BdaDoubleBitPos.DoubleBitPos.ON
+                        : l.matches("intermediate|00|0") ? BdaDoubleBitPos.DoubleBitPos.INTERMEDIATE_STATE
+                        : l.matches("bad|11|3") ? BdaDoubleBitPos.DoubleBitPos.BAD_STATE : null;
+                if (p == null) throw new NumberFormatException(t);
+                ((BdaDoubleBitPos) bda).setDoubleBitPos(p);
+            } else {
+                throw new IOException(I18n.t("sus.err.type", bda.getClass().getSimpleName()));
+            }
+        } catch (NumberFormatException e) {
+            throw new IOException(I18n.t("sus.err.value", t, bda.getReference().getName()));
+        }
+    }
+
     public void writeValue(String reference, Fc fc, String value) throws IOException {
         if (!isConnected() || serverModel == null) {
             throw new IOException("Not connected");

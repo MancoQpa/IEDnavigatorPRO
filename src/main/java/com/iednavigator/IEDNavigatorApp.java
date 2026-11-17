@@ -2928,6 +2928,17 @@ public class IEDNavigatorApp extends JFrame {
         treePopupMenu.add(miBlock);
         treePopupMenu.add(miUnblock);
 
+        // Sustitución (FC=SV) y escritura de atributos que la norma deja escribir
+        JMenuItem miSustituir = new JMenuItem(I18n.t("ctx.substitute"));
+        miSustituir.addActionListener(e -> {
+            String doRef = doSeleccionadoConSustitucion();
+            if (doRef != null) mostrarSustitucion(doRef);
+        });
+        treePopupMenu.add(miSustituir);
+        JMenuItem miEscribir = new JMenuItem(I18n.t("ctx.writevalue"));
+        miEscribir.addActionListener(e -> escribirValorSeleccionado());
+        treePopupMenu.add(miEscribir);
+
         // Mostrar/ocultar ítems según el nodo seleccionado
         treePopupMenu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
@@ -2939,6 +2950,8 @@ public class IEDNavigatorApp extends JFrame {
                 boolean hasBlk = getSelectedBlkEnaNode() != null;
                 miBlock.setVisible(hasBlk);
                 miUnblock.setVisible(hasBlk);
+                miSustituir.setVisible(doSeleccionadoConSustitucion() != null);
+                miEscribir.setVisible(atributoEscribibleSeleccionado() != null);
             }
             public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
             public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
@@ -5053,6 +5066,146 @@ public class IEDNavigatorApp extends JFrame {
 
     // F27: delegados a PollingManager.java
     private void readSelectedNode()                                                           { pollingManager.readSelectedNode(); }
+
+    // --- Sustitución (IEC 61850-7-3, FC=SV) y escritura desde el cliente ---
+
+    private NodeInfo infoSeleccionada() {
+        TreePath path = modelTree == null ? null : modelTree.getSelectionPath();
+        if (path == null) return null;
+        Object u = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
+        return u instanceof NodeInfo ? (NodeInfo) u : null;
+    }
+
+    /** El DO seleccionado (o el que contiene al atributo seleccionado) si admite sustitución. */
+    private String doSeleccionadoConSustitucion() {
+        if (client == null || !isConnected) return null;
+        NodeInfo info = infoSeleccionada();
+        ModelNode n = info == null ? null : info.node;
+        while (n != null && n.getParent() != null && !(n.getParent() instanceof LogicalNode)) n = n.getParent();
+        if (n == null || !(n.getParent() instanceof LogicalNode)) return null;
+        String doRef = n.getReference().toString();
+        return client.admiteSustitucion(doRef) ? doRef : null;
+    }
+
+    /** El atributo seleccionado si su FC se puede escribir (CF, DC, SP, SV, SE, BL). */
+    private BasicDataAttribute atributoEscribibleSeleccionado() {
+        if (client == null || !isConnected) return null;
+        NodeInfo info = infoSeleccionada();
+        if (info == null || !(info.node instanceof BasicDataAttribute)) return null;
+        BasicDataAttribute b = (BasicDataAttribute) info.node;
+        return IEC61850Client.fcEscribible(b.getFc()) ? b : null;
+    }
+
+    private void mostrarSustitucion(String doRef) {
+        backgroundExecutor.submit(() -> {
+            BasicDataAttribute[] par = client.parSustitucion(doRef);
+            boolean activa;
+            String actual;
+            try {
+                activa = client.sustitucionActiva(doRef);
+                if (par != null) client.readNodeValues((FcModelNode) par[1]);
+                actual = par == null ? "?" : ValorBda.texto(par[1]);
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> log(I18n.t("sus.err.write", ex.getMessage())));
+                return;
+            }
+            final boolean act = activa;
+            final String act2 = actual;
+            SwingUtilities.invokeLater(() -> dialogoSustitucion(doRef, par, act, act2));
+        });
+    }
+
+    private void dialogoSustitucion(String doRef, BasicDataAttribute[] par, boolean activa, String actual) {
+        if (par == null) {
+            log(I18n.t("sus.none", doRef));
+            return;
+        }
+        BasicDataAttribute sub = par[0];
+        JComponent valor;
+        if (sub instanceof BdaBoolean) {
+            JComboBox<String> c = new JComboBox<>(new String[] {"true", "false"});
+            c.setSelectedItem("true".equalsIgnoreCase(actual) ? "false" : "true");
+            valor = c;
+        } else if (sub instanceof BdaDoubleBitPos) {
+            JComboBox<String> c = new JComboBox<>(new String[] {"on", "off", "intermediate", "bad"});
+            c.setSelectedItem(actual != null && actual.toLowerCase().contains("on") ? "off" : "on");
+            valor = c;
+        } else {
+            valor = new JTextField(actual, 12);
+        }
+        JComboBox<String> calidad = new JComboBox<>(new String[] {"GOOD", "INVALID", "QUESTIONABLE"});
+        JTextField subId = new JTextField("IEDNavigator", 12);
+
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.anchor = GridBagConstraints.WEST;
+        g.insets = new Insets(4, 4, 4, 8);
+        Object[][] filas = {
+            {I18n.t("sus.data"), new JLabel(par[1].getReference() + " [" + par[1].getFc() + "]")},
+            {I18n.t("sus.current"), new JLabel(actual + (activa ? "   (" + I18n.t("sus.active") + ")" : ""))},
+            {I18n.t("sus.value"), valor},
+            {I18n.t("sus.quality"), calidad},
+            {I18n.t("sus.id"), subId},
+        };
+        for (int i = 0; i < filas.length; i++) {
+            g.gridy = i; g.gridx = 0;
+            p.add(new JLabel((String) filas[i][0]), g);
+            g.gridx = 1;
+            p.add((JComponent) filas[i][1], g);
+        }
+        String[] opciones = activa
+                ? new String[] {I18n.t("sus.btn.apply"), I18n.t("sus.btn.remove"), I18n.t("btn.close")}
+                : new String[] {I18n.t("sus.btn.apply"), I18n.t("btn.close")};
+        int r = JOptionPane.showOptionDialog(this, p, I18n.t("sus.title", doRef), JOptionPane.DEFAULT_OPTION,
+                JOptionPane.PLAIN_MESSAGE, null, opciones, opciones[0]);
+        boolean quitar = activa && r == 1;
+        if (r != 0 && !quitar) return;
+        String texto = valor instanceof JComboBox ? (String) ((JComboBox<?>) valor).getSelectedItem()
+                : ((JTextField) valor).getText();
+        BdaQuality.Validity validez = BdaQuality.Validity.valueOf((String) calidad.getSelectedItem());
+        String id = subId.getText();
+        backgroundExecutor.submit(() -> {
+            try {
+                if (quitar) client.quitarSustitucion(doRef);
+                else client.sustituir(doRef, texto, validez, id);
+                SwingUtilities.invokeLater(() -> {
+                    log(quitar ? I18n.t("sus.log.removed", doRef) : I18n.t("sus.log.ok", doRef, texto, validez.name()));
+                    readSelectedNode();
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    log(ex.getMessage());
+                    JOptionPane.showMessageDialog(this, ex.getMessage(), I18n.t("sus.title", doRef), JOptionPane.WARNING_MESSAGE);
+                });
+            }
+        });
+    }
+
+    private void escribirValorSeleccionado() {
+        BasicDataAttribute b = atributoEscribibleSeleccionado();
+        if (b == null) return;
+        String ref = b.getReference().toString();
+        Fc fc = b.getFc();
+        Object nuevo = JOptionPane.showInputDialog(this,
+                I18n.t("write.prompt", ref, fc.toString(), b.getBasicType().toString()),
+                I18n.t("write.title"), JOptionPane.PLAIN_MESSAGE, null, null, ValorBda.texto(b));
+        if (nuevo == null) return;
+        String texto = nuevo.toString();
+        backgroundExecutor.submit(() -> {
+            try {
+                client.escribirTexto(ref, fc, texto);
+                SwingUtilities.invokeLater(() -> {
+                    log(I18n.t("write.log.ok", ref, fc.toString(), texto));
+                    readSelectedNode();
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    log(ex.getMessage());
+                    JOptionPane.showMessageDialog(this, ex.getMessage(), I18n.t("write.title"), JOptionPane.WARNING_MESSAGE);
+                });
+            }
+        });
+    }
     private void updateTreeNodeRecursive(DefaultMutableTreeNode n)                           { ModelTreeBuilder.updateTreeNodeRecursive(n, treeModel); }
     private com.beanit.iec61850bean.FcModelNode getSelectedBlkEnaNode()                      { return pollingManager.getSelectedBlkEnaNode(); }
     private void toggleBlocking(boolean block)                                               { pollingManager.toggleBlocking(block); }
