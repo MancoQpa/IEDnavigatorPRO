@@ -322,22 +322,11 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         }
     }
 
-    /** Mostrar tensiones y potencias en k (kV, kW, kVAr, kVA): la casilla del monitor. */
-    private boolean enK;
-
-    void ponerEnK(boolean k) {
-        enK = k;
-        repaint();
-    }
-
     /**
-     * Valor y unidad para mostrar: como los publica el equipo (con su multiplicador), o en k
-     * para V, W, VAr y VA si la casilla está marcada. Usa el multiplicador leído: un W que el
-     * equipo ya publica en kW (ION 7400) no se divide dos veces.
+     * Valor y unidad para mostrar, tal como los expone el equipo: con su multiplicador (el ION
+     * 7400 publica las potencias en kW y kVA, las tensiones en V).
      */
     String[] mostrar(double v, Unidad u) {
-        boolean kilo = enK && (u.base.equals("V") || u.base.equals("W") || u.base.equals("VAr") || u.base.equals("VA"));
-        if (kilo) return new String[]{formato(v * Math.pow(10, u.exp) / 1000.0), "k" + u.base};
         return new String[]{formato(v), prefijo(u.exp) + u.base};
     }
 

@@ -2759,22 +2759,8 @@ public class IEDNavigatorApp extends JFrame {
         selVista.add(tbTabla);
         selVista.add(tbPaneles);
         izq.add(selVista, 0);
-        // Tensiones y potencias en k (kV, kW, kVAr, kVA) en la vista de paneles
-        JCheckBox cbKilo = new JCheckBox(I18n.t("mon.panels.kilo"));
-        cbKilo.setToolTipText(I18n.t("mon.panels.kilo.tip"));
-        cbKilo.setFont(Estilo.ui(Font.PLAIN, 12));
-        cbKilo.setOpaque(false);
-        cbKilo.setFocusable(false);
-        cbKilo.setSelected(PREFS_UI.getBoolean("view.monitor.kilo", false));
-        monitorPaneles.ponerEnK(cbKilo.isSelected());
-        cbKilo.addActionListener(e -> {
-            monitorPaneles.ponerEnK(cbKilo.isSelected());
-            PREFS_UI.putBoolean("view.monitor.kilo", cbKilo.isSelected());
-        });
-        izq.add(cbKilo, 1);
         Runnable mostrarVista = () -> {
             boolean paneles = tbPaneles.isSelected();
-            cbKilo.setVisible(paneles);
             vistas.show(cuerpo, paneles ? "paneles" : "tabla");
             PREFS_UI.putBoolean("view.monitor.paneles", paneles);
             if (paneles) monitorPaneles.actualizar();
