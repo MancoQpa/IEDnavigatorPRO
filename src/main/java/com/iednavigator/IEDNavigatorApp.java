@@ -1298,10 +1298,55 @@ public class IEDNavigatorApp extends JFrame {
         };
     }
 
-    /** Archivo > Abrir: en modo servidor carga el SCL a simular; en cliente, el de los GoCB. */
+    /**
+     * Archivo > Abrir: en modo servidor carga el SCL a simular. En modo cliente pregunta: pasar a
+     * Servidor y cargarlo (lo habitual), o solo leer sus GoCB para la pestaña GOOSE.
+     */
     private void abrirScl() {
-        if (currentMode == AppMode.SERVER) selectSclFile();
-        else loadSclForGoCBs();
+        if (currentMode == AppMode.SERVER) {
+            selectSclFile();
+            return;
+        }
+        int r = preguntarModoParaScl(true);
+        if (r == 0) selectSclFile();
+        else if (r == 1) loadSclForGoCBs();
+    }
+
+    /**
+     * La aplicación abre en modo Cliente. Abrir un SCL ahí no simulaba nada: solo leía sus GoCB
+     * para la pestaña GOOSE, y quien no conocía los modos veía que "falla en silencio"
+     * (reporte de usuarios, 2026-11-19). Ahora se avisa y se ofrece pasar a Servidor; si hay
+     * una conexión, el aviso dice que se cierra.
+     *
+     * @param ofrecerGoose si se ofrece también "solo leer los GoCB" (Abrir; no en Recientes)
+     * @return 0 = ya se pasó a modo Servidor, 1 = solo los GoCB, -1 = cancelado
+     */
+    private int preguntarModoParaScl(boolean ofrecerGoose) {
+        String msg;
+        if (isConnected) {
+            msg = I18n.t("mode.scl.msg.connected",
+                    connectionManager.getCurrentHost() + ":" + connectionManager.getCurrentPort());
+        } else if (connectionManager.cancelable()) {
+            msg = I18n.t("mode.scl.msg.connecting", tfHost.getText().trim() + ":" + tfClientPort.getText().trim());
+        } else {
+            msg = I18n.t("mode.scl.msg");
+        }
+        Object[] opciones = ofrecerGoose
+                ? new Object[]{I18n.t("mode.scl.toserver"), I18n.t("mode.scl.goose"), I18n.t("mode.confirm.cancel")}
+                : new Object[]{I18n.t("mode.scl.toserver"), I18n.t("mode.confirm.cancel")};
+        int r = JOptionPane.showOptionDialog(this, msg, I18n.t("mode.scl.title"), JOptionPane.DEFAULT_OPTION,
+                JOptionPane.QUESTION_MESSAGE, null, opciones, opciones[0]);
+        if (r == 0) {
+            // El aviso ya dijo que se cierra la conexión: no se vuelve a confirmar
+            rbServer.setSelected(true);
+            switchToServerMode();
+            refrescarContexto();
+            log(I18n.t("log.mode.scl.toserver"));
+            return 0;
+        }
+        if (ofrecerGoose && r == 1) return 1;
+        log(I18n.t("log.mode.scl.cancelled"));
+        return -1;
     }
 
     private static final int MAX_RECIENTES = 8;
@@ -1355,8 +1400,9 @@ public class IEDNavigatorApp extends JFrame {
             }
             JMenuItem mi = new JMenuItem(etiqueta);
             mi.setToolTipText(servidor ? ruta : I18n.t("menu.file.recent.server"));
-            mi.setEnabled(servidor);
             mi.addActionListener(e -> {
+                // En modo Cliente estaban deshabilitados sin más: ahora se ofrece pasar a Servidor
+                if (currentMode != AppMode.SERVER && preguntarModoParaScl(false) != 0) return;
                 if (!f.isFile()) {
                     JOptionPane.showMessageDialog(this, I18n.t("menu.file.recent.missing", ruta),
                             I18n.t("menu.file.recent"), JOptionPane.WARNING_MESSAGE);
