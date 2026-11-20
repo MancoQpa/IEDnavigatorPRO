@@ -46,6 +46,8 @@ final class MonitorPaneles extends JPanel implements Scrollable {
     private final Supplier<Collection<MonitorItem>> items;
     private final BiFunction<ModelNode, String, String> formatoEnum;
     private final Timer timer;
+    /** ¿El valor vino del equipo? En modo Cliente, un atributo sin leer vale 0 y no sirve. */
+    private java.util.function.Predicate<ModelNode> leido = n -> true;
     /** Referencias de las tarjetas armadas: si cambia el conjunto de señales, se rearma. */
     private String firma = "";
 
@@ -66,6 +68,8 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             }
         });
     }
+
+    void ponerLeido(java.util.function.Predicate<ModelNode> p) { leido = p == null ? n -> true : p; }
 
     /** Rearma las tarjetas si cambió el conjunto de señales y repinta los valores. */
     void actualizar() {
@@ -271,6 +275,39 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             return null;
         }
         return null;
+    }
+
+    /** Ángulo en (-180, 180]. */
+    static double normalizar(double a) {
+        double x = a % 360;
+        if (x <= -180) x += 360;
+        if (x > 180) x -= 360;
+        return x;
+    }
+
+    /** Parte un texto en renglones que entren en el ancho (como mucho {@code max}). */
+    static List<String> partir(Graphics2D g, String s, int ancho, int max) {
+        List<String> r = new ArrayList<>();
+        FontMetrics fm = g.getFontMetrics();
+        StringBuilder l = new StringBuilder();
+        for (String p : s.split(" ")) {
+            String prueba = l.length() == 0 ? p : l + " " + p;
+            if (fm.stringWidth(prueba) <= ancho || l.length() == 0) {
+                l.setLength(0);
+                l.append(prueba);
+            } else {
+                r.add(l.toString());
+                l.setLength(0);
+                l.append(p);
+            }
+        }
+        if (l.length() > 0) r.add(l.toString());
+        while (r.size() > max) {
+            String ult = r.remove(r.size() - 1);
+            r.set(r.size() - 1, r.get(r.size() - 1) + " " + ult);
+        }
+        if (!r.isEmpty()) r.set(r.size() - 1, recortar(g, r.get(r.size() - 1), ancho));
+        return r;
     }
 
     /** "LD/XCBR1.Pos" → "XCBR1.Pos". */
@@ -524,9 +561,14 @@ final class MonitorPaneles extends JPanel implements Scrollable {
 
         /**
          * Plano fasorial como en la vista del colaborador: tarjeta de 2x2 celdas, círculo a la
-         * izquierda y las tres fases a la derecha. Los vectores se dibujan solo con el ángulo
-         * medido; si el equipo publica solo magnitudes (ION 7400: su vector trae mag y no ang),
-         * el plano queda vacío y se dice por qué, en vez de inventar 0/-120/+120.
+         * izquierda y las tres fases a la derecha. Con ángulos medidos, vectores llenos.
+         *
+         * Si el equipo publica solo magnitudes (ION 7400: su vector trae mag y no ang), los
+         * ángulos se calculan y se dibujan punteados, con "≈" y la leyenda de cómo: Va = 0°
+         * y secuencia ABC para las tensiones (PhV, PPV); para las corrientes (A), el ángulo
+         * de su tensión menos el desfase de cada fase (de W y VAr, del PF o de W/VA).
+         * Verificado contra la pantalla del ION 7400 del banco: Ia -19,9° / Ib 217,0° /
+         * Ic 95,6° calculados, -20,0° / 217,0° / 95,6° en el equipo.
          */
         private void pintarFasor(Graphics2D g, int w, int h) {
             boolean estrella = buscar(it.node, "phsA") != null;
@@ -539,13 +581,40 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             for (int i = 0; i < 3; i++) {
                 ModelNode cv = buscar(it.node, fases[i], "cVal");
                 if (cv == null) continue;
-                mag[i] = analogico(cv.getChild("mag"));
-                ang[i] = analogico(cv.getChild("ang"));
+                mag[i] = medido(cv.getChild("mag"));
+                ang[i] = medido(cv.getChild("ang"));
                 if (mag[i] != null) max = Math.max(max, Math.abs(mag[i]));
                 if (ang[i] != null) hayAngulo = true;
             }
             ModelNode fase0 = buscar(it.node, fases[0]);
             String u = unidad(fase0 != null ? fase0 : it.node);
+
+            // Sin ángulos del equipo: se calculan si es una tensión o una corriente
+            boolean calculado = false;
+            String nota = null;
+            if (!hayAngulo && max > 0) {
+                String dob = it.reference.substring(it.reference.lastIndexOf('.') + 1);
+                double[] ref = null;
+                if (dob.equals("PhV")) ref = new double[]{0, 240, 120};      // como la pantalla del ION
+                else if (dob.equals("PPV")) ref = new double[]{30, 270, 150};
+                if (ref != null) {
+                    for (int i = 0; i < 3; i++) if (mag[i] != null) ang[i] = ref[i];
+                    calculado = true;
+                    nota = I18n.t("mon.panels.calc.v");
+                } else if (dob.equals("A") && estrella) {
+                    double[] phi = desfases();
+                    if (phi != null) {
+                        double[] v = {0, 240, 120};       // Ia -20,0 / Ib 217,0 / Ic 95,6 en el ION
+                        for (int i = 0; i < 3; i++) if (mag[i] != null) ang[i] = v[i] - phi[i];
+                        calculado = true;
+                        nota = I18n.t("mon.panels.calc.i");
+                    } else {
+                        nota = I18n.t("mon.panels.calc.faltapf");
+                    }
+                } else {
+                    nota = I18n.t("mon.panels.noangle");
+                }
+            }
 
             // Plano: círculo con sus ejes, a la izquierda
             int r = Math.max(30, Math.min((h - 46) / 2, (w / 2 - 30) / 2));
@@ -555,8 +624,10 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
             g.drawLine(cx - r, cy, cx + r, cy);
             g.drawLine(cx, cy - r, cx, cy + r);
-            if (hayAngulo && max > 0) {
-                g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            if ((hayAngulo || calculado) && max > 0) {
+                g.setStroke(calculado
+                        ? new BasicStroke(2.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f, new float[]{6f, 4f}, 0f)
+                        : new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 for (int i = 0; i < 3; i++) {
                     if (mag[i] == null || ang[i] == null) continue;
                     double a = Math.toRadians(ang[i]);
@@ -578,7 +649,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
                 g.drawString(I18n.t("mon.panels.noread"), x, cy + 4);
                 return;
             }
-            int y = cy - 26;
+            int y = cy - (nota == null ? 26 : 40);
             for (int i = 0; i < 3; i++) {
                 int yy = y + i * 26;
                 g.setFont(Estilo.ui(Font.BOLD, 13));
@@ -588,29 +659,69 @@ final class MonitorPaneles extends JPanel implements Scrollable {
                 g.setColor(texto());
                 String s = mag[i] == null ? "—" : formato(mag[i]);
                 int xs = x + 30;
-                int anchoMag = ancho - 30 - 62;
+                int anchoMag = ancho - 30 - 70;
                 g.drawString(recortar(g, s, anchoMag), xs, yy);
                 int fin = xs + Math.min(g.getFontMetrics().stringWidth(s), anchoMag);
                 g.setFont(Estilo.ui(Font.PLAIN, 11));
                 g.setColor(texto2());
                 if (!u.isEmpty()) g.drawString(u, fin + 4, yy);
-                String an = ang[i] == null ? "∠ —" : "∠ " + formato(ang[i]) + "°";
+                String an = ang[i] == null ? "∠ —" : (calculado ? "≈ " : "∠ ") + String.format(Locale.ROOT, "%.1f", ang[i]) + "°";
                 g.drawString(an, x + ancho - g.getFontMetrics().stringWidth(an), yy);
             }
-            if (!hayAngulo) {
+            if (nota != null) {
                 g.setFont(Estilo.ui(Font.PLAIN, 10));
-                g.setColor(texto2());
-                // En dos líneas si hace falta: la columna de fases es angosta
-                String nota = I18n.t("mon.panels.noangle");
-                FontMetrics fm = g.getFontMetrics();
-                String l1 = nota, l2 = null;
-                if (fm.stringWidth(nota) > ancho) {
-                    int corte = nota.lastIndexOf(' ', nota.length() / 2 + 6);
-                    if (corte > 0) { l1 = nota.substring(0, corte); l2 = nota.substring(corte + 1); }
+                g.setColor(calculado ? AMBAR.darker() : texto2());
+                int ly = y + 3 * 26 - 4;
+                for (String linea : partir(g, nota, ancho, 3)) {
+                    g.drawString(linea, x, ly);
+                    ly += 13;
                 }
-                g.drawString(recortar(g, l1, ancho), x, y + 3 * 26 + 2);
-                if (l2 != null) g.drawString(recortar(g, l2, ancho), x, y + 3 * 26 + 15);
             }
+        }
+
+        /** Valor numérico de un AnalogueValue o atributo, solo si se leyó del equipo. */
+        private Double medido(ModelNode av) {
+            if (av == null) return null;
+            ModelNode b = av instanceof BasicDataAttribute ? av : av.getChild("f") != null ? av.getChild("f") : av.getChild("i");
+            if (b == null || !leido.test(b)) return null;
+            return numero(b);
+        }
+
+        /** Magnitud de una fase de otro DO del mismo LN (W, VAr, VA, PF), o null. */
+        private Double deHermano(String dob, String fase) {
+            ModelNode ln = it.node == null ? null : it.node.getParent();
+            if (!(ln instanceof LogicalNode)) return null;
+            ModelNode d = ((LogicalNode) ln).getChild(dob, Fc.MX);
+            if (d == null) return null;
+            ModelNode cv = buscar(d, fase, "cVal");
+            return cv == null ? null : medido(cv.getChild("mag"));
+        }
+
+        /**
+         * Desfase tensión-corriente de cada fase, en grados (positivo = corriente atrasada), o
+         * null si falta algún dato. De W y VAr si la reactiva es coherente con VA; si no, del PF
+         * (atraso supuesto, como mide el ION 7400 del banco); si no, de W/VA.
+         */
+        private double[] desfases() {
+            String[] fases = {"phsA", "phsB", "phsC"};
+            double[] phi = new double[3];
+            for (int i = 0; i < 3; i++) {
+                Double p = deHermano("W", fases[i]), q = deHermano("VAr", fases[i]), s = deHermano("VA", fases[i]);
+                Double pf = deHermano("PF", fases[i]);
+                if (p != null && q != null && (p != 0 || q != 0)
+                        && (s == null || Math.abs(Math.hypot(p, q) - Math.abs(s)) <= 0.05 * Math.abs(s))) {
+                    phi[i] = Math.toDegrees(Math.atan2(q, p));
+                } else if (pf != null) {
+                    double f = Math.abs(pf);
+                    if (f > 1.0001) f /= 100;      // el ION lo da en porcentaje
+                    phi[i] = Math.toDegrees(Math.acos(Math.min(1, f)));
+                } else if (p != null && s != null && s != 0) {
+                    phi[i] = Math.toDegrees(Math.acos(Math.min(1, Math.abs(p / s))));
+                } else {
+                    return null;
+                }
+            }
+            return phi;
         }
 
         private void flecha(Graphics2D g, int x1, int y1, int x2, int y2) {

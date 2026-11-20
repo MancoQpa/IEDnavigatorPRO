@@ -2734,6 +2734,8 @@ public class IEDNavigatorApp extends JFrame {
         cuerpo.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
         cuerpo.add(tableScroll, "tabla");
         monitorPaneles = new MonitorPaneles(() -> new ArrayList<>(monitorItems.values()), this::formatEnumValue);
+        // En Cliente, un valor sin leer es el por defecto del modelo (0): no sirve para calcular
+        monitorPaneles.ponerLeido(n -> currentMode != AppMode.CLIENT || client == null || client.fueLeido(n));
         monitorPanelesScroll = new JScrollPane(monitorPaneles);
         monitorPanelesScroll.setBorder(BorderFactory.createEmptyBorder());
         monitorPanelesScroll.getViewport().setBackground(superficie());
