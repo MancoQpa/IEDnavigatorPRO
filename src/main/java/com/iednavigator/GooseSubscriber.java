@@ -39,6 +39,8 @@ public class GooseSubscriber {
         public boolean ndsCom;
         public int confRev;
         public int numDataSetEntries;
+        /** timeAllowedToLive de la trama, en ms; 0 si no vino (GOOSE sobre UDP, loopback). */
+        public int timeAllowedToLive;
         public byte[] rawData;
         public List<DataEntry> dataEntries = new ArrayList<>();
 
@@ -367,7 +369,9 @@ public class GooseSubscriber {
                         case 0x80: // gocbRef
                             msg.gocbRef = new String(data, offset, fieldLen);
                             break;
-                        case 0x81: // timeAllowedToLive
+                        case 0x81: // timeAllowedToLive (ms): el interruptor virtual lo usa para dar
+                                   // por perdida una suscripción
+                            msg.timeAllowedToLive = parseInteger(data, offset, fieldLen);
                             break;
                         case 0x82: // datSet
                             msg.datSet = new String(data, offset, fieldLen);
@@ -499,6 +503,17 @@ public class GooseSubscriber {
                     type = "VisibleString";
                     value = new String(data, offset, Math.min(fieldLen, data.length - offset));
                     break;
+                case 0xA1:   // array
+                case 0xA2: { // structure: un DO entero en el DataSet (p. ej. PTRC1.Tr con general,
+                             // phsA...). Antes salía como hexadecimal y no se podía usar su booleano.
+                    List<DataEntry> internos = new ArrayList<>();
+                    parseAllData(data, offset, Math.min(fieldLen, data.length - offset), internos);
+                    List<Object> valores = new ArrayList<>();
+                    for (DataEntry d : internos) valores.add(d.value);
+                    type = tag == 0xA2 ? "Structure" : "Array";
+                    value = valores;
+                    break;
+                }
                 case 0x8C: // binary-time
                     type = "BinaryTime";
                     value = "T+" + parseInteger(data, offset, Math.min(fieldLen, 4));

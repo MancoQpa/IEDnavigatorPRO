@@ -1,4 +1,4 @@
-# CLAUDE.md - IEC 61850 Java Explorer (IEDNavigator)
+# CLAUDE.md - IEDNavigator PRO
 
 ## Project Overview
 
@@ -28,7 +28,7 @@ available in the desktop app.
 
 ```
 src/main/java/com/iednavigator/
-  IEDNavigatorApp.java       # Main window, entry point, wiring (~3700 lines)
+  IEDNavigatorApp.java       # Main window, entry point, wiring (~5600 lines)
   IEC61850Client.java        # MMS client: model discovery, reads, control (SBO/direct/cancel),
                              #   preflight, keep-alive, DataSet recovery
   IEC61850Server.java        # IED simulation from SCL files
@@ -43,7 +43,7 @@ src/main/java/com/iednavigator/
   I18n.java                  # Bundles in src/main/resources/i18n (es, en, pt, zh)
   SessionLog.java            # Per-session log file (see "Logs")
   Iec61850Dictionary.java    # Descriptions of LN classes, DOs, ServiceErrors, AddCauses
-  ARQUITECTURA.md            # Architecture notes (written 2026-06; partly outdated)
+  ARQUITECTURA.md            # Architecture notes of 2026-06, kept as history (this file is current)
   native_lib/                # JNA bindings to iec61850.dll: loaded, unused by the desktop app
   bridge/                    # Headless REST bridge (BridgeMain, api/)
 src/main/java/com/iedexplorer/  # OLD package, not compiled by compile.ps1. Do not edit.
@@ -55,7 +55,7 @@ installer/                   # resources/ is versioned; output/ is gitignored
 ## Build & Run
 
 ```bash
-# Maven build (primary)
+# Maven build (alternative; the project builds with compile.ps1, below)
 mvn clean package -DskipTests
 
 # Run
@@ -78,7 +78,8 @@ Main class: `com.iednavigator.IEDNavigatorApp`
 
 - **Package**: `com.iednavigator`, with sub-packages `native_lib` and `bridge`.
 - **IEDNavigatorApp.java** was monolithic (~6600 lines) and has been split into panels and
-  managers that receive a small `Context` interface from it; it is now ~3700 lines.
+  managers that receive a small `Context` interface from it. It went down to ~3700 lines and is
+  back to ~5600 after the 2026-11 redesign (menus, context bar, view options).
 - **Listener/callback patterns**: Client and Server use listener interfaces to notify the GUI of events (connections, value changes, errors).
 - **CachedValue**: Inner class in IEC61850Client for tracking attribute values with timestamps.
 - **Who does what** (verified 2026-10-11 in the code, not deduced from names):
@@ -108,6 +109,18 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     as one: `posicionesVinculadas` adds the XCBRs without their own CSWI when the LD has only
     one commanded XCBR (`test/TestInterruptorPolos`, `test_interruptor_polos.cid`).
     `test/TestInterruptorVirtual`, `TestFallasInterruptor`, `TestBobinasGoose`.
+    Since 2026-11-19 the window follows the course reference tool: a fixed 360 px main
+    window (identity, MMS / GOOSE Pub / GOOSE Sub LEDs, symbol, LOCAL|REMOTO, ABRIR/CERRAR,
+    52a/52b, last event) and separate windows from its menu (instructor panel, event log,
+    connection data, GOOSE subscription, GOOSE publishing). Widgets in `VintComponentes`
+    (painted by hand: FlatLaf overrides the colors of a selected toggle). Local buttons work only
+    in LOCAL and, like that tool, the panel and GOOSE reject "already in position", "moving" and a
+    position forced by the instructor (MMS still goes through the control engine). GOOSE
+    subscription is `SuscripcionGoose`: typed by hand (APPID hex, goCbRef, data index, optional
+    source MAC), states from the frame's TAL, rising edge, first boolean of a structure; saved in
+    Preferences `iednavigator/vint`; trip acts in LOCAL, close does not. `BobinasGoose` is kept
+    for its test only. `test/TestSuscripcionGoose`, `TestVentanaInterruptor`,
+    `TestGooseInterruptor` (real `GoosePanel` in internal loopback, fake `Context` by `Proxy`).
   - Mode and behaviour (since 2026-11-12): `Beh` is derived from the LD mode (`LLN0.Mod`) and
     the LN's own `Mod` as in IEC 61850-7-4 annex A (`EstadoLocal.comportamiento`), at start
     (`derivarComportamiento`), when a client operates a `Mod`, when `Mod.stVal` is edited in

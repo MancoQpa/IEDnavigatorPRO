@@ -179,6 +179,112 @@ class GoosePanel {
         return r;
     }
 
+    /**
+     * Índices (en {@code ctx.getSclGoCBs()}) de los GoCB del modelo cuyo DataSet lleva alguno de
+     * los {@code LN.DO} dados del LD. Para la ventana del interruptor virtual.
+     */
+    List<Integer> indicesGocbQueLlevan(String ld, List<String> lnDos) {
+        List<Integer> r = new ArrayList<>();
+        List<SclGoCB> gcbs = ctx.getSclGoCBs();
+        if (gcbs == null || ctx.getSclDataSets() == null) return r;
+        String ied = ctx.getLoadedIedName();
+        String ldInst = ied != null && ld.startsWith(ied) ? ld.substring(ied.length()) : ld;
+        for (int i = 0; i < gcbs.size(); i++) {
+            SclGoCB g = gcbs.get(i);
+            buscar:
+            for (SclDataSet ds : ctx.getSclDataSets()) {
+                if (ds.name == null || !ds.name.equals(g.datSet)) continue;
+                if (ds.ldInst != null && !ds.ldInst.equals(g.ldInst)) continue;
+                for (String m : ds.members) {
+                    for (String lnDo : lnDos) {
+                        String b = ldInst + "/" + lnDo;
+                        if (m.equals(b) || m.startsWith(b + ".") || m.startsWith(b + " ")) {
+                            r.add(i);
+                            break buscar;
+                        }
+                    }
+                }
+            }
+        }
+        return r;
+    }
+
+    /** El GoCB de índice {@code i}, o null. */
+    SclGoCB gocb(int i) {
+        List<SclGoCB> gcbs = ctx.getSclGoCBs();
+        return gcbs != null && i >= 0 && i < gcbs.size() ? gcbs.get(i) : null;
+    }
+
+    /** gocbRef con que se publica el GoCB (el mismo que pone {@link #createPublisherForGoCB}). */
+    static String gocbRefDe(SclGoCB g) {
+        return g.ldInst + "/LLN0$GO$" + g.cbName;
+    }
+
+    boolean publicando(int i) { return activePublishers.containsKey(i); }
+
+    /** Publica o detiene un GoCB del modelo, igual que el menú contextual de la tabla de GoCB. */
+    void publicarGoCB(int i, boolean publicar) {
+        if (publicar) {
+            if (!activePublishers.containsKey(i)) publishSelectedGoCB(i);
+            return;
+        }
+        GoosePublisher pub = activePublishers.remove(i);
+        if (pub == null) return;
+        pub.stopPublishing();
+        pub.close();
+        if (i < gooseTableModel.getRowCount()) gooseTableModel.setValueAt(I18n.t("status.stopped"), i, 6);
+        logGoose(I18n.t("log.goose.gocbstopped", i));
+        if (activePublishers.isEmpty()) {
+            btnPublicarTodos.setText(I18n.t("goose.publishall"));
+            btnPublicarTodos.setBackground(new Color(0, 130, 60));
+            lblPublishStatus.setText(I18n.t("status.stopped"));
+            lblPublishStatus.setForeground(Color.GRAY);
+        }
+    }
+
+    /** true si lo que se publica sale marcado como simulado (bit S y campo simulation). */
+    boolean publicaSimulado() { return cbSimulado == null || cbSimulado.isSelected(); }
+
+    /** Lo mismo que tildar o destildar la casilla de la pestaña GOOSE. */
+    void ponerPublicaSimulado(boolean simulado) {
+        if (cbSimulado == null || cbSimulado.isSelected() == simulado) return;
+        cbSimulado.setSelected(simulado);
+        aplicarModoSimulado(simulado);
+    }
+
+    /** true si llegan tramas: captura de Capa 2, loopback interno o GOOSE sobre UDP. */
+    boolean capturando() {
+        return (gooseSubscriber != null && gooseSubscriber.isRunning())
+            || (nativeGooseSubscriber != null && nativeGooseSubscriber.isRunning())
+            || internalLoopbackEnabled
+            || (gooseUdpBridge != null && gooseUdpBridge.isReceiving());
+    }
+
+    /**
+     * Arranca la captura en la placa elegida si no está corriendo (lo mismo que el botón de la
+     * pestaña GOOSE). Si no puede, el aviso lo da la propia pestaña. Devuelve si quedó capturando.
+     */
+    boolean asegurarCaptura() {
+        if (!capturando()) toggleGooseCapture();
+        return capturando();
+    }
+
+    /** Placa elegida en la pestaña GOOSE (texto del combo), o null. */
+    String placaElegida() {
+        Object sel = gooseInterfaceCombo != null ? gooseInterfaceCombo.getSelectedItem() : null;
+        return sel != null ? sel.toString() : null;
+    }
+
+    /** Primera IPv4 de la placa elegida, o null (loopback, UDP o sin IP). */
+    String ipPlacaElegida() {
+        String p = placaElegida();
+        if (p == null) return null;
+        for (String ip : PlacaGoose.ipsDe(p)) {
+            if (ip.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) return ip;
+        }
+        return null;
+    }
+
     void logGoose(String message) {
         SwingUtilities.invokeLater(() -> {
             String timestamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
@@ -1652,6 +1758,14 @@ class GoosePanel {
                 String[] nombres = {"INTERMEDIATE", "OFF", "ON", "BAD"};
                 return nombres[v] + " (" + v + ")";
             }
+        }
+        if (valor instanceof java.util.List) {
+            StringBuilder sb = new StringBuilder("{");
+            for (Object x : (java.util.List<?>) valor) {
+                if (sb.length() > 1) sb.append(", ");
+                sb.append(textoDato(x instanceof java.util.List ? "Structure" : null, x));
+            }
+            return sb.append('}').toString();
         }
         return String.valueOf(valor);
     }
