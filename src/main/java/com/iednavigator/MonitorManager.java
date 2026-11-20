@@ -37,40 +37,94 @@ class MonitorManager {
         this.ctx = ctx;
     }
 
+    /**
+     * Agrega al monitor lo elegido en el árbol, por señales (como la vista de paneles del
+     * colaborador, ui46): un DO entra como UNA señal, su variante de estado (ST) o de medida
+     * (MX), con su valor principal; un LN o un LD agregan cada uno de sus DO; un atributo suelto
+     * entra solo. Antes un DO agregaba además cada atributo por separado.
+     */
     void addNodeToMonitor(DefaultMutableTreeNode treeNode) {
-        Object userObj = treeNode.getUserObject();
-        if (userObj instanceof NodeInfo) {
-            NodeInfo info = (NodeInfo) userObj;
-            if (info.node instanceof FcModelNode) {
-                FcModelNode fcNode = (FcModelNode) info.node;
-                String ref = info.node.getReference().toString();
-                Fc fc = fcNode.getFc();
-                String fullRef = ref + "$" + fc.toString();
-
-                if (!ctx.getMonitorItems().containsKey(fullRef)) {
-                    // Tipo de la norma (CDC del DO, tipo básico o construido del DA), no la
-                    // clase de Java de la biblioteca ("Int8", "FcDataObject").
-                    String type = TiposIec61850.tipoCorto(info.node);
-
-                    String displayName = formatReference(ref);
-                    MonitorItem item = new MonitorItem(ref, displayName, fc.toString(), type, fcNode);
-                    if (info.node instanceof BasicDataAttribute) {
-                        item.value = ctx.formatEnumValue(info.node, ValorBda.texto((BasicDataAttribute) info.node));
-                        if (item.value == null) item.value = "";
-                    }
-                    ctx.getMonitorItems().put(fullRef, item);
-                    ctx.getWatchlist().add(fullRef);
-                    ctx.updateWatchlistLabel();
-                    refreshMonitorTable();
-                    ctx.log(I18n.t("log.monitor.added", displayName, fc));
-                }
-            }
-        }
-        // Agregar hijos también (si es un DO) — solo BasicDataAttributes
-        for (int i = 0; i < treeNode.getChildCount(); i++) {
-            addNodeToMonitor((DefaultMutableTreeNode) treeNode.getChildAt(i));
-        }
+        agregar(treeNode, true);
         ctx.getModelTree().repaint();
+    }
+
+    private void agregar(DefaultMutableTreeNode treeNode, boolean raiz) {
+        Object userObj = treeNode.getUserObject();
+        if (userObj instanceof NodeInfo && ((NodeInfo) userObj).node instanceof FcModelNode) {
+            ModelNode n = ((NodeInfo) userObj).node;
+            if (n instanceof FcDataObject) {
+                FcDataObject p = principal((FcDataObject) n);
+                if (p != null) agregarSenal(p);
+                // Un DO sin estado ni medida (p. ej. solo CF) entra si se lo eligió a él
+                else if (raiz) agregarSenal((FcModelNode) n);
+            } else {
+                agregarSenal((FcModelNode) n);
+            }
+            return;
+        }
+        for (int i = 0; i < treeNode.getChildCount(); i++) {
+            agregar((DefaultMutableTreeNode) treeNode.getChildAt(i), false);
+        }
+    }
+
+    /** Variante del DO que es la señal: la de estado (ST) o, si no hay, la de medida (MX). */
+    static FcDataObject principal(FcDataObject d) {
+        FcDataObject mx = null;
+        for (FcDataObject v : TiposIec61850.variantes(d)) {
+            if (v.getFc() == Fc.ST) return v;
+            if (v.getFc() == Fc.MX && mx == null) mx = v;
+        }
+        if (mx == null && (d.getFc() == Fc.ST || d.getFc() == Fc.MX)) return d;
+        return mx;
+    }
+
+    private void agregarSenal(FcModelNode fcNode) {
+        String ref = fcNode.getReference().toString();
+        Fc fc = fcNode.getFc();
+        String fullRef = ref + "$" + fc.toString();
+        if (ctx.getMonitorItems().containsKey(fullRef)) return;
+        // Tipo de la norma (CDC del DO, tipo básico o construido del DA), no la
+        // clase de Java de la biblioteca ("Int8", "FcDataObject").
+        String type = TiposIec61850.tipoCorto(fcNode);
+        String displayName = formatReference(ref);
+        MonitorItem item = new MonitorItem(ref, displayName, fc.toString(), type, fcNode);
+        item.value = valorResumen(fcNode);
+        ctx.getMonitorItems().put(fullRef, item);
+        ctx.getWatchlist().add(fullRef);
+        ctx.updateWatchlistLabel();
+        refreshMonitorTable();
+        ctx.log(I18n.t("log.monitor.added", displayName, fc));
+    }
+
+    /**
+     * Valor de una señal para la tabla: el del atributo, o el principal del DO (stVal, general,
+     * la medida, o las tres fases de un WYE/DEL).
+     */
+    String valorResumen(ModelNode n) {
+        if (n instanceof BasicDataAttribute) {
+            String v = ctx.formatEnumValue(n, ValorBda.texto((BasicDataAttribute) n));
+            return v == null ? "" : v;
+        }
+        if (n == null) return "";
+        if (MonitorPaneles.buscar(n, "phsA") != null || MonitorPaneles.buscar(n, "phsAB") != null) {
+            String[] fases = MonitorPaneles.buscar(n, "phsA") != null
+                    ? new String[]{"phsA", "phsB", "phsC"} : new String[]{"phsAB", "phsBC", "phsCA"};
+            StringBuilder sb = new StringBuilder();
+            for (String f : fases) {
+                ModelNode cv = MonitorPaneles.buscar(n, f, "cVal");
+                Double m = cv == null ? null : MonitorPaneles.analogico(cv.getChild("mag"));
+                if (m == null) continue;
+                if (sb.length() > 0) sb.append("  ");
+                sb.append(f.substring(3)).append(' ').append(MonitorPaneles.formato(m));
+            }
+            return sb.toString();
+        }
+        for (String c : new String[]{"stVal", "general"}) {
+            ModelNode h = MonitorPaneles.buscar(n, c);
+            if (h instanceof BasicDataAttribute) return valorResumen(h);
+        }
+        Double d = MonitorPaneles.analogicoDe(n);
+        return d == null ? "" : MonitorPaneles.formato(d);
     }
 
     /** Formatea referencia para mostrar de forma legible.
@@ -276,10 +330,8 @@ class MonitorManager {
             try {
                 Fc fc = Fc.valueOf(item.fc);
                 ModelNode node = model.findModelNode(item.reference, fc);
-                if (node instanceof BasicDataAttribute) {
-                    BasicDataAttribute bda = (BasicDataAttribute) node;
-                    String newVal = ctx.formatEnumValue(node, ValorBda.texto(bda));
-                    if (newVal == null) newVal = "";
+                if (node instanceof FcModelNode) {
+                    String newVal = valorResumen(node);
                     if (!newVal.equals(item.value)) {
                         item.oldValue = item.value;
                         item.value = newVal;
@@ -298,9 +350,9 @@ class MonitorManager {
         for (MonitorItem item : ctx.getMonitorItems().values()) {
             if (row >= ctx.getMonitorTableModel().getRowCount()) break;
 
-            if (item.node instanceof BasicDataAttribute) {
-                BasicDataAttribute bda = (BasicDataAttribute) item.node;
-                String newVal = ValorBda.texto(bda);
+            if (item.node != null) {
+                String newVal = item.node instanceof BasicDataAttribute
+                        ? ValorBda.texto((BasicDataAttribute) item.node) : valorResumen(item.node);
                 if (newVal == null) newVal = "";
 
                 if (!newVal.equals(item.value)) {

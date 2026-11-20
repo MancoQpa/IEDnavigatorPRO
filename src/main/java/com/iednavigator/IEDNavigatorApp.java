@@ -277,6 +277,30 @@ public class IEDNavigatorApp extends JFrame {
                 }
             }
         });
+
+        // La vista de paneles también recibe lo que se suelta desde el árbol
+        if (monitorPanelesScroll != null) {
+            monitorPanelesScroll.getViewport().setDropTarget(new DropTarget() {
+                @Override public synchronized void dragEnter(DropTargetDragEvent dtde) {
+                    if (dtde.isDataFlavorSupported(DataFlavor.stringFlavor)) dtde.acceptDrag(DnDConstants.ACTION_COPY);
+                    else dtde.rejectDrag();
+                }
+                @Override public synchronized void drop(DropTargetDropEvent dtde) {
+                    try {
+                        dtde.acceptDrop(DnDConstants.ACTION_COPY);
+                        TreePath[] paths = modelTree.getSelectionPaths();
+                        if (paths != null) {
+                            for (TreePath path : paths) addNodeToMonitor((DefaultMutableTreeNode) path.getLastPathComponent());
+                        }
+                        dtde.dropComplete(true);
+                        if (monitorPaneles != null) monitorPaneles.actualizar();
+                    } catch (Exception e) {
+                        log(I18n.t("log.app.droperror", e.getMessage()));
+                        dtde.dropComplete(false);
+                    }
+                }
+            });
+        }
     }
 
     // Colores
@@ -1030,6 +1054,7 @@ public class IEDNavigatorApp extends JFrame {
         actualizarTitulo();
         if (barraContexto != null) barraContexto.refrescar();
         if (panelWatchlist != null) panelWatchlist.setVisible(currentMode == AppMode.CLIENT);
+        if (barraSondeo != null) barraSondeo.setVisible(currentMode == AppMode.CLIENT);
         if (panelArbol == null) return;
         boolean hayModelo = rootNode != null && rootNode.getChildCount() > 0;
         if (!hayModelo) {
@@ -2701,13 +2726,52 @@ public class IEDNavigatorApp extends JFrame {
             if (!vivo) ((javax.swing.Timer) e.getSource()).stop();
         });
 
-        JPanel cuerpo = new JPanel(new BorderLayout());
+        // Dos vistas de las mismas señales: la tabla y los paneles (una tarjeta por señal,
+        // dibujada según su tipo). Réplica de la vista del paquete ui46 de un colaborador.
+        java.awt.CardLayout vistas = new java.awt.CardLayout();
+        JPanel cuerpo = new JPanel(vistas);
         cuerpo.setOpaque(false);
         cuerpo.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
-        cuerpo.add(tableScroll, BorderLayout.CENTER);
+        cuerpo.add(tableScroll, "tabla");
+        monitorPaneles = new MonitorPaneles(() -> new ArrayList<>(monitorItems.values()), this::formatEnumValue);
+        monitorPanelesScroll = new JScrollPane(monitorPaneles);
+        monitorPanelesScroll.setBorder(BorderFactory.createEmptyBorder());
+        monitorPanelesScroll.getViewport().setBackground(superficie());
+        monitorPanelesScroll.getVerticalScrollBar().setUnitIncrement(24);
+        cuerpo.add(monitorPanelesScroll, "paneles");
+
+        JToggleButton tbTabla = new JToggleButton(I18n.t("mon.view.table"));
+        JToggleButton tbPaneles = new JToggleButton(I18n.t("mon.view.panels"));
+        ButtonGroup gVista = new ButtonGroup();
+        gVista.add(tbTabla);
+        gVista.add(tbPaneles);
+        tbTabla.putClientProperty("JButton.buttonType", "segmented");
+        tbPaneles.putClientProperty("JButton.buttonType", "segmented");
+        for (JToggleButton t : new JToggleButton[]{tbTabla, tbPaneles}) {
+            t.setFont(Estilo.ui(Font.PLAIN, 12));
+            t.setFocusable(false);
+            t.setPreferredSize(new Dimension(t.getPreferredSize().width, altoControl));
+        }
+        JPanel selVista = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        selVista.setOpaque(false);
+        selVista.add(tbTabla);
+        selVista.add(tbPaneles);
+        izq.add(selVista, 0);
+        Runnable mostrarVista = () -> {
+            boolean paneles = tbPaneles.isSelected();
+            vistas.show(cuerpo, paneles ? "paneles" : "tabla");
+            PREFS_UI.putBoolean("view.monitor.paneles", paneles);
+            if (paneles) monitorPaneles.actualizar();
+        };
+        tbTabla.addActionListener(e -> mostrarVista.run());
+        tbPaneles.addActionListener(e -> mostrarVista.run());
+        if (PREFS_UI.getBoolean("view.monitor.paneles", false)) tbPaneles.setSelected(true); else tbTabla.setSelected(true);
+        mostrarVista.run();
 
         panel.add(enc, BorderLayout.NORTH);
         panel.add(cuerpo, BorderLayout.CENTER);
+        barraSondeo = barraSondeo();
+        panel.add(barraSondeo, BorderLayout.SOUTH);
 
         // Guardar referencia al label de conteo para actualizar
         monitorCountLabel = lblCount;
@@ -2715,6 +2779,82 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private JLabel monitorCountLabel;
+    private MonitorPaneles monitorPaneles;
+    private JScrollPane monitorPanelesScroll;
+    private JPanel barraSondeo;
+    private JToggleButton tbSondeo;
+    private JComboBox<String> cbIntervaloSondeo;
+
+    /**
+     * Barra del pie del monitor (modo Cliente): pausar o reanudar el sondeo y su intervalo en
+     * ms, a la vista en vez de solo en el menú Conexión. Usa los mismos controles (cbPolling,
+     * spinnerInterval); se enlaza en enlazarBarraSondeo(), cuando ya existen.
+     */
+    private JPanel barraSondeo() {
+        JPanel b = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        b.setOpaque(false);
+        b.setBorder(BorderFactory.createEmptyBorder(2, 10, 4, 10));
+        tbSondeo = new JToggleButton(I18n.t("mon.poll.start"));
+        tbSondeo.setFont(Estilo.ui(Font.PLAIN, 12));
+        tbSondeo.setFocusable(false);
+        tbSondeo.setEnabled(false);
+        b.add(tbSondeo);
+        JLabel li = new JLabel(I18n.t("mon.poll.interval"));
+        li.setFont(Estilo.ui(Font.PLAIN, 12));
+        li.setForeground(Estilo.TEXTO_2);
+        b.add(li);
+        cbIntervaloSondeo = new JComboBox<>(new String[]{"500", "1000", "2000", "5000"});
+        cbIntervaloSondeo.setEditable(true);
+        cbIntervaloSondeo.setPrototypeDisplayValue("100000");
+        cbIntervaloSondeo.setFont(Estilo.mono(Font.PLAIN, 12));
+        b.add(cbIntervaloSondeo);
+        JLabel ms = new JLabel("ms");
+        ms.setFont(Estilo.ui(Font.PLAIN, 12));
+        ms.setForeground(Estilo.TEXTO_2);
+        b.add(ms);
+        b.setVisible(false);
+        return b;
+    }
+
+    private void enlazarBarraSondeo() {
+        if (tbSondeo == null || cbPolling == null || spinnerInterval == null) return;
+        Runnable reflejar = () -> {
+            boolean activo = cbPolling.isSelected();
+            tbSondeo.setSelected(activo);
+            tbSondeo.setText(I18n.t(activo ? "mon.poll.pause" : "mon.poll.start"));
+            tbSondeo.setEnabled(cbPolling.isEnabled());
+        };
+        cbPolling.addItemListener(e -> reflejar.run());
+        cbPolling.addPropertyChangeListener("enabled", e -> reflejar.run());
+        tbSondeo.addActionListener(e -> {
+            if (tbSondeo.isSelected() != cbPolling.isSelected()) cbPolling.doClick();
+            reflejar.run();
+        });
+        cbIntervaloSondeo.setSelectedItem(String.valueOf(spinnerInterval.getValue()));
+        spinnerInterval.addChangeListener(e -> {
+            String v = String.valueOf(spinnerInterval.getValue());
+            if (!v.equals(cbIntervaloSondeo.getSelectedItem())) cbIntervaloSondeo.setSelectedItem(v);
+        });
+        cbIntervaloSondeo.addActionListener(e -> {
+            int ms;
+            try {
+                ms = Integer.parseInt(String.valueOf(cbIntervaloSondeo.getSelectedItem()).trim());
+            } catch (NumberFormatException ex) {
+                cbIntervaloSondeo.setSelectedItem(String.valueOf(spinnerInterval.getValue()));
+                return;
+            }
+            ms = Math.max(500, Math.min(60000, ms));
+            if (ms == (Integer) spinnerInterval.getValue()) return;
+            spinnerInterval.setValue(ms);
+            // El sondeo toma el intervalo al arrancar: si está corriendo, se lo reinicia
+            if (cbPolling.isSelected()) {
+                pollingManager.toggle(false);
+                pollingManager.toggle(true);
+            }
+        });
+        reflejar.run();
+    }
+
     /** Repinta el ambar que se desvanece; corre solo mientras hay filas resaltadas. */
     private javax.swing.Timer timerResalte;
 
@@ -2855,6 +2995,7 @@ public class IEDNavigatorApp extends JFrame {
         // Cliente
         btnConnect.addActionListener(e -> toggleConnection());
         cbPolling.addActionListener(e -> togglePolling());
+        enlazarBarraSondeo();
 
         // Crear popup menu para watchlist
         createTreePopupMenu();
