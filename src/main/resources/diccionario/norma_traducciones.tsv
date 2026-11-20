@@ -1,0 +1,85 @@
+# Traducciones de la descripción de entradas de norma.tsv: tipo, clave, inglés, portugués, chino.
+# Solo se aplican a lo que se cargó de norma.tsv (lo escrito a mano trae sus traducciones).
+# Los nombres de la norma (CDC, LN, DO, DA, FC) quedan sin traducir dentro del texto.
+# Columna vacía: ese idioma muestra el texto en español.
+# --- Agregados 2026-11-20 ---
+CDC	HST	Status as a histogram: counters per class (hstVal) over configured ranges (hstRangeC), for example the distribution of magnitudes or durations of events.	Estado em forma de histograma: contadores por classe (hstVal) sobre faixas configuradas (hstRangeC), por exemplo a distribuição de magnitudes ou durações de eventos.	以直方图表示的状态：按配置的区间 (hstRangeC) 统计各类别的计数 (hstVal)，例如事件幅值或持续时间的分布。
+CDC	HMV	Harmonics of a single-phase quantity: array har with one value per order, plus numHar (number of harmonics), numCyc (cycles in the window), evalTm (evaluation time), frequency and hvRef (reference: fundamental, RMS or absolute).	Harmônicos de uma grandeza monofásica: arranjo har com um valor por ordem, mais numHar (quantidade de harmônicos), numCyc (ciclos da janela), evalTm (tempo de avaliação), frequency e hvRef (referência: fundamental, eficaz ou absoluta).	单相量的谐波：数组 har 每个次数一个值，另有 numHar（谐波数）、numCyc（窗口周波数）、evalTm（评估时间）、frequency 和 hvRef（参考：基波、有效值或绝对值）。
+CDC	HWYE	Harmonics of a three-phase wye quantity: one array per phase (phsAHar, phsBHar, phsCHar) and optionally neutral, net and residual (neutHar, netHar, resHar), one element per harmonic order. Shares numHar, numCyc, evalTm and hvRef with HMV. Used by MHAI: HA, HPhV, HW.	Harmônicos de uma grandeza trifásica em estrela: um arranjo por fase (phsAHar, phsBHar, phsCHar) e opcionalmente neutro, líquido e residual (neutHar, netHar, resHar), um elemento por ordem harmônica. Compartilha numHar, numCyc, evalTm e hvRef com HMV. Usado por MHAI: HA, HPhV, HW.	星形三相量的谐波：每相一个数组（phsAHar、phsBHar、phsCHar），可选中性、净值和剩余（neutHar、netHar、resHar），每个谐波次数一个元素。与 HMV 共用 numHar、numCyc、evalTm 和 hvRef。用于 MHAI：HA、HPhV、HW。
+CDC	HDEL	Harmonics of a phase-to-phase quantity: arrays phsABHar, phsBCHar and phsCAHar, one element per harmonic order. Used by MHAI.HPPV.	Harmônicos de uma grandeza entre fases: arranjos phsABHar, phsBCHar e phsCAHar, um elemento por ordem harmônica. Usado por MHAI.HPPV.	相间量的谐波：数组 phsABHar、phsBCHar 和 phsCAHar，每个谐波次数一个元素。用于 MHAI.HPPV。
+CDC	ISC	Position of a step-by-step element with control: valWTr (position and whether it is in transition) and an integer ctlVal with the requested step, for example a transformer tap.	Posição de um elemento por degraus com comando: valWTr (posição e se está em transição) e ctlVal inteiro com o degrau pedido, por exemplo o tap de um transformador.	带控制的分级元件位置：valWTr（位置及是否处于过渡）和整数 ctlVal（所要求的档位），例如变压器分接头。
+CDC	TSG	Setting that holds a time (setTm) or a calendar moment (setCal), for example the start of a demand period or of a tariff.	Ajuste que contém uma hora (setTm) ou um momento de calendário (setCal), por exemplo o início de um período de demanda ou de uma tarifa.	包含时间 (setTm) 或日历时刻 (setCal) 的定值，例如需量周期或费率的起始时间。
+CDC	CUG	Setting with the currency code (cur, ISO 4217) in which monetary energy values are expressed.	Ajuste com o código de moeda (cur, ISO 4217) em que se expressam valores de energia em dinheiro.	货币代码定值（cur，ISO 4217），用于以货币表示的电能数值。
+CDC	CURVE	Selects a characteristic curve (setCharact, for example inverse time) and its parameters (setParA to setParF).	Escolhe uma curva característica (setCharact, por exemplo de tempo inverso) e seus parâmetros (setParA a setParF).	选择特性曲线（setCharact，例如反时限）及其参数（setParA 至 setParF）。
+CDC	CSD	Describes a curve by points for display, without being a setting: units and description of the axes (xUnits, yUnits, xD, yD) and the points (crvPts, numPts).	Descreve uma curva por pontos para exibi-la, sem ser um ajuste: unidades e descrição dos eixos (xUnits, yUnits, xD, yD) e os pontos (crvPts, numPts).	以点描述曲线以供显示，不作为定值：坐标轴的单位和说明（xUnits、yUnits、xD、yD）以及各点（crvPts、numPts）。
+CDC	VSD	Read-only descriptive text (val), for example a name or a configuration note.	Texto descritivo somente leitura (val), por exemplo um nome ou uma nota de configuração.	只读描述文本 (val)，例如名称或配置说明。
+CDC	MTS	Record of the last service executed on a multicast sampled value control block (MSVCB). Used by LN LTRK.	Registro do último serviço executado sobre um bloco de controle de valores amostrados multicast (MSVCB). Usado pelo LN LTRK.	记录对组播采样值控制块 (MSVCB) 执行的最后一次服务。由 LN LTRK 使用。
+CDC	NTS	Record of the last service executed on a unicast sampled value control block (USVCB). Used by LN LTRK.	Registro do último serviço executado sobre um bloco de controle de valores amostrados unicast (USVCB). Usado pelo LN LTRK.	记录对单播采样值控制块 (USVCB) 执行的最后一次服务。由 LN LTRK 使用。
+DO	HA	Harmonics of the phase currents (HWYE): one array per phase with the value of each harmonic order.	Harmônicos das correntes de fase (HWYE): um arranjo por fase com o valor de cada ordem harmônica.	相电流的谐波 (HWYE)：每相一个数组，含各谐波次数的值。
+DO	HPhV	Harmonics of the phase-to-ground voltages (HWYE).	Harmônicos das tensões fase-terra (HWYE).	相对地电压的谐波 (HWYE)。
+DO	HPPV	Harmonics of the phase-to-phase voltages (HDEL).	Harmônicos das tensões entre fases (HDEL).	相间电压的谐波 (HDEL)。
+DO	HW	Active power per harmonic order and per phase (HWYE).	Potência ativa por ordem harmônica e por fase (HWYE).	按谐波次数和相别的有功功率 (HWYE)。
+DO	HVAr	Reactive power per harmonic order and per phase (HWYE).	Potência reativa por ordem harmônica e por fase (HWYE).	按谐波次数和相别的无功功率 (HWYE)。
+DO	HVA	Apparent power per harmonic order and per phase (HWYE).	Potência aparente por ordem harmônica e por fase (HWYE).	按谐波次数和相别的视在功率 (HWYE)。
+DO	HRmsA	RMS value of each phase current including harmonics (WYE).	Valor eficaz da corrente de cada fase incluindo os harmônicos (WYE).	含谐波的各相电流有效值 (WYE)。
+DO	HRmsPhV	RMS value of the phase-to-ground voltage including harmonics (WYE).	Valor eficaz da tensão fase-terra incluindo os harmônicos (WYE).	含谐波的相对地电压有效值 (WYE)。
+DO	HRmsPPV	RMS value of the phase-to-phase voltage including harmonics (DEL).	Valor eficaz da tensão entre fases incluindo os harmônicos (DEL).	含谐波的相间电压有效值 (DEL)。
+DO	HKf	K factor per phase (WYE): how much the current harmonics heat a transformer compared with the fundamental current.	Fator K por fase (WYE): quanto os harmônicos de corrente aquecem um transformador em relação à corrente fundamental.	每相 K 系数 (WYE)：电流谐波相对基波电流使变压器发热的程度。
+DO	HTdf	Derating factor of a transformer's power due to current harmonics, per phase (WYE).	Fator de redução da potência de um transformador devido aos harmônicos de corrente, por fase (WYE).	因电流谐波而降低变压器容量的系数，按相 (WYE)。
+DO	HCfA	Ratio between the peak and the RMS value of each phase current (WYE).	Relação entre o valor de pico e o eficaz da corrente de cada fase (WYE).	各相电流峰值与有效值之比 (WYE)。
+DO	HCfPhV	Ratio between the peak and the RMS value of the phase-to-ground voltage (WYE).	Relação entre o valor de pico e o eficaz da tensão fase-terra (WYE).	相对地电压峰值与有效值之比 (WYE)。
+DO	HCfPPV	Ratio between the peak and the RMS value of the phase-to-phase voltage (DEL).	Relação entre o valor de pico e o eficaz da tensão entre fases (DEL).	相间电压峰值与有效值之比 (DEL)。
+DO	ThdPPV	Total harmonic distortion of the phase-to-phase voltages (DEL).	Distorção harmônica total das tensões entre fases (DEL).	相间电压的总谐波畸变率 (DEL)。
+DO	ThdOddA	Total harmonic distortion of the current considering only the odd orders (WYE).	Distorção harmônica total da corrente considerando apenas as ordens ímpares (WYE).	仅计奇次谐波的电流总谐波畸变率 (WYE)。
+DO	ThdEvnA	Total harmonic distortion of the current considering only the even orders (WYE).	Distorção harmônica total da corrente considerando apenas as ordens pares (WYE).	仅计偶次谐波的电流总谐波畸变率 (WYE)。
+DO	ThdOddPhV	Total harmonic distortion of the phase-to-ground voltage, odd orders only (WYE).	Distorção harmônica total da tensão fase-terra, apenas ordens ímpares (WYE).	相对地电压总谐波畸变率，仅奇次 (WYE)。
+DO	ThdEvnPhV	Total harmonic distortion of the phase-to-ground voltage, even orders only (WYE).	Distorção harmônica total da tensão fase-terra, apenas ordens pares (WYE).	相对地电压总谐波畸变率，仅偶次 (WYE)。
+DO	ThdOddPPV	Total harmonic distortion of the phase-to-phase voltage, odd orders only (DEL).	Distorção harmônica total da tensão entre fases, apenas ordens ímpares (DEL).	相间电压总谐波畸变率，仅奇次 (DEL)。
+DO	ThdEvnPPV	Total harmonic distortion of the phase-to-phase voltage, even orders only (DEL).	Distorção harmônica total da tensão entre fases, apenas ordens pares (DEL).	相间电压总谐波畸变率，仅偶次 (DEL)。
+DO	TddA	Harmonic distortion of the current referred to the maximum demand current, per phase (WYE).	Distorção harmônica da corrente referida à corrente de demanda máxima, por fase (WYE).	以最大需量电流为基准的电流谐波畸变，按相 (WYE)。
+DO	PhPst	Pst per phase (WYE): severity of the voltage flicker over 10-minute windows.	Pst por fase (WYE): severidade da cintilação de tensão em janelas de 10 minutos.	每相 Pst (WYE)：10 分钟窗口内电压闪变的严重度。
+DO	PhPlt	Plt per phase (WYE): severity of the voltage flicker over 2-hour windows.	Plt por fase (WYE): severidade da cintilação de tensão em janelas de 2 horas.	每相 Plt (WYE)：2 小时窗口内电压闪变的严重度。
+DO	AvVolts	Average of the voltage over the calculation period (MV).	Média da tensão no período de cálculo (MV).	计算周期内电压的平均值 (MV)。
+DO	MaxVolts	Maximum value of the voltage over the calculation period (MV).	Valor máximo da tensão no período de cálculo (MV).	计算周期内电压的最大值 (MV)。
+DO	MinVolts	Minimum value of the voltage over the calculation period (MV).	Valor mínimo da tensão no período de cálculo (MV).	计算周期内电压的最小值 (MV)。
+DO	AvVA	Average of the apparent power over the calculation period (MV).	Média da potência aparente no período de cálculo (MV).	计算周期内视在功率的平均值 (MV)。
+DO	MaxVA	Maximum value of the apparent power over the calculation period (MV).	Valor máximo da potência aparente no período de cálculo (MV).	计算周期内视在功率的最大值 (MV)。
+DO	MinVA	Minimum value of the apparent power over the calculation period (MV).	Valor mínimo da potência aparente no período de cálculo (MV).	计算周期内视在功率的最小值 (MV)。
+DO	AnIn	Generic analogue input (MV). Numbered: AnIn1, AnIn2...	Entrada analógica genérica (MV). Numera-se: AnIn1, AnIn2...	通用模拟量输入 (MV)。按编号：AnIn1、AnIn2……
+DO	AnOut	Generic analogue output with control (APC). Numbered: AnOut1, AnOut2...	Saída analógica genérica com comando (APC). Numera-se: AnOut1, AnOut2...	带控制的通用模拟量输出 (APC)。按编号：AnOut1、AnOut2……
+DO	IntIn	Generic integer-valued input (INS). Numbered: IntIn1, IntIn2...	Entrada genérica de valor inteiro (INS). Numera-se: IntIn1, IntIn2...	通用整数输入 (INS)。按编号：IntIn1、IntIn2……
+DO	DPCSO	Generic double-point output with control (DPC). Numbered: DPCSO1, DPCSO2...	Saída genérica de ponto duplo com comando (DPC). Numera-se: DPCSO1, DPCSO2...	带控制的通用双点输出 (DPC)。按编号：DPCSO1、DPCSO2……
+DO	ISCSO	Generic integer-valued output with control (INC). Numbered: ISCSO1, ISCSO2...	Saída genérica de valor inteiro com comando (INC). Numera-se: ISCSO1, ISCSO2...	带控制的通用整数输出 (INC)。按编号：ISCSO1、ISCSO2……
+DO	ClcMth	How the measurement is calculated (ENG), for example true RMS, RMS of the fundamental or peak of the fundamental.	Como a medida é calculada (ENG), por exemplo valor eficaz verdadeiro, eficaz da fundamental ou pico da fundamental.	测量的计算方法 (ENG)，例如真有效值、基波有效值或基波峰值。
+DO	ClcMod	Mode of the statistical calculation (ENG): total, periodic or sliding window.	Modo do cálculo estatístico (ENG): total, por período ou janela deslizante.	统计计算模式 (ENG)：总计、按周期或滑动窗口。
+DO	ClcIntvTyp	Unit of the calculation interval (ENG): milliseconds, cycles, day, week, month, year or external trigger.	Unidade do intervalo de cálculo (ENG): milissegundos, ciclos, dia, semana, mês, ano ou disparo externo.	计算间隔的单位 (ENG)：毫秒、周波、日、周、月、年或外部触发。
+DO	ClcIntvPer	Number of units of the calculation interval (ING).	Quantidade de unidades do intervalo de cálculo (ING).	计算间隔的单位数量 (ING)。
+DO	ClcStr	Order to start the statistical calculation (SPC).	Ordem de iniciar o cálculo estatístico (SPC).	启动统计计算的命令 (SPC)。
+DO	ClcSrc	Reference to the object that is the source of the statistical calculation (ORG).	Referência ao objeto que dá origem ao cálculo estatístico (ORG).	统计计算来源对象的引用 (ORG)。
+DO	ClcExp	Indicates that the calculation period has ended and the result is available (SPS).	Indica que o período de cálculo terminou e o resultado está disponível (SPS).	表示计算周期已结束且结果可用 (SPS)。
+DA	valWTr	Position of a step-by-step element (posVal) and whether it is in transition between steps (transInd). Used by BSC and ISC.	Posição de um elemento por degraus (posVal) e se está em transição entre degraus (transInd). Usado por BSC e ISC.	分级元件的位置 (posVal) 以及是否处于档位间过渡 (transInd)。用于 BSC 和 ISC。
+DA	har	Array with one value per harmonic order (HMV).	Arranjo com um valor por ordem harmônica (HMV).	每个谐波次数一个值的数组 (HMV)。
+DA	frequency	Fundamental frequency taken as reference for the harmonics (HMV, HWYE, HDEL).	Frequência da fundamental tomada como referência para os harmônicos (HMV, HWYE, HDEL).	作为谐波参考的基波频率 (HMV、HWYE、HDEL)。
+DA	rmsCyc	Number of cycles over which the RMS value is calculated (HMV, HWYE, HDEL).	Quantidade de ciclos sobre os quais se calcula o valor eficaz (HMV, HWYE, HDEL).	计算有效值所用的周波数 (HMV、HWYE、HDEL)。
+DA	hstVal	Counters of each histogram class (HST).	Contadores de cada classe do histograma (HST).	直方图各类别的计数 (HST)。
+DA	hstRangeC	Configuration of the ranges of the histogram classes (HST).	Configuração das faixas das classes do histograma (HST).	直方图各类别区间的配置 (HST)。
+DA	numPts	Points used of the curve or histogram (CSG, CSD, HST).	Pontos usados da curva ou do histograma (CSG, CSD, HST).	曲线或直方图已使用的点数 (CSG、CSD、HST)。
+DA	maxPts	Maximum number of points the curve accepts (CSG, CSD).	Quantidade máxima de pontos que a curva admite (CSG, CSD).	曲线可容纳的最大点数 (CSG、CSD)。
+DA	crvPts	Array of (x, y) points describing the curve (CSG, CSD).	Arranjo de pontos (x, y) que descrevem a curva (CSG, CSD).	描述曲线的 (x, y) 点数组 (CSG、CSD)。
+DA	xUnits	SI unit and multiplier of the X axis of the curve.	Unidade SI e multiplicador do eixo X da curva.	曲线 X 轴的 SI 单位和倍率。
+DA	yUnits	SI unit and multiplier of the Y axis of the curve.	Unidade SI e multiplicador do eixo Y da curva.	曲线 Y 轴的 SI 单位和倍率。
+DA	zUnits	SI unit and multiplier of the Z axis, in three-axis curves.	Unidade SI e multiplicador do eixo Z, em curvas de três eixos.	Z 轴的 SI 单位和倍率，用于三轴曲线。
+DA	xD	Text describing the X axis of the curve.	Texto que descreve o eixo X da curva.	描述曲线 X 轴的文本。
+DA	yD	Text describing the Y axis of the curve.	Texto que descreve o eixo Y da curva.	描述曲线 Y 轴的文本。
+DA	zD	Text describing the Z axis, in three-axis curves.	Texto que descreve o eixo Z, em curvas de três eixos.	描述 Z 轴的文本，用于三轴曲线。
+DA	setCharact	Which curve is used (for example an IEC or ANSI inverse-time curve), in a CURVE setting.	Qual curva é usada (por exemplo de tempo inverso IEC ou ANSI), em um ajuste CURVE.	所用的曲线（例如 IEC 或 ANSI 反时限曲线），用于 CURVE 定值。
+DA	setParA	First parameter of the curve chosen in setCharact.	Primeiro parâmetro da curva escolhida em setCharact.	setCharact 所选曲线的第一个参数。
+DA	setParB	Second parameter of the curve chosen in setCharact.	Segundo parâmetro da curva escolhida em setCharact.	setCharact 所选曲线的第二个参数。
+DA	setParC	Third parameter of the curve chosen in setCharact.	Terceiro parâmetro da curva escolhida em setCharact.	setCharact 所选曲线的第三个参数。
+DA	setParD	Fourth parameter of the curve chosen in setCharact.	Quarto parâmetro da curva escolhida em setCharact.	setCharact 所选曲线的第四个参数。
+DA	setParE	Fifth parameter of the curve chosen in setCharact.	Quinto parâmetro da curva escolhida em setCharact.	setCharact 所选曲线的第五个参数。
+DA	setParF	Sixth parameter of the curve chosen in setCharact.	Sexto parâmetro da curva escolhida em setCharact.	setCharact 所选曲线的第六个参数。
+DA	setTm	Time set by a time setting (TSG).	Hora que um ajuste de tempo fixa (TSG).	时间定值 (TSG) 所设定的时间。
+DA	setCal	Calendar moment set by a time setting (TSG): period, weekday, month, day, hour and minute.	Momento de calendário que um ajuste de tempo fixa (TSG): período, dia da semana, mês, dia, hora e minuto.	时间定值 (TSG) 所设定的日历时刻：周期、星期、月、日、时和分。
+DA	cur	Currency code according to ISO 4217 (CUG).	Código de moeda segundo a ISO 4217 (CUG).	符合 ISO 4217 的货币代码 (CUG)。
+DA	val	Text of a description CDC (VSD).	Texto de um CDC de descrição (VSD).	描述类 CDC (VSD) 的文本。

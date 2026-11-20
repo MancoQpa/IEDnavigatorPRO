@@ -2128,9 +2128,48 @@ public class Iec61850Dictionary {
     // Van después de las entradas escritas arriba y con putIfAbsent, en este orden: lo escrito
     // a mano gana, después lo que define la norma (norma.tsv) y al final lo de fabricante, así
     // un nombre que la norma define nunca queda tapado por la explicación de un fabricante.
+    /** Claves que se cargaron de norma.tsv (no las tapó una entrada escrita a mano). Declarada
+     *  antes del bloque static que la llena: si no, todavía es null cuando se carga. */
+    private static final java.util.Set<String> DE_NORMA = new java.util.HashSet<>();
+
     static {
         cargarNorma("/diccionario/norma.tsv");
+        cargarTraduccionesNorma("/diccionario/norma_traducciones.tsv");
         cargarDoFabricante("/diccionario/do_fabricante.tsv");
+    }
+
+    private static String claveTsv(String tipo, String clave) {
+        return "LN".equals(tipo) || "CDC".equals(tipo) ? clave.toUpperCase() : clave;
+    }
+
+    /**
+     * Descripción en inglés, portugués y chino de entradas de norma.tsv: tipo, clave, en, pt, zh.
+     * Solo se aplica a lo que vino de norma.tsv: una entrada escrita a mano trae sus propias
+     * traducciones. Una columna vacía deja ese idioma en español.
+     */
+    private static void cargarTraduccionesNorma(String recurso) {
+        try (java.io.InputStream in = Iec61850Dictionary.class.getResourceAsStream(recurso)) {
+            if (in == null) {
+                System.out.println("[Diccionario] falta el recurso " + recurso);
+                return;
+            }
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+            String l;
+            while ((l = r.readLine()) != null) {
+                if (l.isBlank() || l.startsWith("#")) continue;
+                String[] c = l.split("	", -1);
+                if (c.length < 5) continue;
+                String clave = claveTsv(c[0], c[1]);
+                Entry e = DICT.get(clave);
+                if (e == null || !DE_NORMA.contains(clave)) continue;
+                if (!c[2].isBlank()) e.descriptionEn = c[2];
+                if (!c[3].isBlank()) e.descriptionPt = c[3];
+                if (!c[4].isBlank()) e.descriptionZh = c[4];
+            }
+        } catch (java.io.IOException e) {
+            System.out.println("[Diccionario] no se pudo leer " + recurso + ": " + e.getMessage());
+        }
     }
 
     private static void cargarNorma(String recurso) {
@@ -2155,7 +2194,7 @@ public class Iec61850Dictionary {
                     case "DA":  t = EntryType.DATA_ATTRIBUTE; break;
                     default: continue;
                 }
-                DICT.putIfAbsent(clave, new Entry(t, c[2], c[3], c[4], c[5]));
+                if (DICT.putIfAbsent(clave, new Entry(t, c[2], c[3], c[4], c[5])) == null) DE_NORMA.add(clave);
             }
         } catch (java.io.IOException e) {
             System.out.println("[Diccionario] no se pudo leer " + recurso + ": " + e.getMessage());

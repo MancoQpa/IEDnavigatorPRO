@@ -69,6 +69,32 @@ public class TestDiccionarioNorma {
         chk("las " + nFc + " FC de la norma están, como FC y traducidas"
                 + (fcMal.isEmpty() ? "" : ", fallan " + fcMal), fcMal.isEmpty());
 
+        // Traducciones: cada entrada agregada a norma.tsv el 2026-11-20 tiene su descripción en
+        // inglés, portugués y chino (norma_traducciones.tsv), aplicada a la entrada cargada
+        List<String> sinTraducir = new ArrayList<>(), tapadas = new ArrayList<>();
+        int nuevas = 0;
+        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(
+                Iec61850Dictionary.class.getResourceAsStream("/diccionario/norma.tsv"), java.nio.charset.StandardCharsets.UTF_8))) {
+            boolean desde = false;
+            String l;
+            while ((l = r.readLine()) != null) {
+                if (l.startsWith("# --- Agregados 2026-11-20")) { desde = true; continue; }
+                if (!desde || l.isBlank() || l.startsWith("#")) continue;
+                String[] c = l.split("\t");
+                String clave = c[0].equals("CDC") || c[0].equals("LN") ? c[1].toUpperCase() : c[1];
+                Iec61850Dictionary.Entry e = Iec61850Dictionary.lookup(clave);
+                nuevas++;
+                if (e == null || !e.description.equals(c[4])) { tapadas.add(clave); continue; }
+                if (e.descriptionEn == null || e.descriptionPt == null || e.descriptionZh == null) sinTraducir.add(clave);
+            }
+        } catch (java.io.IOException ex) {
+            sinTraducir.add("no se pudo leer norma.tsv: " + ex);
+        }
+        chk("las " + nuevas + " entradas nuevas tienen descripción en inglés, portugués y chino"
+                + (sinTraducir.isEmpty() ? "" : ", faltan " + sinTraducir), nuevas > 0 && sinTraducir.isEmpty());
+        if (!tapadas.isEmpty()) System.out.println("       (tapadas por una entrada escrita a mano: " + tapadas + ")");
+        chk("HWYE en inglés se ve en inglés", Iec61850Dictionary.lookup("HWYE").descriptionEn.startsWith("Harmonics of a three-phase"));
+
         // Deducción del CDC sin SCL: fases como estructuras (así llegan por MMS)
         Map<String, String> wye = new HashMap<>();
         wye.put("phsA", "Struct"); wye.put("phsB", "Struct"); wye.put("phsC", "Struct");
