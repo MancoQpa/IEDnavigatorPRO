@@ -528,6 +528,9 @@ public class IEDNavigatorApp extends JFrame {
 
         // Panel derecho con tabs: Activity Monitor, Reports, GOOSE, Setting Groups, Dataset, Data Model
         rightTabbedPane = new JTabbedPane();
+        // Una sola fila: con la ventana angosta las pestañas se partían en dos filas y el
+        // botón Registro quedaba sobre la segunda; así se desplazan con flechas
+        rightTabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         rightTabbedPane.addTab(I18n.t("tab.monitor"), createMonitorPanel());
         Supplier<ServerModel> panelModelSupplier = () -> {
             if (currentMode == AppMode.SERVER && server != null) return server.getServerModel();
@@ -2622,11 +2625,13 @@ public class IEDNavigatorApp extends JFrame {
 
         // Barra superior (~40 px, sin titulo: ya lo dice la pestaña):
         // contador · watchlist (Cliente) | filtro · FC · Quitar · Limpiar…
-        JPanel enc = new JPanel(new BorderLayout(10, 0));
+        // BarraAdaptable: con la ventana angosta acorta el filtro y oculta la watchlist y el
+        // contador antes que encimar los dos grupos (con BorderLayout se pisaban)
+        BarraAdaptable distribucion = new BarraAdaptable(8, 16);
+        JPanel enc = new JPanel(distribucion);
         enc.setOpaque(false);
         enc.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
-        JPanel izq = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        izq.setOpaque(false);
+        JPanel izq = enc;
         // Contador en pildora
         JLabel lblCount = new JLabel(I18n.t("monitor.signals", 0)) {
             @Override protected void paintComponent(Graphics g) {
@@ -2658,10 +2663,8 @@ public class IEDNavigatorApp extends JFrame {
         panelWatchlist.add(limpiarWatchlist);
         panelWatchlist.setVisible(false);
         izq.add(panelWatchlist);
-        enc.add(izq, BorderLayout.WEST);
 
-        JPanel der = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
-        der.setOpaque(false);
+        JPanel der = enc;
         int altoControl = com.formdev.flatlaf.util.UIScale.scale(28);
         monitorNameFilter = new javax.swing.JTextField(16);
         monitorNameFilter.setPreferredSize(new Dimension(com.formdev.flatlaf.util.UIScale.scale(200), altoControl));
@@ -2704,7 +2707,9 @@ public class IEDNavigatorApp extends JFrame {
             if (r == JOptionPane.OK_OPTION) clearMonitor();
         });
         der.add(btnClear);
-        enc.add(der, BorderLayout.EAST);
+        distribucion.derecha(monitorNameFilter, etiquetaFc, monitorFcFilter, btnRemove, btnClear)
+                .flexible(monitorNameFilter, com.formdev.flatlaf.util.UIScale.scale(110), com.formdev.flatlaf.util.UIScale.scale(60))
+                .prescindibles(panelWatchlist, lblCount, etiquetaFc);
 
         // Quitar: deshabilitado sin nada marcado ni seleccionado
         Runnable habilitarQuitar = () -> btnRemove.setEnabled(monitorManager != null && monitorManager.cantidadParaQuitar() > 0);
@@ -2759,6 +2764,7 @@ public class IEDNavigatorApp extends JFrame {
         selVista.add(tbTabla);
         selVista.add(tbPaneles);
         izq.add(selVista, 0);
+        distribucion.izquierda(selVista, lblCount, panelWatchlist);
         Runnable mostrarVista = () -> {
             boolean paneles = tbPaneles.isSelected();
             vistas.show(cuerpo, paneles ? "paneles" : "tabla");
