@@ -753,7 +753,11 @@ final class MonitorPaneles extends JPanel implements Scrollable {
                 // Trazo continuo también para los calculados (pedido del usuario): lo calculado
                 // lo dicen el "≈" de los ángulos y la leyenda
                 g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                for (int i = 0; i < 3; i++) {
+                if (!estrella && mag[0] != null && mag[1] != null && mag[2] != null
+                        && ang[0] != null && ang[1] != null && ang[2] != null) {
+                    pintarTriangulo(g, cx, cy, r, mag, ang, colores);
+                }
+                for (int i = 0; i < 3 && estrella; i++) {
                     if (mag[i] == null || ang[i] == null) continue;
                     double a = Math.toRadians(ang[i]);
                     double l = r * Math.abs(mag[i]) / max;
@@ -847,6 +851,53 @@ final class MonitorPaneles extends JPanel implements Scrollable {
                 }
             }
             return phi;
+        }
+
+        /**
+         * Tensiones compuestas (DEL: phsAB, phsBC, phsCA) como lados del triángulo que une las
+         * puntas de las tensiones simples: Vab = Va − Vb va de la punta de b a la de a (y así las
+         * otras). Se arma encadenando los tres vectores (b → a → c → b), se centra en el plano y
+         * se dibuja de fondo, tenue, la estrella de tensiones simples hacia los vértices.
+         */
+        private void pintarTriangulo(Graphics2D g, int cx, int cy, int r, Double[] mag, Double[] ang, Color[] colores) {
+            double[] vx = new double[3], vy = new double[3];
+            for (int i = 0; i < 3; i++) {
+                double a = Math.toRadians(ang[i]);
+                vx[i] = Math.abs(mag[i]) * Math.cos(a);
+                vy[i] = Math.abs(mag[i]) * Math.sin(a);
+            }
+            // Vértices: b = (0,0); a = b + Vab; c = a + Vca  (Vbc cierra de c a b)
+            double[] px = {vx[0], 0, vx[0] + vx[2]};   // a, b, c
+            double[] py = {vy[0], 0, vy[0] + vy[2]};
+            double gx = (px[0] + px[1] + px[2]) / 3, gy = (py[0] + py[1] + py[2]) / 3;
+            double radio = 0;
+            for (int i = 0; i < 3; i++) radio = Math.max(radio, Math.hypot(px[i] - gx, py[i] - gy));
+            if (radio <= 0) return;
+            double s = r / radio;
+            int[] x = new int[3], y = new int[3];
+            for (int i = 0; i < 3; i++) {
+                x[i] = cx + (int) Math.round((px[i] - gx) * s);
+                y[i] = cy - (int) Math.round((py[i] - gy) * s);
+            }
+            // Estrella de tensiones simples, tenue, del neutro a cada vértice
+            g.setStroke(new BasicStroke(1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{3f, 3f}, 0f));
+            g.setColor(apagado());
+            String[] vertices = {"a", "b", "c"};
+            g.setFont(Estilo.ui(Font.PLAIN, 10));
+            for (int i = 0; i < 3; i++) {
+                g.drawLine(cx, cy, x[i], y[i]);
+                int lx = x[i] + (x[i] >= cx ? 4 : -10), ly = y[i] + (y[i] >= cy ? 12 : -4);
+                g.drawString(vertices[i], lx, ly);
+            }
+            // Lados: Vab de b a a, Vbc de c a b, Vca de a a c
+            int[][] lados = {{1, 0}, {2, 1}, {0, 2}};
+            g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            for (int i = 0; i < 3; i++) {
+                int de = lados[i][0], a = lados[i][1];
+                g.setColor(colores[i]);
+                g.drawLine(x[de], y[de], x[a], y[a]);
+                flecha(g, x[de], y[de], x[a], y[a]);
+            }
         }
 
         private void flecha(Graphics2D g, int x1, int y1, int x2, int y2) {
