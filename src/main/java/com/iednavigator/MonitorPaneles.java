@@ -187,22 +187,37 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         if (num != null && !(it.node instanceof BdaFloat32) && !(it.node instanceof BdaFloat64)) {
             return nombreEnum(it.node) != null ? Tipo.ETIQUETA : Tipo.NUMERO;
         }
-        return tipoBase(it);
+        Tipo t = tipoBase(it);
+        // Un enumerado sin CDC conocido (Mod, Beh, Health en modo Cliente) se ve como etiqueta
+        if (t == Tipo.NUMERO && it.node instanceof FcDataObject) {
+            ModelNode st = buscar(it.node, "stVal");
+            if (st != null && !(st instanceof BdaFloat32) && nombreEnum(st) != null) return Tipo.ETIQUETA;
+        }
+        return t;
     }
 
     static Tipo tipoBase(MonitorItem it) {
         ModelNode n = it.node;
         if (n instanceof FcDataObject) {
             String cdc = TiposIec61850.cdcDe((FcDataObject) n);
-            if (cdc == null) return Tipo.TEXTO;
-            switch (cdc) {
-                case "WYE": case "DEL": return Tipo.FASOR;
-                case "DPS": case "DPC": return Tipo.INTERRUPTOR;
-                case "SPS": case "SPC": case "ACT": case "ACD": return Tipo.LED;
-                case "MV": case "CMV": case "INS": case "INC": case "BCR": case "APC": case "BAC": return Tipo.NUMERO;
-                case "ENS": case "ENC": case "ENG": return Tipo.ETIQUETA;
-                default: return Tipo.TEXTO;
+            if (cdc != null) {
+                switch (cdc) {
+                    case "WYE": case "DEL": return Tipo.FASOR;
+                    case "DPS": case "DPC": return Tipo.INTERRUPTOR;
+                    case "SPS": case "SPC": case "ACT": case "ACD": return Tipo.LED;
+                    case "MV": case "CMV": case "INS": case "INC": case "BCR": case "APC": case "BAC": return Tipo.NUMERO;
+                    case "ENS": case "ENC": case "ENG": return Tipo.ETIQUETA;
+                    default: break;
+                }
             }
+            // Sin CDC (modo Cliente sin el SCL del equipo: el ION 7400 no lo sirve y su PhV no
+            // se deduce como WYE) se decide por la estructura del DO. Antes caía en texto.
+            if (buscar(n, "phsA") != null || buscar(n, "phsAB") != null) return Tipo.FASOR;
+            ModelNode st = buscar(n, "stVal");
+            if (st instanceof BdaDoubleBitPos) return Tipo.INTERRUPTOR;
+            if (st instanceof BdaBoolean || buscar(n, "general") instanceof BdaBoolean) return Tipo.LED;
+            if (numero(st) != null || analogicoDe(n) != null) return Tipo.NUMERO;
+            return Tipo.TEXTO;
         }
         if (n instanceof BdaBoolean) return Tipo.LED;
         if (n instanceof BdaDoubleBitPos) return Tipo.INTERRUPTOR;
