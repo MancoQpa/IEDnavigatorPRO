@@ -91,9 +91,26 @@ class MonitorManager {
         item.value = valorResumen(fcNode);
         ctx.getMonitorItems().put(fullRef, item);
         ctx.getWatchlist().add(fullRef);
+        leerAuxiliares(fcNode);
         ctx.updateWatchlistLabel();
         refreshMonitorTable();
         ctx.log(I18n.t("log.monitor.added", displayName, fc));
+    }
+
+    /**
+     * Las corrientes por fase (A) necesitan el PF de su LN para que la vista de paneles calcule
+     * sus ángulos cuando el equipo publica solo magnitudes (ION 7400): se lo lee también, sin
+     * tarjeta propia (va a la watchlist, que es lo que lee el sondeo).
+     */
+    private void leerAuxiliares(FcModelNode n) {
+        if (!(n instanceof FcDataObject) || !"A".equals(n.getName())) return;
+        ModelNode ln = n.getParent();
+        if (!(ln instanceof LogicalNode)) return;
+        ModelNode pf = ((LogicalNode) ln).getChild("PF", Fc.MX);
+        if (pf == null) return;
+        if (ctx.getWatchlist().add(pf.getReference() + "$MX")) {
+            ctx.log(I18n.t("log.monitor.auxpf", formatReference(pf.getReference().toString())));
+        }
     }
 
     /**

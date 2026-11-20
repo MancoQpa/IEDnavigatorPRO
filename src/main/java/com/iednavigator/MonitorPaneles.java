@@ -41,7 +41,17 @@ final class MonitorPaneles extends JPanel implements Scrollable {
     private static final Color FASE_B = new Color(0x1D9E75);
     private static final Color FASE_C = new Color(0x378ADD);
 
-    enum Tipo { FASOR, INTERRUPTOR, LED, NUMERO, ETIQUETA, TEXTO }
+    /** FASES: magnitud trifásica que no es un fasor (potencias, PF): tres valores, sin plano. */
+    enum Tipo { FASOR, FASES, INTERRUPTOR, LED, NUMERO, ETIQUETA, TEXTO }
+
+    /**
+     * Potencias y factor de potencia por fase: no se dibujan en el plano fasorial (no son
+     * fasores del mismo plano que V e I), se muestran como tres valores.
+     */
+    static boolean esPotencia(ModelNode n) {
+        String d = n == null ? "" : n.getName();
+        return d.equals("W") || d.equals("VAr") || d.equals("VA") || d.equals("PF");
+    }
 
     private final Supplier<Collection<MonitorItem>> items;
     private final BiFunction<ModelNode, String, String> formatoEnum;
@@ -206,7 +216,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             String cdc = TiposIec61850.cdcDe((FcDataObject) n);
             if (cdc != null) {
                 switch (cdc) {
-                    case "WYE": case "DEL": return Tipo.FASOR;
+                    case "WYE": case "DEL": return esPotencia(n) ? Tipo.FASES : Tipo.FASOR;
                     case "DPS": case "DPC": return Tipo.INTERRUPTOR;
                     case "SPS": case "SPC": case "ACT": case "ACD": return Tipo.LED;
                     case "MV": case "CMV": case "INS": case "INC": case "BCR": case "APC": case "BAC": return Tipo.NUMERO;
@@ -216,7 +226,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             }
             // Sin CDC (modo Cliente sin el SCL del equipo: el ION 7400 no lo sirve y su PhV no
             // se deduce como WYE) se decide por la estructura del DO. Antes caía en texto.
-            if (buscar(n, "phsA") != null || buscar(n, "phsAB") != null) return Tipo.FASOR;
+            if (buscar(n, "phsA") != null || buscar(n, "phsAB") != null) return esPotencia(n) ? Tipo.FASES : Tipo.FASOR;
             ModelNode st = buscar(n, "stVal");
             if (st instanceof BdaDoubleBitPos) return Tipo.INTERRUPTOR;
             if (st instanceof BdaBoolean || buscar(n, "general") instanceof BdaBoolean) return Tipo.LED;
@@ -400,7 +410,10 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         }
 
         /** Celdas de ancho y de alto que ocupa: el fasor, 2x2 (como en la vista del colaborador). */
-        int span() { return tipo == Tipo.FASOR ? 2 : 1; }
+        int span() { return tipo == Tipo.FASOR || tipo == Tipo.FASES ? 2 : 1; }
+
+        /** Celdas de alto: el fasor, dos. */
+        int alto() { return tipo == Tipo.FASOR ? 2 : 1; }
 
         @Override protected void paintComponent(Graphics g0) {
             Graphics2D g = (Graphics2D) g0.create();
@@ -437,6 +450,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
                 case NUMERO: pintarNumero(g, w, h); break;
                 case ETIQUETA: pintarEtiqueta(g, w, h); break;
                 case FASOR: pintarFasor(g, w, h); break;
+                case FASES: pintarFases(g, w, h); break;
                 default: pintarTexto(g, w, h);
             }
             g.dispose();
@@ -541,6 +555,41 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             g.setFont(Estilo.ui(Font.PLAIN, 22));
             g.setColor(texto());
             g.drawString(recortar(g, txt, w - 46), 32, y);
+        }
+
+        /** Tres valores por fase (potencias, PF), en columnas con el color de cada fase. */
+        private void pintarFases(Graphics2D g, int w, int h) {
+            boolean estrella = buscar(it.node, "phsA") != null;
+            String[] fases = estrella ? new String[]{"phsA", "phsB", "phsC"} : new String[]{"phsAB", "phsBC", "phsCA"};
+            String[] nombres = estrella ? new String[]{"A", "B", "C"} : new String[]{"AB", "BC", "CA"};
+            Color[] colores = {FASE_A, FASE_B, FASE_C};
+            ModelNode fase0 = buscar(it.node, fases[0]);
+            String u = unidad(fase0 != null ? fase0 : it.node);
+            int y = base(h);
+            int col = (w - 28) / 3;
+            boolean alguno = false;
+            for (int i = 0; i < 3; i++) {
+                ModelNode cv = buscar(it.node, fases[i], "cVal");
+                Double v = cv == null ? null : medido(cv.getChild("mag"));
+                int x = 14 + i * col;
+                g.setFont(Estilo.ui(Font.BOLD, 12));
+                g.setColor(colores[i]);
+                g.drawString(nombres[i], x, y - 26);
+                g.setFont(Estilo.ui(Font.PLAIN, 20));
+                g.setColor(v == null ? apagado() : texto());
+                String s = v == null ? "—" : formato(v);
+                g.drawString(recortar(g, s, col - 34), x, y);
+                if (v != null) {
+                    alguno = true;
+                    int fin = x + Math.min(g.getFontMetrics().stringWidth(s), col - 34);
+                    g.setFont(Estilo.ui(Font.PLAIN, 11));
+                    g.setColor(texto2());
+                    if (!u.isEmpty()) g.drawString(u, fin + 4, y);
+                }
+            }
+            if (!alguno) {
+                g.setColor(linea());
+            }
         }
 
         private void pintarTexto(Graphics2D g, int w, int h) {
@@ -758,7 +807,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             int filas = 0;
             for (Component k : c.getComponents()) {
                 int span = k instanceof Tarjeta ? Math.min(cols, ((Tarjeta) k).span()) : 1;
-                int alto = k instanceof Tarjeta ? ((Tarjeta) k).span() : 1;
+                int alto = k instanceof Tarjeta ? ((Tarjeta) k).alto() : 1;
                 int[] lugar = lugar(ocupado, cols, span, alto);
                 for (int f = lugar[0]; f < lugar[0] + alto; f++) {
                     while (ocupado.size() <= f) ocupado.add(new boolean[cols]);
