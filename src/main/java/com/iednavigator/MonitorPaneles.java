@@ -347,7 +347,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             setToolTipText(it.reference + "  [" + it.fc + "]");
         }
 
-        /** Celdas de ancho que ocupa: el fasor, dos. */
+        /** Celdas de ancho y de alto que ocupa: el fasor, 2x2 (como en la vista del colaborador). */
         int span() { return tipo == Tipo.FASOR ? 2 : 1; }
 
         @Override protected void paintComponent(Graphics g0) {
@@ -507,6 +507,12 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             g.drawString(recortar(g, s, w - 28), 14, y);
         }
 
+        /**
+         * Plano fasorial como en la vista del colaborador: tarjeta de 2x2 celdas, círculo a la
+         * izquierda y las tres fases a la derecha. Los vectores se dibujan solo con el ángulo
+         * medido; si el equipo publica solo magnitudes (ION 7400: su vector trae mag y no ang),
+         * el plano queda vacío y se dice por qué, en vez de inventar 0/-120/+120.
+         */
         private void pintarFasor(Graphics2D g, int w, int h) {
             boolean estrella = buscar(it.node, "phsA") != null;
             String[] fases = estrella ? new String[]{"phsA", "phsB", "phsC"} : new String[]{"phsAB", "phsBC", "phsCA"};
@@ -514,46 +520,81 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             Color[] colores = {FASE_A, FASE_B, FASE_C};
             Double[] mag = new Double[3], ang = new Double[3];
             double max = 0;
+            boolean hayAngulo = false;
             for (int i = 0; i < 3; i++) {
                 ModelNode cv = buscar(it.node, fases[i], "cVal");
                 if (cv == null) continue;
                 mag[i] = analogico(cv.getChild("mag"));
                 ang[i] = analogico(cv.getChild("ang"));
                 if (mag[i] != null) max = Math.max(max, Math.abs(mag[i]));
+                if (ang[i] != null) hayAngulo = true;
             }
-            String u = unidad(buscar(it.node, fases[0]) != null ? buscar(it.node, fases[0]) : it.node);
-            // Diagrama a la izquierda
-            int r = Math.max(16, (h - 36) / 2 - 2);
-            int cx = 18 + r, cy = 30 + r;
+            ModelNode fase0 = buscar(it.node, fases[0]);
+            String u = unidad(fase0 != null ? fase0 : it.node);
+
+            // Plano: círculo con sus ejes, a la izquierda
+            int r = Math.max(30, Math.min((h - 46) / 2, (w / 2 - 30) / 2));
+            int cx = 16 + r, cy = 30 + (h - 30) / 2 - 2;
             g.setColor(linea());
             g.setStroke(new BasicStroke(1f));
             g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
             g.drawLine(cx - r, cy, cx + r, cy);
             g.drawLine(cx, cy - r, cx, cy + r);
-            g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            for (int i = 0; i < 3; i++) {
-                if (mag[i] == null || max <= 0) continue;
-                double a = Math.toRadians(ang[i] == null ? -120 * i : ang[i]);
-                double l = r * Math.abs(mag[i]) / max;
-                int x2 = cx + (int) Math.round(l * Math.cos(a));
-                int y2 = cy - (int) Math.round(l * Math.sin(a));
-                g.setColor(colores[i]);
-                g.drawLine(cx, cy, x2, y2);
-                flecha(g, cx, cy, x2, y2);
+            if (hayAngulo && max > 0) {
+                g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                for (int i = 0; i < 3; i++) {
+                    if (mag[i] == null || ang[i] == null) continue;
+                    double a = Math.toRadians(ang[i]);
+                    double l = r * Math.abs(mag[i]) / max;
+                    int x2 = cx + (int) Math.round(l * Math.cos(a));
+                    int y2 = cy - (int) Math.round(l * Math.sin(a));
+                    g.setColor(colores[i]);
+                    g.drawLine(cx, cy, x2, y2);
+                    flecha(g, cx, cy, x2, y2);
+                }
             }
-            // Valores a la derecha
-            int x = cx + r + 22, y = 42;
-            g.setFont(Estilo.mono(Font.PLAIN, 12));
-            for (int i = 0; i < 3; i++) {
-                g.setColor(colores[i]);
-                String s = nombres[i] + "  " + (mag[i] == null ? "—" : formato(mag[i]) + (u.isEmpty() ? "" : " " + u))
-                        + (ang[i] == null ? "" : "  ∠" + formato(ang[i]) + "°");
-                g.drawString(recortar(g, s, w - x - 10), x, y + i * 20);
-            }
+
+            // Fases a la derecha
+            int x = cx + r + 26;
+            int ancho = w - x - 12;
             if (max <= 0) {
-                g.setColor(apagado());
                 g.setFont(Estilo.ui(Font.PLAIN, 12));
-                g.drawString(I18n.t("mon.panels.noread"), x, y + 62);
+                g.setColor(texto2());
+                g.drawString(I18n.t("mon.panels.noread"), x, cy + 4);
+                return;
+            }
+            int y = cy - 26;
+            for (int i = 0; i < 3; i++) {
+                int yy = y + i * 26;
+                g.setFont(Estilo.ui(Font.BOLD, 13));
+                g.setColor(colores[i]);
+                g.drawString(nombres[i], x, yy);
+                g.setFont(Estilo.ui(Font.PLAIN, 16));
+                g.setColor(texto());
+                String s = mag[i] == null ? "—" : formato(mag[i]);
+                int xs = x + 30;
+                int anchoMag = ancho - 30 - 62;
+                g.drawString(recortar(g, s, anchoMag), xs, yy);
+                int fin = xs + Math.min(g.getFontMetrics().stringWidth(s), anchoMag);
+                g.setFont(Estilo.ui(Font.PLAIN, 11));
+                g.setColor(texto2());
+                if (!u.isEmpty()) g.drawString(u, fin + 4, yy);
+                String an = ang[i] == null ? "∠ —" : "∠ " + formato(ang[i]) + "°";
+                g.drawString(an, x + ancho - g.getFontMetrics().stringWidth(an), yy);
+            }
+            if (!hayAngulo) {
+                g.setFont(Estilo.ui(Font.PLAIN, 10));
+                g.setColor(texto2());
+                // En dos líneas si hace falta: la columna de fases es angosta
+                String nota = I18n.t("mon.panels.noangle");
+                FontMetrics fm = g.getFontMetrics();
+                String l1 = nota, l2 = null;
+                if (fm.stringWidth(nota) > ancho) {
+                    int corte = nota.lastIndexOf(' ', nota.length() / 2 + 6);
+                    if (corte > 0) { l1 = nota.substring(0, corte); l2 = nota.substring(corte + 1); }
+                }
+                g.drawString(recortar(g, l1, ancho), x, y + 3 * 26 + 2);
+                if (l2 != null) g.drawString(recortar(g, l2, ancho), x, y + 3 * 26 + 15);
             }
         }
 
@@ -567,7 +608,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         }
     }
 
-    // ── Grilla: celdas fijas que se acomodan al ancho; el fasor ocupa dos ──
+    // ── Grilla: celdas fijas que se acomodan al ancho; el fasor ocupa 2x2 ──
 
     private final class Grilla implements LayoutManager {
         @Override public void addLayoutComponent(String name, Component comp) { }
@@ -581,21 +622,45 @@ final class MonitorPaneles extends JPanel implements Scrollable {
 
         @Override public void layoutContainer(Container c) { ubicar(c, c.getWidth(), true); }
 
-        /** Coloca las tarjetas por filas y devuelve el alto total. */
+        /**
+         * Coloca cada tarjeta en el primer hueco libre, recorriendo por filas (una ocupación
+         * de celdas, así una chica llena el lugar al lado de un fasor). Devuelve el alto total.
+         */
         private int ubicar(Container c, int ancho, boolean mover) {
             int cols = Math.max(1, (ancho - 2 * MARGEN + GAP) / (CELDA_W + GAP));
-            int col = 0, fila = 0;
+            List<boolean[]> ocupado = new ArrayList<>();
+            int filas = 0;
             for (Component k : c.getComponents()) {
                 int span = k instanceof Tarjeta ? Math.min(cols, ((Tarjeta) k).span()) : 1;
-                if (col + span > cols) { col = 0; fila++; }
-                if (mover) {
-                    k.setBounds(MARGEN + col * (CELDA_W + GAP), MARGEN + fila * (CELDA_H + GAP),
-                            span * CELDA_W + (span - 1) * GAP, CELDA_H);
+                int alto = k instanceof Tarjeta ? ((Tarjeta) k).span() : 1;
+                int[] lugar = lugar(ocupado, cols, span, alto);
+                for (int f = lugar[0]; f < lugar[0] + alto; f++) {
+                    while (ocupado.size() <= f) ocupado.add(new boolean[cols]);
+                    for (int col = lugar[1]; col < lugar[1] + span; col++) ocupado.get(f)[col] = true;
                 }
-                col += span;
+                filas = Math.max(filas, lugar[0] + alto);
+                if (mover) {
+                    k.setBounds(MARGEN + lugar[1] * (CELDA_W + GAP), MARGEN + lugar[0] * (CELDA_H + GAP),
+                            span * CELDA_W + (span - 1) * GAP, alto * CELDA_H + (alto - 1) * GAP);
+                }
             }
-            int filas = c.getComponentCount() == 0 ? 0 : fila + 1;
             return 2 * MARGEN + filas * (CELDA_H + GAP);
+        }
+
+        /** Primera {fila, columna} con span x alto celdas libres. */
+        private int[] lugar(List<boolean[]> ocupado, int cols, int span, int alto) {
+            for (int f = 0; ; f++) {
+                for (int col = 0; col + span <= cols; col++) {
+                    boolean libre = true;
+                    for (int ff = f; ff < f + alto && libre; ff++) {
+                        if (ff >= ocupado.size()) continue;
+                        for (int cc = col; cc < col + span; cc++) {
+                            if (ocupado.get(ff)[cc]) { libre = false; break; }
+                        }
+                    }
+                    if (libre) return new int[]{f, col};
+                }
+            }
         }
     }
 }
