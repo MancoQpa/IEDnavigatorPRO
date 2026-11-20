@@ -122,6 +122,20 @@ final class MonitorPaneles extends JPanel implements Scrollable {
 
     // ── Lectura del modelo ──────────────────────────────────────────────────
 
+    /**
+     * Hijo por nombre, o null. Un arreglo de iec61850bean (Array: p. ej. HA.phsAHar de un
+     * MHAI) convierte el nombre a índice y lanza NumberFormatException con "q" o "mag": el
+     * dibujo se cortaba y el panel quedaba colgado (2026-11-20, armónicos del ION 7400).
+     */
+    static ModelNode hijo(ModelNode n, String nombre) {
+        if (n == null || nombre == null) return null;
+        try {
+            return n.getChild(nombre);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     /** El nodo y, si es un DO agrupado por FC, sus otras variantes (ST, MX, CF...). */
     private static List<ModelNode> variantes(ModelNode n) {
         List<ModelNode> r = new ArrayList<>();
@@ -139,7 +153,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         for (ModelNode v : variantes(n)) {
             ModelNode x = v;
             for (String c : camino) {
-                x = x == null ? null : x.getChild(c);
+                x = x == null ? null : hijo(x, c);
             }
             if (x != null) return x;
         }
@@ -164,8 +178,8 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         if (n == null) return null;
         Double d = numero(n);
         if (d != null) return d;
-        d = numero(n.getChild("f"));
-        return d != null ? d : numero(n.getChild("i"));
+        d = numero(hijo(n, "f"));
+        return d != null ? d : numero(hijo(n, "i"));
     }
 
     /** Valor principal de un DO de medida o contador: mag, cVal.mag, instMag, stVal, actVal. */
@@ -236,7 +250,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         if (n instanceof BdaBoolean) return Tipo.LED;
         if (n instanceof BdaDoubleBitPos) return Tipo.INTERRUPTOR;
         if (n instanceof BdaFloat32 || n instanceof BdaFloat64 || numero(n) != null) return Tipo.NUMERO;
-        if (n instanceof ConstructedDataAttribute && (n.getChild("phsA") != null || n.getChild("phsAB") != null)) return Tipo.FASOR;
+        if (n instanceof ConstructedDataAttribute && (hijo(n, "phsA") != null || hijo(n, "phsAB") != null)) return Tipo.FASOR;
         if (n instanceof ConstructedDataAttribute && analogicoDe(n) != null) return Tipo.NUMERO;
         return Tipo.TEXTO;
     }
@@ -277,7 +291,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         }
         if (base == null) base = unidadPorNombre(nombreDo);
         int exp = 0;
-        ModelNode m = u == null || u.getParent() == null ? null : u.getParent().getChild("multiplier");
+        ModelNode m = u == null || u.getParent() == null ? null : hijo(u.getParent(), "multiplier");
         Double mult = m != null && leido.test(m) ? numero(m) : null;
         if (mult != null) exp = mult.intValue();
         return new Unidad(exp, base);
@@ -293,7 +307,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         }
         if (d == null || !(d.getParent() instanceof LogicalNode)) return null;
         ModelNode x = ((LogicalNode) d.getParent()).getChild(d.getName(), Fc.CF);
-        while (x != null && !camino.isEmpty()) x = x.getChild(camino.pop());
+        while (x != null && !camino.isEmpty()) x = hijo(x, camino.pop());
         return x;
     }
 
@@ -343,7 +357,9 @@ final class MonitorPaneles extends JPanel implements Scrollable {
     /** Calidad para el rótulo de la tarjeta: {texto, "e" si es error} o null si es buena. */
     static String[] calidad(ModelNode n) {
         ModelNode q = n instanceof FcDataObject ? buscar(n, "q") : null;
-        if (q == null && n != null && n.getParent() != null) q = n.getParent().getChild("q");
+        // Un elemento de un arreglo de armónicos (HA.phsAHar(0)) trae su propio q adentro
+        if (q == null && n instanceof ConstructedDataAttribute) q = hijo(n, "q");
+        if (q == null && n != null && n.getParent() != null) q = hijo(n.getParent(), "q");
         if (!(q instanceof BdaQuality)) return null;
         BdaQuality bq = (BdaQuality) q;
         try {
@@ -402,7 +418,9 @@ final class MonitorPaneles extends JPanel implements Scrollable {
 
     static String formato(double v) {
         double a = Math.abs(v);
-        if (v == Math.rint(v) && a < 1e9) return String.valueOf((long) v);
+        // Valores enormes (el ION usa 3,4028E38, el máximo de un float, para "no disponible")
+        if (a >= 1e9) return String.format(Locale.ROOT, "%.4g", v);
+        if (v == Math.rint(v)) return String.valueOf((long) v);
         if (a >= 1000) return String.format(Locale.ROOT, "%.1f", v);
         if (a >= 10) return String.format(Locale.ROOT, "%.2f", v);
         return String.format(Locale.ROOT, "%.3f", v);
@@ -645,7 +663,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             boolean alguno = false;
             for (int i = 0; i < 3; i++) {
                 ModelNode cv = buscar(it.node, fases[i], "cVal");
-                Double v = cv == null ? null : medido(cv.getChild("mag"));
+                Double v = cv == null ? null : medido(hijo(cv, "mag"));
                 int x = 14 + i * col;
                 g.setFont(Estilo.ui(Font.BOLD, 12));
                 g.setColor(colores[i]);
@@ -705,8 +723,8 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             for (int i = 0; i < 3; i++) {
                 ModelNode cv = buscar(it.node, fases[i], "cVal");
                 if (cv == null) continue;
-                mag[i] = medido(cv.getChild("mag"));
-                ang[i] = medido(cv.getChild("ang"));
+                mag[i] = medido(hijo(cv, "mag"));
+                ang[i] = medido(hijo(cv, "ang"));
                 if (mag[i] != null) max = Math.max(max, Math.abs(mag[i]));
                 if (ang[i] != null) hayAngulo = true;
             }
@@ -811,7 +829,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         /** Valor numérico de un AnalogueValue o atributo, solo si se leyó del equipo. */
         private Double medido(ModelNode av) {
             if (av == null) return null;
-            ModelNode b = av instanceof BasicDataAttribute ? av : av.getChild("f") != null ? av.getChild("f") : av.getChild("i");
+            ModelNode b = av instanceof BasicDataAttribute ? av : hijo(av, "f") != null ? hijo(av, "f") : hijo(av, "i");
             if (b == null || !leido.test(b)) return null;
             return numero(b);
         }
@@ -823,7 +841,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             ModelNode d = ((LogicalNode) ln).getChild(dob, Fc.MX);
             if (d == null) return null;
             ModelNode cv = buscar(d, fase, "cVal");
-            return cv == null ? null : medido(cv.getChild("mag"));
+            return cv == null ? null : medido(hijo(cv, "mag"));
         }
 
         /**

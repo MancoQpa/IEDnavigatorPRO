@@ -149,7 +149,7 @@ class MonitorManager {
             StringBuilder sb = new StringBuilder();
             for (String f : fases) {
                 ModelNode cv = MonitorPaneles.buscar(n, f, "cVal");
-                Double m = cv == null ? null : MonitorPaneles.analogico(cv.getChild("mag"));
+                Double m = cv == null ? null : MonitorPaneles.analogico(MonitorPaneles.hijo(cv, "mag"));
                 if (m == null) continue;
                 if (sb.length() > 0) sb.append("  ");
                 sb.append(f.substring(3)).append(' ').append(MonitorPaneles.formato(m));
@@ -249,7 +249,7 @@ class MonitorManager {
         } else {
             ModelNode base = n instanceof BasicDataAttribute ? n.getParent() : n;
             for (int i = 0; i < 3 && base != null && q == null; i++) {
-                ModelNode c = base.getChild("q");
+                ModelNode c = MonitorPaneles.hijo(base, "q");
                 if (c instanceof BdaQuality) q = (BdaQuality) c;
                 else base = base.getParent();
             }

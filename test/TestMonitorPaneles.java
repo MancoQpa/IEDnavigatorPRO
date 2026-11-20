@@ -63,6 +63,49 @@ public class TestMonitorPaneles {
         chk("unidad por nombre: PPV en V, VAr en VAr", MonitorPaneles.unidadPorNombre("PPV").equals("V")
                 && MonitorPaneles.unidadPorNombre("VAr").equals("VAr"));
 
+        // Armónicos: el ION 7400 expone HA.phsAHar como Array de iec61850bean. Pedirle un hijo
+        // por nombre ("q", "mag") lanzaba NumberFormatException y el panel quedaba colgado.
+        Array arr = arregloArmonicos();
+        chk("hijo() de un Array por nombre: null, sin excepción", MonitorPaneles.hijo(arr, "q") == null);
+        MonitorItem itArr = new MonitorItem("ION/MHAI1.HA.phsAHar", "a", "MX", "", arr);
+        MonitorItem itEl0 = new MonitorItem("ION/MHAI1.HA.phsAHar(0)", "e0", "MX", "", (FcModelNode) arr.getChild(0));
+        MonitorItem itEl3 = new MonitorItem("ION/MHAI1.HA.phsAHar(1)", "e1", "MX", "", (FcModelNode) arr.getChild(1));
+        boolean sinExcepcion = true;
+        try {
+            MonitorPaneles.calidad(itArr.node);
+            MonitorPaneles.calidad(itEl0.node);
+            MonitorPaneles.buscar(itArr.node, "phsA");
+            MonitorPaneles.analogicoDe(itArr.node);
+        } catch (RuntimeException e) {
+            sinExcepcion = false;
+        }
+        chk("calidad y búsquedas sobre un arreglo no lanzan excepción", sinExcepcion);
+        chk("un elemento de armónico es un número", mp.tipoDe(itEl3) == MonitorPaneles.Tipo.NUMERO);
+        chk("su valor se lee de cVal.mag", Double.valueOf(0.003f).equals(MonitorPaneles.analogicoDe(itEl3.node)));
+        String[] q0 = MonitorPaneles.calidad(itEl0.node);
+        chk("el elemento 0 (3,4E38, no disponible) tiene calidad invalid", q0 != null && q0[0].equals("invalid"));
+        chk("3,4E38 se muestra en notación científica", MonitorPaneles.formato(3.4028235E38).equals("3.403e+38"));
+        MonitorPaneles vista = new MonitorPaneles(() -> Arrays.asList(itArr, itEl0, itEl3), (n, r) -> r);
+        boolean dibujo = true;
+        try {
+            vista.actualizar();
+            vista.setSize(1000, 400);
+            vista.doLayout();
+            java.awt.image.BufferedImage im = new java.awt.image.BufferedImage(1000, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D g = im.createGraphics();
+            for (java.awt.Component c : vista.getComponents()) {
+                c.doLayout();
+                java.awt.Graphics2D gc = (java.awt.Graphics2D) g.create(c.getX(), c.getY(), c.getWidth(), c.getHeight());
+                c.paint(gc);
+                gc.dispose();
+            }
+            g.dispose();
+        } catch (RuntimeException e) {
+            dibujo = false;
+            e.printStackTrace();
+        }
+        chk("las tarjetas del arreglo y sus elementos se dibujan", dibujo && vista.getComponentCount() == 3);
+
         chk("formato entero", MonitorPaneles.formato(16).equals("16"));
         chk("formato con decimales", MonitorPaneles.formato(50.0234).equals("50.02"));
         chk("título sin el LD", MonitorPaneles.titulo("BAYCTRLCTRL/Q0XCBR1.Pos").equals("Q0XCBR1.Pos"));
@@ -75,6 +118,26 @@ public class TestMonitorPaneles {
         System.out.println(ok + " pasaron, " + falla + " fallaron");
         if (falla == 0) System.out.println("TODO OK");
         System.exit(falla == 0 ? 0 : 1);
+    }
+
+    /** HA.phsAHar como lo expone el ION: Array de dos elementos {cVal.mag.f, q}. */
+    private static Array arregloArmonicos() {
+        List<FcModelNode> elems = new ArrayList<>();
+        float[] valores = {3.4028235E38f, 0.003f};
+        for (int i = 0; i < 2; i++) {
+            String b = "ION/MHAI1.HA.phsAHar(" + i + ")";
+            BdaFloat32 f = new BdaFloat32(new ObjectReference(b + ".cVal.mag.f"), Fc.MX, "", false, false);
+            f.setFloat(valores[i]);
+            ConstructedDataAttribute mag = new ConstructedDataAttribute(new ObjectReference(b + ".cVal.mag"), Fc.MX,
+                    new ArrayList<>(Arrays.asList((FcModelNode) f)));
+            ConstructedDataAttribute cVal = new ConstructedDataAttribute(new ObjectReference(b + ".cVal"), Fc.MX,
+                    new ArrayList<>(Arrays.asList((FcModelNode) mag)));
+            BdaQuality q = new BdaQuality(new ObjectReference(b + ".q"), Fc.MX, "", false);
+            if (i == 0) q.setValidity(BdaQuality.Validity.INVALID);
+            elems.add(new ConstructedDataAttribute(new ObjectReference(b), Fc.MX,
+                    new ArrayList<>(Arrays.asList((FcModelNode) cVal, q))));
+        }
+        return new Array(new ObjectReference("ION/MHAI1.HA.phsAHar"), Fc.MX, elems);
     }
 
     private static MonitorItem item(ServerModel m, String ref, Fc fc) {
