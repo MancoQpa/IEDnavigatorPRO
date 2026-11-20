@@ -488,7 +488,7 @@ public class Iec61850Dictionary {
            "posición de interruptores, alarmas, calidad e indicaciones de protección. " +
            "Accesibles por el cliente y reportados automáticamente mediante RCB.",
            "IEC 61850-7-2 §6.2",
-           "XCBR1.Pos [ST], MMXU1.TotW [ST]");
+           "XCBR1.Pos [ST], LLN0.Mod [ST]");
 
         fc("MX",  "Valores Medidos (Measured Values)",
            "Valores analógicos de proceso: tensión, corriente, potencia, frecuencia, etc. " +
@@ -547,6 +547,48 @@ public class Iec61850Dictionary {
            "Se usa en pruebas de mantenimiento (blkEna=true). " +
            "El valor congelado permanece aunque cambie el proceso.",
            "IEC 61850-7-2 §6.2");
+
+        // FC que faltaban (2026-11-20): sustitución, seguimiento y bloques de control
+        fc("SV",  "Sustitución (Substitution)",
+           "Valores de sustitución de un dato: subEna habilita la sustitución y subVal, subMag, subCVal y subQ dan el valor y la calidad que se publican en lugar del medido, con subID de quién la hizo. Se usa en mantenimiento y pruebas.",
+           "IEC 61850-7-2 §6.2, 7-3 Ed.2",
+           "XCBR1.Pos.subEna [SV], MMXU1.TotW.subMag [SV]");
+        fc("SR",  "Respuesta de servicio (Service Response)",
+           "Seguimiento de servicios (Ed.2): registro del último servicio ejecutado sobre un objeto o bloque de control (quién, qué, cuándo y con qué resultado). Lo usan los CDC de seguimiento (CTS, BTS, UTS, GTS…) del LN LTRK.",
+           "IEC 61850-7-2 Ed.2 §6.2",
+           "LTRK1.SpcTrk [SR], LTRK1.BrcbTrk [SR]");
+        fc("RP",  "Reporte sin buffer (Unbuffered Report Control)",
+           "Atributos de un bloque de control de reportes sin buffer (URCB): RptID, RptEna, DatSet, TrgOps, OptFlds, IntgPd, BufTm, Resv. Si la asociación se corta, los cambios de ese momento se pierden.",
+           "IEC 61850-7-2 §14, 8-1",
+           "LLN0.urcbA01 [RP]");
+        fc("BR",  "Reporte con buffer (Buffered Report Control)",
+           "Atributos de un bloque de control de reportes con buffer (BRCB): los de un URCB más EntryID, TimeOfEntry, PurgeBuf, GI y ResvTms. El IED guarda los eventos mientras no hay cliente y los entrega al reconectar.",
+           "IEC 61850-7-2 §14, 8-1",
+           "LLN0.brcbA01 [BR]");
+        fc("LG",  "Registro (Logging)",
+           "Atributos de un bloque de control de registro (LCB): LogEna, LogRef, DatSet, TrgOps, IntgPd. Guarda en el IED un historial consultable de los valores del DataSet.",
+           "IEC 61850-7-2 §17",
+           "LLN0.LogCB [LG]");
+        fc("GO",  "Control GOOSE (GOOSE Control)",
+           "Atributos de un bloque de control GOOSE (GoCB): GoEna, GoID, DatSet, ConfRev, NdsCom y DstAddress (MAC, APPID, VLAN). Por MMS se pueden leer y habilitar; muchas bibliotecas cliente no los exponen.",
+           "IEC 61850-7-2 §18, 8-1",
+           "LLN0.gcb01 [GO]");
+        fc("GS",  "Control GSSE (GSSE Control)",
+           "Atributos de un bloque de control GSSE, el mensaje de estado binario de UCA 2.0 que antecedió a GOOSE. Existe en la Ed.1 y se retiró en la Ed.2.",
+           "IEC 61850-7-2 Ed.1 §18",
+           "LLN0.gsse01 [GS]");
+        fc("MS",  "Valores muestreados multicast (Multicast Sampled Value Control)",
+           "Atributos de un bloque de control de valores muestreados multicast (MSVCB): SvEna, MsvID, DatSet, ConfRev, SmpRate, OptFlds y DstAddress. Es el flujo de una merging unit (IEC 61850-9-2).",
+           "IEC 61850-7-2 §19, 9-2",
+           "LLN0.MSVCB01 [MS]");
+        fc("US",  "Valores muestreados unicast (Unicast Sampled Value Control)",
+           "Atributos de un bloque de control de valores muestreados unicast (USVCB): como los del MSVCB, más la reserva (Resv) para un único destinatario.",
+           "IEC 61850-7-2 §19",
+           "LLN0.USVCB01 [US]");
+        fc("SC",  "Control de grupos de ajustes (Setting Group Control)",
+           "Atributos del bloque de control de grupos de ajustes (SGCB): NumOfSG, ActSG, EditSG, CnfEdit y LActTm. Algunos IED (Ed.1) lo publican con esta FC; por MMS (8-1) suele aparecer bajo SP, como LLN0$SP$SGCB.",
+           "IEC 61850-7-2 §16, 8-1",
+           "LLN0.SGCB [SC]");
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Common Data Classes (CDC) — IEC 61850-7-3
@@ -1223,7 +1265,7 @@ public class Iec61850Dictionary {
         zh("SOPM", "监测运行参数: 跳闸计数器、累计开断电流、空载操作次数。");
 
         zh("ST", "过程实时状态值。是读取最频繁的数据: 开关位置、告警、品质及保护指示。客户端可访问，并通过 RCB 自动上报。",
-            "XCBR1.Pos [ST], MMXU1.TotW [ST]");
+            "XCBR1.Pos [ST], LLN0.Mod [ST]");
         zh("MX", "过程模拟值: 电压、电流、功率、频率等。周期性更新或在显著变化时更新。通过 RCB 上报或由客户端轮询读取。",
             "MMXU1.PhV [MX], MMXU1.A [MX], MMXU1.Hz [MX]");
         zh("CO", "用于控制序列的属性: 控制值 (ctlVal)、来源 (origin)、序列号 (ctlNum)、操作时间 (operTm)。客户端写入这些属性以向 IED 发送命令。",
@@ -1239,6 +1281,16 @@ public class Iec61850Dictionary {
         zh("EX", "厂商或应用相关的扩展定义属性。不属于标准规范模型的一部分。");
         zh("OR", "指示已收到操作命令。内部用于在 SBO (Select-Before-Operate) 序列中跟踪命令。");
         zh("BL", "闭锁某属性的数值，阻止其更新。用于维护测试 (blkEna=true)。即使过程发生变化，被冻结的值仍保持不变。");
+        zh("SV", "数据的取代值: subEna 启用取代, subVal、subMag、subCVal 和 subQ 给出代替测量值发布的数值和品质, subID 标识执行者。用于维护和测试。");
+        zh("SR", "服务跟踪 (Ed.2): 记录对某对象或控制块执行的最后一次服务 (谁、什么、何时及结果)。由 LTRK 逻辑节点的跟踪类 CDC (CTS、BTS、UTS、GTS…) 使用。");
+        zh("RP", "非缓存报告控制块 (URCB) 的属性: RptID、RptEna、DatSet、TrgOps、OptFlds、IntgPd、BufTm、Resv。关联中断时，当时的变化会丢失。");
+        zh("BR", "缓存报告控制块 (BRCB) 的属性: URCB 的属性加上 EntryID、TimeOfEntry、PurgeBuf、GI 和 ResvTms。无客户端时 IED 保存事件，重新连接后再发送。");
+        zh("LG", "日志控制块 (LCB) 的属性: LogEna、LogRef、DatSet、TrgOps、IntgPd。在 IED 中保存 DataSet 数值的可查询历史。");
+        zh("GO", "GOOSE 控制块 (GoCB) 的属性: GoEna、GoID、DatSet、ConfRev、NdsCom 及 DstAddress (MAC、APPID、VLAN)。可通过 MMS 读取和启用；许多客户端库不公开这些属性。");
+        zh("GS", "GSSE 控制块的属性。GSSE 是 GOOSE 之前的 UCA 2.0 二进制状态报文，存在于 Ed.1，在 Ed.2 中被取消。");
+        zh("MS", "组播采样值控制块 (MSVCB) 的属性: SvEna、MsvID、DatSet、ConfRev、SmpRate、OptFlds 及 DstAddress。即合并单元的数据流 (IEC 61850-9-2)。");
+        zh("US", "单播采样值控制块 (USVCB) 的属性: 与 MSVCB 相同，另加供单一接收方使用的预留 (Resv)。");
+        zh("SC", "定值组控制块 (SGCB) 的属性: NumOfSG、ActSG、EditSG、CnfEdit 和 LActTm。部分 IED (Ed.1) 使用此 FC 发布；通过 MMS (8-1) 时通常出现在 SP 下，即 LLN0$SP$SGCB。");
 
         zh("SPS", "过程状态的布尔位: 真 (TRUE) 或假 (FALSE)。包含: stVal (数值)、q (品质) 和 t (时间戳)。例如: 断路器闭锁、告警信号、模式使能。",
             "BlkOpn, BlkCls, Loc, Auto, EnaOpn, EnaCls");
@@ -1496,7 +1548,7 @@ public class Iec61850Dictionary {
         pt("SOPM", "Supervisiona parâmetros de operação: contador de disparos, corrente de interrupção acumulada, número de operações a vazio.");
 
         pt("ST", "Valores de estado do processo em tempo real. São os dados mais lidos: posição de disjuntores, alarmes, qualidade e indicações de proteção. Acessíveis pelo cliente e reportados automaticamente via RCB.",
-            "XCBR1.Pos [ST], MMXU1.TotW [ST]");
+            "XCBR1.Pos [ST], LLN0.Mod [ST]");
         pt("MX", "Valores analógicos de processo: tensão, corrente, potência, frequência, etc. Atualizados periodicamente ou por mudança significativa. Reportados via RCB ou lidos por polling.",
             "MMXU1.PhV [MX], MMXU1.A [MX], MMXU1.Hz [MX]");
         pt("CO", "Atributos usados em sequências de controle: valor de controle (ctlVal), origem (origin), número de sequência (ctlNum), tempo de operação (operTm). O cliente escreve esses atributos para enviar comandos ao IED.",
@@ -1512,6 +1564,16 @@ public class Iec61850Dictionary {
         pt("EX", "Atributos de definição estendida, específicos do fabricante ou da aplicação. Não fazem parte do modelo normativo padrão.");
         pt("OR", "Indica que uma ordem de operação foi recebida. Usado internamente para rastreamento de comandos em sequências SBO (Select-Before-Operate).");
         pt("BL", "Bloqueia o valor de um atributo impedindo sua atualização. Usado em testes de manutenção (blkEna=true). O valor congelado permanece mesmo que o processo mude.");
+        pt("SV", "Valores de substituição de um dado: subEna habilita a substituição e subVal, subMag, subCVal e subQ dão o valor e a qualidade publicados no lugar do medido, com subID de quem a fez. Usado em manutenção e testes.");
+        pt("SR", "Rastreamento de serviços (Ed.2): registro do último serviço executado sobre um objeto ou bloco de controle (quem, o quê, quando e com que resultado). Usado pelos CDC de rastreamento (CTS, BTS, UTS, GTS…) do LN LTRK.");
+        pt("RP", "Atributos de um bloco de controle de relatórios sem buffer (URCB): RptID, RptEna, DatSet, TrgOps, OptFlds, IntgPd, BufTm, Resv. Se a associação cair, as mudanças daquele momento se perdem.");
+        pt("BR", "Atributos de um bloco de controle de relatórios com buffer (BRCB): os de um URCB mais EntryID, TimeOfEntry, PurgeBuf, GI e ResvTms. O IED guarda os eventos enquanto não há cliente e os entrega ao reconectar.");
+        pt("LG", "Atributos de um bloco de controle de registro (LCB): LogEna, LogRef, DatSet, TrgOps, IntgPd. Guarda no IED um histórico consultável dos valores do DataSet.");
+        pt("GO", "Atributos de um bloco de controle GOOSE (GoCB): GoEna, GoID, DatSet, ConfRev, NdsCom e DstAddress (MAC, APPID, VLAN). Podem ser lidos e habilitados por MMS; muitas bibliotecas cliente não os expõem.");
+        pt("GS", "Atributos de um bloco de controle GSSE, a mensagem de estado binário do UCA 2.0 que antecedeu o GOOSE. Existe na Ed.1 e foi retirado na Ed.2.");
+        pt("MS", "Atributos de um bloco de controle de valores amostrados multicast (MSVCB): SvEna, MsvID, DatSet, ConfRev, SmpRate, OptFlds e DstAddress. É o fluxo de uma merging unit (IEC 61850-9-2).");
+        pt("US", "Atributos de um bloco de controle de valores amostrados unicast (USVCB): como os do MSVCB, mais a reserva (Resv) para um único destinatário.");
+        pt("SC", "Atributos do bloco de controle de grupos de ajustes (SGCB): NumOfSG, ActSG, EditSG, CnfEdit e LActTm. Alguns IED (Ed.1) o publicam com esta FC; por MMS (8-1) costuma aparecer sob SP, como LLN0$SP$SGCB.");
 
         pt("SPS", "Bit booleano de estado do processo: VERDADEIRO ou FALSO. Contém: stVal (valor), q (qualidade) e t (timestamp). Exemplo: disjuntor intertravado, sinal de alarme, habilitação de modo.",
             "BlkOpn, BlkCls, Loc, Auto, EnaOpn, EnaCls");
@@ -1769,7 +1831,7 @@ public class Iec61850Dictionary {
         en("SOPM", "Supervises operating parameters: trip counter, accumulated interrupting current, number of no-load operations.");
 
         en("ST", "Real-time process status values. These are the most-read data: breaker position, alarms, quality and protection indications. Accessible by the client and automatically reported via RCB.",
-            "XCBR1.Pos [ST], MMXU1.TotW [ST]");
+            "XCBR1.Pos [ST], LLN0.Mod [ST]");
         en("MX", "Analog process values: voltage, current, power, frequency, etc. Updated periodically or on significant change. Reported via RCB or read by polling.",
             "MMXU1.PhV [MX], MMXU1.A [MX], MMXU1.Hz [MX]");
         en("CO", "Attributes used in control sequences: control value (ctlVal), origin, sequence number (ctlNum), operate time (operTm). The client writes these attributes to send commands to the IED.",
@@ -1785,6 +1847,16 @@ public class Iec61850Dictionary {
         en("EX", "Extended definition attributes, specific to the vendor or the application. Not part of the standard normative model.");
         en("OR", "Indicates that an operate order has been received. Used internally to track commands in SBO (Select-Before-Operate) sequences.");
         en("BL", "Blocks the value of an attribute, preventing its update. Used in maintenance tests (blkEna=true). The frozen value remains even if the process changes.");
+        en("SV", "Substitution values of a data object: subEna enables substitution and subVal, subMag, subCVal and subQ give the value and quality published instead of the measured one, with subID identifying who did it. Used in maintenance and testing.");
+        en("SR", "Service tracking (Ed.2): record of the last service executed on an object or control block (who, what, when and with which result). Used by the tracking CDCs (CTS, BTS, UTS, GTS…) of LN LTRK.");
+        en("RP", "Attributes of an unbuffered report control block (URCB): RptID, RptEna, DatSet, TrgOps, OptFlds, IntgPd, BufTm, Resv. If the association drops, the changes at that moment are lost.");
+        en("BR", "Attributes of a buffered report control block (BRCB): those of a URCB plus EntryID, TimeOfEntry, PurgeBuf, GI and ResvTms. The IED keeps the events while there is no client and delivers them on reconnection.");
+        en("LG", "Attributes of a log control block (LCB): LogEna, LogRef, DatSet, TrgOps, IntgPd. Keeps in the IED a queryable history of the DataSet values.");
+        en("GO", "Attributes of a GOOSE control block (GoCB): GoEna, GoID, DatSet, ConfRev, NdsCom and DstAddress (MAC, APPID, VLAN). They can be read and enabled over MMS; many client libraries do not expose them.");
+        en("GS", "Attributes of a GSSE control block, the UCA 2.0 binary status message that preceded GOOSE. It exists in Ed.1 and was withdrawn in Ed.2.");
+        en("MS", "Attributes of a multicast sampled value control block (MSVCB): SvEna, MsvID, DatSet, ConfRev, SmpRate, OptFlds and DstAddress. It is the stream of a merging unit (IEC 61850-9-2).");
+        en("US", "Attributes of a unicast sampled value control block (USVCB): like those of the MSVCB, plus the reservation (Resv) for a single recipient.");
+        en("SC", "Attributes of the setting group control block (SGCB): NumOfSG, ActSG, EditSG, CnfEdit and LActTm. Some IEDs (Ed.1) publish it with this FC; over MMS (8-1) it usually appears under SP, as LLN0$SP$SGCB.");
 
         en("SPS", "Boolean process-status bit: TRUE or FALSE. Contains: stVal (value), q (quality) and t (timestamp). Example: breaker interlocked, alarm signal, mode enable.",
             "BlkOpn, BlkCls, Loc, Auto, EnaOpn, EnaCls");

@@ -55,6 +55,20 @@ public class TestDiccionarioNorma {
         for (String d : das) if (Iec61850Dictionary.lookup(d) == null) faltan.add(d);
         chk("los " + das.length + " DA agregados se encuentran" + (faltan.isEmpty() ? "" : ", faltan " + faltan), faltan.isEmpty());
 
+        // Todas las FC que reconoce la biblioteca (IEC 61850-7-2 y 8-1), con su descripción y
+        // traducciones; ninguna pisa otra entrada (las claves van en mayúsculas)
+        List<String> fcMal = new ArrayList<>();
+        int nFc = 0;
+        for (com.beanit.iec61850bean.Fc f : com.beanit.iec61850bean.Fc.values()) {
+            // UNKNOWN no es de la norma: es el valor del Fc parcheado para FC desconocidas
+            if (f.name().equals("UNKNOWN")) continue;
+            nFc++;
+            Iec61850Dictionary.Entry e = Iec61850Dictionary.lookup(f.name());
+            if (e == null || e.type != Iec61850Dictionary.EntryType.FC || e.descriptionZh == null) fcMal.add(f.name());
+        }
+        chk("las " + nFc + " FC de la norma están, como FC y traducidas"
+                + (fcMal.isEmpty() ? "" : ", fallan " + fcMal), fcMal.isEmpty());
+
         // Deducción del CDC sin SCL: fases como estructuras (así llegan por MMS)
         Map<String, String> wye = new HashMap<>();
         wye.put("phsA", "Struct"); wye.put("phsB", "Struct"); wye.put("phsC", "Struct");
