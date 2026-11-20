@@ -83,3 +83,315 @@ DA	setTm	Time set by a time setting (TSG).	Hora que um ajuste de tempo fixa (TSG
 DA	setCal	Calendar moment set by a time setting (TSG): period, weekday, month, day, hour and minute.	Momento de calendário que um ajuste de tempo fixa (TSG): período, dia da semana, mês, dia, hora e minuto.	时间定值 (TSG) 所设定的日历时刻：周期、星期、月、日、时和分。
 DA	cur	Currency code according to ISO 4217 (CUG).	Código de moeda segundo a ISO 4217 (CUG).	符合 ISO 4217 的货币代码 (CUG)。
 DA	val	Text of a description CDC (VSD).	Texto de um CDC de descrição (VSD).	描述类 CDC (VSD) 的文本。
+# --- Entradas anteriores de norma.tsv (traducidas el 2026-11-20) ---
+LN	LGOS	Supervises a GOOSE subscription: whether the expected message arrives (St), with which configuration revision (ConfRevNum against the expected one) and the last stNum received. There is usually one instance per GOOSE the device receives; its GoCBRef says which.	Supervisiona uma assinatura GOOSE: se a mensagem esperada chega (St), com qual revisão de configuração (ConfRevNum frente à esperada) e qual foi o último stNum recebido. Costuma haver uma instância por cada GOOSE que o equipamento recebe; seu GoCBRef diz qual.	监视一个 GOOSE 订阅：预期报文是否到达 (St)、配置版本（ConfRevNum 与预期值比较）以及最后收到的 stNum。通常设备接收的每个 GOOSE 对应一个实例，由其 GoCBRef 指明。
+LN	RDIR	Directional element shared by several protections: decides whether the fault is forward or reverse (Dir) from the chosen polarizing quantity (PolQty), the characteristic angle (ChrAng) and the angular limits of each zone.	Elemento direcional compartilhado por várias proteções: decide se a falta está para frente ou para trás (Dir) a partir da grandeza de polarização escolhida (PolQty), do ângulo característico (ChrAng) e dos limites angulares de cada zona.	多个保护共用的方向元件：根据所选极化量 (PolQty)、特性角 (ChrAng) 及各区的角度限值，判断故障为正向还是反向 (Dir)。
+CDC	SPG	Single-bit setting: enabled or disabled (setVal). In generic nodes some vendors number settings with the CDC name (SPG01, SPG02…): what each one enables is given by the SCL desc.	Ajuste de um só bit: habilitado ou desabilitado (setVal). Em nós genéricos alguns fabricantes numeram ajustes com o nome do CDC (SPG01, SPG02…): o que cada um habilita é dito pelo desc do SCL.	单比特定值：投入或退出 (setVal)。在通用节点中，部分厂商用 CDC 名称为定值编号（SPG01、SPG02…）：每个定值的作用见 SCL 的 desc。
+CDC	ING	Integer setting (setVal), with optional minimum, maximum and step; times in ms use this class. In generic nodes some vendors number settings with the CDC name (ING01, ING02…): what each one sets is given by the SCL desc.	Ajuste de valor inteiro (setVal), com mínimo, máximo e passo opcionais; os tempos em ms usam esta classe. Em nós genéricos alguns fabricantes numeram ajustes com o nome do CDC (ING01, ING02…): o que cada um ajusta é dito pelo desc do SCL.	整数定值 (setVal)，可带最小值、最大值和步长；以 ms 表示的时间使用此类。在通用节点中，部分厂商用 CDC 名称为定值编号（ING01、ING02…）：每个定值的含义见 SCL 的 desc。
+CDC	ENG	Setting that takes a value from a closed list (setVal), for example an operating mode.	Ajuste que toma um valor de uma lista fechada (setVal), por exemplo um modo de operação.	从固定列表中取值的定值 (setVal)，例如运行模式。
+CDC	ASG	Analogue setting (setMag), with units and scaling: current, voltage and angle thresholds. In generic nodes some vendors number settings with the CDC name (ASG01, ASG02…): what each one sets is given by the SCL desc.	Ajuste de valor analógico (setMag), com unidades e escala: limiares de corrente, tensão, ângulo. Em nós genéricos alguns fabricantes numeram ajustes com o nome do CDC (ASG01, ASG02…): o que cada um ajusta é dito pelo desc do SCL.	模拟量定值 (setMag)，带单位和比例：电流、电压、角度门槛。在通用节点中，部分厂商用 CDC 名称为定值编号（ASG01、ASG02…）：每个定值的含义见 SCL 的 desc。
+CDC	VSG	Text setting (setVal), for example a configurable name.	Ajuste de texto (setVal), por exemplo um nome configurável.	文本定值 (setVal)，例如可配置的名称。
+CDC	ORG	Setting that holds the reference of another object of the model (setSrcRef), for example the GOOSE or the signal an input is taken from.	Ajuste que contém a referência de outro objeto do modelo (setSrcRef), por exemplo o GOOSE ou o sinal do qual se toma uma entrada.	包含模型中另一对象引用的定值 (setSrcRef)，例如某输入所取自的 GOOSE 或信号。
+CDC	VSS	Text status (stVal), for example the time source in use.	Estado do tipo texto (stVal), por exemplo a fonte de hora em uso.	文本状态 (stVal)，例如正在使用的时钟源。
+CDC	CTS	Record of the last control service received (who requested it, which value, result and AddCause). Used by LN LTRK.	Registro do último serviço de controle recebido (quem o pediu, qual valor, resultado e AddCause). Usado pelo LN LTRK.	记录最后收到的控制服务（请求者、值、结果和 AddCause）。由 LN LTRK 使用。
+CDC	BTS	Record of the last service executed on a BRCB. Used by LN LTRK.	Registro do último serviço executado sobre um BRCB. Usado pelo LN LTRK.	记录对 BRCB 执行的最后一次服务。由 LN LTRK 使用。
+CDC	UTS	Record of the last service executed on a URCB. Used by LN LTRK.	Registro do último serviço executado sobre um URCB. Usado pelo LN LTRK.	记录对 URCB 执行的最后一次服务。由 LN LTRK 使用。
+CDC	LTS	Record of the last service executed on a log control block. Used by LN LTRK.	Registro do último serviço executado sobre um bloco de controle de log. Usado pelo LN LTRK.	记录对日志控制块执行的最后一次服务。由 LN LTRK 使用。
+CDC	GTS	Record of the last service executed on a GOOSE control block. Used by LN LTRK.	Registro do último serviço executado sobre um bloco de controle GOOSE. Usado pelo LN LTRK.	记录对 GOOSE 控制块执行的最后一次服务。由 LN LTRK 使用。
+CDC	STS	Record of the last service executed on the setting group control block (group change, editing). Used by LN LTRK.	Registro do último serviço executado sobre o bloco de controle de grupos de ajustes (troca de grupo, edição). Usado pelo LN LTRK.	记录对定值组控制块执行的最后一次服务（切换定值组、编辑）。由 LN LTRK 使用。
+CDC	CST	Common base of the service tracking CDCs: object, service, originator, time and result.	Base comum dos CDC de rastreamento de serviços: objeto, serviço, originador, hora e resultado.	服务跟踪类 CDC 的公共基础：对象、服务、发起者、时间和结果。
+CDC	CSG	Setting that describes a curve by points.	Ajuste que descreve uma curva por pontos.	以点描述曲线的定值。
+DO	PhyNam	Nameplate of the physical device in LPHD: vendor, model, serial number, hardware and software versions. It is where IEDNavigator takes the model it shows in the status bar.	Placa do equipamento físico em LPHD: fabricante, modelo, número de série, versões de hardware e software. É de onde o IEDNavigator toma o modelo que mostra na barra de estado.	LPHD 中物理设备的铭牌：厂商、型号、序列号、硬件和软件版本。IEDNavigator 在状态栏显示的型号即取自此处。
+DO	PhyHealth	Health of the physical device: Ok, Warning or Alarm.	Estado de saúde do equipamento físico: Ok, Warning ou Alarm.	物理设备的健康状态：Ok、Warning 或 Alarm。
+DO	Proxy	Indicates whether the LD represents another device (acts as a proxy) instead of the device itself.	Indica se o LD representa outro equipamento (atua como proxy) em vez do próprio.	表示该 LD 是否代表另一设备（作为代理）而非本设备。
+DO	InOv	The communication input buffer overflowed.	O buffer de entrada de comunicações transbordou.	通信输入缓冲区溢出。
+DO	OutOv	The communication output buffer overflowed.	O buffer de saída de comunicações transbordou.	通信输出缓冲区溢出。
+DO	EEHealth	Health of the external equipment associated with the node (sensor, instrument transformer, apparatus).	Saúde do equipamento externo associado ao nó (sensor, transformador de medida, aparelho).	与该节点关联的外部设备（传感器、互感器、一次设备）的健康状态。
+DO	EEName	Nameplate (vendor, model, serial) of the external equipment associated with the node.	Placa (fabricante, modelo, série) do equipamento externo associado ao nó.	与该节点关联的外部设备的铭牌（厂商、型号、序列号）。
+DO	LocKey	Local control for the whole LD: if true, orders over communications are not accepted for that LD (in the standard, together with Loc and LocSta).	Comando local para todo o LD: se verdadeiro, não se aceitam ordens por comunicações para esse LD (na norma, junto com Loc e LocSta).	整个 LD 的就地控制：为真时，该 LD 不接受经通信下发的命令（标准中与 Loc、LocSta 配合）。
+DO	LocSta	Control authority at station level: if true, only orders with a station originator category are accepted.	Autoridade de comando no nível de estação: se verdadeiro, só se aceitam ordens com categoria de origem de estação.	站级控制权：为真时，仅接受发起者类别为站级的命令。
+DO	MltLev	If true, control from more than one level at a time is accepted; if false, only from the level that holds the authority (annex B of 7-4).	Se verdadeiro, aceita-se comando de mais de um nível ao mesmo tempo; se falso, só do nível que tem a autoridade (anexo B da 7-4).	为真时允许多个层级同时控制；为假时仅允许拥有控制权的层级（7-4 附录 B）。
+DO	Diag	Order for the device to run its self-diagnosis.	Ordem para que o equipamento execute seu autodiagnóstico.	命令设备执行自诊断。
+DO	LEDRs	Order to reset the LEDs on the front of the device.	Ordem para repor os LED do frontal do equipamento.	复归设备面板 LED 的命令。
+DO	GrRef	Reference to the LD this one depends on, in a hierarchy of LDs.	Referência ao LD do qual este depende, em uma hierarquia de LD.	在 LD 层级中，本 LD 所隶属的 LD 的引用。
+DO	Blk	Dynamic blocking of the function the LN describes.	Bloqueio dinâmico da função que o LN descreve.	对该 LN 所描述功能的动态闭锁。
+DO	CmdBlk	Blocks control orders on the node (for example, during maintenance).	Bloqueia as ordens de controle sobre o nó (por exemplo, durante manutenção).	闭锁对该节点的控制命令（例如检修期间）。
+DO	OpCntRs	Operation counter that can be reset to zero by command.	Contador de operações que pode ser zerado por ordem.	可通过命令清零的操作计数器。
+DO	OpTmh	Accumulated operating time of the equipment, in hours.	Tempo de operação acumulado do equipamento, em horas.	设备累计运行时间，单位小时。
+DO	Sim	If true, the device accepts GOOSE and SV with the simulation flag instead of the real ones (Ed.2 test mode).	Se verdadeiro, o equipamento aceita GOOSE e SV com a marca de simulação no lugar dos reais (modo de teste da Ed.2).	为真时，设备接收带仿真标志的 GOOSE 和 SV 以代替真实报文（Ed.2 测试模式）。
+DO	Ind	Generic binary indication; each numbered instance (Ind1, Ind2…) is a different signal, whose meaning is given by the SCL desc.	Indicação binária genérica; cada instância numerada (Ind1, Ind2…) é um sinal distinto, cujo significado é dado pelo desc do SCL.	通用二进制指示；每个编号实例（Ind1、Ind2…）是不同的信号，其含义见 SCL 的 desc。
+DO	Alm	Generic alarm; each numbered instance is a different alarm, whose meaning is given by the SCL desc.	Alarme genérico; cada instância numerada é um alarme distinto, cujo significado é dado pelo desc do SCL.	通用告警；每个编号实例是不同的告警，其含义见 SCL 的 desc。
+DO	SPCSO	Generic controllable binary output; each numbered instance is a different output.	Saída binária controlável genérica; cada instância numerada é uma saída distinta.	通用可控二进制输出；每个编号实例是不同的输出。
+DO	ARtg	Rated primary current of the current transformer or of the equipment.	Corrente nominal primária do transformador de corrente ou do equipamento.	电流互感器或设备的一次额定电流。
+DO	VRtg	Rated primary voltage of the voltage transformer or of the equipment.	Tensão nominal primária do transformador de potencial ou do equipamento.	电压互感器或设备的一次额定电压。
+DO	HzRtg	Rated frequency.	Frequência nominal.	额定频率。
+DO	AngCor	Correction of the phasor angle of the external instrument transformer.	Correção do ângulo do fasor do transformador de medida externo.	外部互感器相量角度的校正。
+DO	AmpSv	Current as a sampled value (SV).	Corrente como valor amostrado (SV).	以采样值 (SV) 表示的电流。
+DO	VolSv	Voltage as a sampled value (SV).	Tensão como valor amostrado (SV).	以采样值 (SV) 表示的电压。
+DO	FuFail	Failure (blown fuse) of the voltage transformer circuit.	Falha (fusão de fusível) do circuito do transformador de potencial.	电压互感器回路故障（熔断器熔断）。
+DO	PNV	Phase-to-neutral voltages of the three phases.	Tensões fase-neutro das três fases.	三相的相对中性点电压。
+DO	Amp	Current not assigned to a phase (for example, in direct current).	Corrente não atribuída a uma fase (por exemplo, em corrente contínua).	不属于某一相的电流（例如直流）。
+DO	Vol	Voltage not assigned to a phase.	Tensão não atribuída a uma fase.	不属于某一相的电压。
+DO	Watt	Active power not assigned to a phase.	Potência ativa não atribuída a uma fase.	不属于某一相的有功功率。
+DO	VolAmpr	Reactive power not assigned to a phase.	Potência reativa não atribuída a uma fase.	不属于某一相的无功功率。
+DO	VolAmp	Apparent power not assigned to a phase.	Potência aparente não atribuída a uma fase.	不属于某一相的视在功率。
+DO	PwrFact	Power factor not assigned to a phase.	Fator de potência não atribuído a uma fase.	不属于某一相的功率因数。
+DO	Imp	Impedance not assigned to a phase.	Impedância não atribuída a uma fase.	不属于某一相的阻抗。
+DO	DQ0Seq	Components in the DQ0 reference frame.	Componentes no referencial DQ0.	DQ0 参考坐标系下的分量。
+DO	ImbA	Unbalance of the phase currents.	Desequilíbrio das correntes de fase.	相电流不平衡。
+DO	ImbV	Unbalance of the phase voltages.	Desequilíbrio das tensões de fase.	相电压不平衡。
+DO	ImbPPV	Unbalance of the phase-to-phase voltages.	Desequilíbrio das tensões entre fases.	相间电压不平衡。
+DO	ImbNgA	Negative-sequence unbalance ratio of the current.	Relação de desequilíbrio de sequência negativa da corrente.	电流负序不平衡度。
+DO	ImbNgV	Negative-sequence unbalance ratio of the voltage.	Relação de desequilíbrio de sequência negativa da tensão.	电压负序不平衡度。
+DO	ImbZroA	Zero-sequence unbalance ratio of the current.	Relação de desequilíbrio de sequência zero da corrente.	电流零序不平衡度。
+DO	ImbZroV	Zero-sequence unbalance ratio of the voltage.	Relação de desequilíbrio de sequência zero da tensão.	电压零序不平衡度。
+DO	MaxImbA	Maximum current unbalance recorded.	Máximo desequilíbrio de corrente registrado.	记录的最大电流不平衡。
+DO	MaxImbV	Maximum voltage unbalance recorded.	Máximo desequilíbrio de tensão registrado.	记录的最大电压不平衡。
+DO	MaxImbPPV	Maximum phase-to-phase voltage unbalance recorded.	Máximo desequilíbrio de tensão entre fases registrado.	记录的最大相间电压不平衡。
+DO	SupWh	Active energy flowing towards the busbar.	Energia ativa com sentido para o barramento.	流向母线方向的有功电能。
+DO	SupVArh	Reactive energy flowing towards the busbar.	Energia reativa com sentido para o barramento.	流向母线方向的无功电能。
+DO	DmdWh	Active energy flowing out from the busbar.	Energia ativa com sentido do barramento para fora.	从母线流出的有功电能。
+DO	DmdVArh	Reactive energy flowing out from the busbar.	Energia reativa com sentido do barramento para fora.	从母线流出的无功电能。
+DO	StrVal	Start (pickup) threshold of the protection function.	Limiar de partida da função de proteção.	保护功能的启动门槛。
+DO	TmMult	Multiplier of the inverse-time curve (TMS / time dial).	Multiplicador da curva de tempo inverso (TMS / dial de tempo).	反时限曲线的时间倍数（TMS / 时间刻度）。
+DO	MinOpTmms	Minimum operating time, in ms.	Tempo mínimo de operação, em ms.	最小动作时间，单位 ms。
+DO	MaxOpTmms	Maximum operating time, in ms.	Tempo máximo de operação, em ms.	最大动作时间，单位 ms。
+DO	RsDlTmms	Reset time, in ms.	Tempo de reposição, em ms.	返回时间，单位 ms。
+DO	TypRsCrv	Type of reset curve (instantaneous, definite time, inverse time).	Tipo de curva de reposição (instantânea, temporizada, de tempo inverso).	返回曲线类型（瞬时、定时限、反时限）。
+DO	DirMod	Directional mode of the function: non-directional, forward or reverse.	Modo direcional da função: não direcional, para frente ou para trás.	功能的方向模式：无方向、正向或反向。
+DO	BlkValA	Minimum operating current: below it the function does not operate.	Corrente mínima de operação: abaixo dela a função não opera.	最小动作电流：低于该值功能不动作。
+DO	BlkValV	Minimum operating voltage: below it the function does not operate.	Tensão mínima de operação: abaixo dela a função não opera.	最小动作电压：低于该值功能不动作。
+DO	Tr	Resulting trip order, combination of the operations of the protections.	Ordem de disparo resultante, combinação das operações das proteções.	综合各保护动作得出的跳闸命令。
+DO	TrMod	Trip mode (single-pole, three-pole, depending on the fault).	Modo de disparo (monopolar, tripolar, conforme a falta).	跳闸方式（单相、三相、按故障类型）。
+DO	TrPlsTmms	Duration of the trip pulse, in ms.	Duração do pulso de disparo, em ms.	跳闸脉冲宽度，单位 ms。
+DO	Dir	Direction of the fault (forward, reverse or unknown), with the detail per phase.	Direção da falta (para frente, para trás ou desconhecida), com o detalhe por fase.	故障方向（正向、反向或未知），含分相信息。
+DO	ChrAng	Characteristic angle of the directional element.	Ângulo característico do elemento direcional.	方向元件的特性角。
+DO	PolQty	Quantity that polarizes the directional element (zero-sequence or negative-sequence voltage, current, etc.).	Grandeza que polariza o elemento direcional (tensão de sequência zero, de sequência negativa, corrente etc.).	方向元件的极化量（零序电压、负序电压、电流等）。
+DO	MinFwdAng	Minimum angular limit of the forward zone.	Limite angular mínimo da zona para frente.	正向区的最小角度限值。
+DO	MaxFwdAng	Maximum angular limit of the forward zone.	Limite angular máximo da zona para frente.	正向区的最大角度限值。
+DO	MinRvAng	Minimum angular limit of the reverse zone.	Limite angular mínimo da zona para trás.	反向区的最小角度限值。
+DO	MaxRvAng	Maximum angular limit of the reverse zone.	Limite angular máximo da zona para trás.	反向区的最大角度限值。
+DO	MinPPV	Minimum phase-to-phase voltage for the directional element to decide.	Tensão mínima entre fases para que o elemento direcional decida.	方向元件作出判断所需的最小相间电压。
+DO	FailMod	Criterion used to detect the breaker failure (current, auxiliary contacts or both).	Critério com que se detecta a falha do disjuntor (corrente, contatos auxiliares ou ambos).	检测断路器失灵的判据（电流、辅助触点或两者）。
+DO	FailTmms	Time after which the busbar breakers are tripped, in ms.	Tempo após o qual se disparam os disjuntores do barramento, em ms.	经过该时间后跳开母线上各断路器，单位 ms。
+DO	ReTrMod	Mode of the re-trip of the breaker itself.	Modo do redisparo do próprio disjuntor.	本断路器重跳的方式。
+DO	SPlTrTmms	Single-pole re-trip time, in ms.	Tempo de redisparo monopolar, em ms.	单相重跳时间，单位 ms。
+DO	TPTrTmms	Three-pole re-trip time, in ms.	Tempo de redisparo tripolar, em ms.	三相重跳时间，单位 ms。
+DO	DetValA	Threshold of the current detector of the breaker failure.	Limiar do detector de corrente da falha de disjuntor.	断路器失灵电流检测元件的门槛。
+DO	OpEx	Breaker failure trip to the adjacent breakers.	Disparo por falha de disjuntor para os disjuntores adjacentes.	断路器失灵时跳相邻断路器。
+DO	OpIn	Re-trip of the breaker itself.	Redisparo do próprio disjuntor.	本断路器重跳。
+DO	Rel	The synchronism check releases the closing order.	A verificação de sincronismo libera a ordem de fechamento.	同期检查放行合闸命令。
+DO	VInd	The voltage difference is outside the limit.	A diferença de tensão está fora do limite.	电压差超出限值。
+DO	AngInd	The angle difference is outside the limit.	A diferença de ângulo está fora do limite.	角度差超出限值。
+DO	HzInd	The frequency difference is outside the limit.	A diferença de frequência está fora do limite.	频率差超出限值。
+DO	DifV	Maximum voltage difference allowed for closing.	Máxima diferença de tensão admitida para o fechamento.	允许合闸的最大电压差。
+DO	DifHz	Maximum frequency difference allowed for closing.	Máxima diferença de frequência admitida para o fechamento.	允许合闸的最大频率差。
+DO	DifAng	Maximum angle difference allowed for closing.	Máxima diferença de ângulo admitida para o fechamento.	允许合闸的最大角度差。
+DO	DifVClc	Voltage difference measured between the two sides.	Diferença de tensão medida entre os dois lados.	两侧测得的电压差。
+DO	DifHzClc	Frequency difference measured between the two sides.	Diferença de frequência medida entre os dois lados.	两侧测得的频率差。
+DO	DifAngClc	Angle difference measured between the two sides.	Diferença de ângulo medida entre os dois lados.	两侧测得的角度差。
+DO	LivDeaMod	Which combinations of live or dead busbar and line allow closing.	Quais combinações de barramento e linha com ou sem tensão permitem o fechamento.	母线与线路有压/无压的哪些组合允许合闸。
+DO	DeaLinVal	Voltage below which the line is considered dead.	Tensão abaixo da qual a linha é considerada sem tensão.	低于该电压时线路视为无压。
+DO	LivLinVal	Voltage above which the line is considered live.	Tensão acima da qual a linha é considerada com tensão.	高于该电压时线路视为有压。
+DO	DeaBusVal	Voltage below which the busbar is considered dead.	Tensão abaixo da qual o barramento é considerado sem tensão.	低于该电压时母线视为无压。
+DO	LivBusVal	Voltage above which the busbar is considered live.	Tensão acima da qual o barramento é considerado com tensão.	高于该电压时母线视为有压。
+DO	TotTmms	Maximum time of the synchronizing process, in ms.	Tempo máximo do processo de sincronização, em ms.	同期过程的最长时间，单位 ms。
+DO	SynPrg	Order to start and stop the synchronizing process.	Ordem de início e parada do processo de sincronização.	启动和停止同期过程的命令。
+DO	PosA	Position of the phase A pole (apparatus with per-pole control).	Posição do polo da fase A (aparelhos com comando por polo).	A 相极的位置（分相操作的设备）。
+DO	PosB	Position of the phase B pole.	Posição do polo da fase B.	B 相极的位置。
+DO	PosC	Position of the phase C pole.	Posição do polo da fase C.	C 相极的位置。
+DO	OpOpn	The opening of the apparatus was executed.	A abertura do aparelho foi executada.	设备分闸已执行。
+DO	OpCls	The closing of the apparatus was executed.	O fechamento do aparelho foi executado.	设备合闸已执行。
+DO	SelOpn	The apparatus is selected to open (SBO).	O aparelho está selecionado para abrir (SBO).	设备已选择待分闸 (SBO)。
+DO	SelCls	The apparatus is selected to close (SBO).	O aparelho está selecionado para fechar (SBO).	设备已选择待合闸 (SBO)。
+DO	Dsc	Discrepancy between the poles or between the expected and the measured position.	Discrepância entre os polos ou entre a posição esperada e a medida.	各极之间或预期位置与实测位置之间不一致。
+DO	MaxOpCap	Number of operations the apparatus can make with the stored energy full.	Quantidade de operações que o aparelho pode fazer com a energia armazenada completa.	储能满时设备可完成的操作次数。
+DO	POWCap	Capability of the breaker to switch at a chosen point on the wave.	Capacidade do disjuntor de manobrar em um ponto escolhido da onda.	断路器在波形选定点进行操作的能力。
+DO	SwTyp	Type of switching device (disconnector, earthing switch, etc.).	Tipo de aparelho de manobra (seccionador, aterramento etc.).	开关设备类型（隔离开关、接地开关等）。
+DO	SwOpCap	What the disconnector can switch (no load, load, etc.).	O que o seccionador pode manobrar (sem carga, com carga etc.).	隔离开关的开断能力（空载、带负荷等）。
+DO	SumSwARs	Accumulated sum of the currents interrupted by the breaker, resettable.	Soma acumulada das correntes interrompidas pelo disjuntor, reponível.	断路器累计开断电流之和，可复归。
+DO	ChaMotEna	Enabling of the breaker spring charging motor.	Habilitação do motor de carga de molas do disjuntor.	断路器弹簧储能电机的使能。
+DO	CBTmms	Operating time of the breaker itself, in ms.	Tempo próprio de operação do disjuntor, em ms.	断路器固有动作时间，单位 ms。
+DO	RcdTrg	Order to trigger a recording.	Ordem para disparar um registro.	触发录波的命令。
+DO	RcdMade	A new complete recording is available.	Há um novo registro completo.	已有一条新的完整录波。
+DO	RcdStr	A recording was started.	Um registro foi iniciado.	录波已开始。
+DO	FltNum	Number of the last fault recorded.	Número da última falta registrada.	最近记录的故障编号。
+DO	GriFltNum	Grid fault number (may group several recordings of the same fault).	Número de falta de rede (pode agrupar vários registros de uma mesma falta).	电网故障编号（可将同一故障的多条录波归为一组）。
+DO	MemUsed	Percentage of the recorder memory in use.	Porcentagem da memória do registrador em uso.	录波器内存已用百分比。
+DO	MemRs	Order to move the memory pointer back to the start.	Ordem para voltar o ponteiro da memória ao início.	将内存指针复位到起始位置的命令。
+DO	MemClr	Order to erase the whole content of the recorder memory.	Ordem para apagar todo o conteúdo da memória do registrador.	清除录波器内存全部内容的命令。
+DO	MemFull	Occupancy level from which the memory is considered full.	Nível de ocupação a partir do qual a memória é considerada cheia.	内存视为已满的占用水平。
+DO	MaxNumRcd	Maximum number of recordings the device keeps.	Quantidade máxima de registros que o equipamento guarda.	设备保存的最大录波条数。
+DO	RcdMod	What the recorder does with the memory full: it stops (saturation) or overwrites.	O que o registrador faz com a memória cheia: para (saturação) ou sobrescreve.	内存满时录波器的处理方式：停止（饱和）或覆盖。
+DO	ReTrgMod	Whether a trigger during a recording in progress starts another recording.	Se um disparo durante um registro em curso inicia outro registro.	录波进行中再次触发时是否开始新的录波。
+DO	PerTrgTms	Period of the periodically triggered recordings, in s.	Período dos registros disparados periodicamente, em s.	周期触发录波的周期，单位 s。
+DO	ExclTmms	Time during which new triggers are not accepted after one, in ms.	Tempo durante o qual não se aceitam novos disparos após um, em ms.	一次触发后不接受新触发的时间，单位 ms。
+DO	PreTmms	Time recorded before the trigger, in ms.	Tempo registrado antes do disparo, em ms.	触发前记录的时间，单位 ms。
+DO	PstTmms	Time recorded after the trigger, in ms.	Tempo registrado depois do disparo, em ms.	触发后记录的时间，单位 ms。
+DO	StoRte	Sampling rate of the disturbance recorder.	Taxa de amostragem do registrador de perturbações.	故障录波器的采样率。
+DO	TrgMod	Source of the recording trigger: internal, external or both.	Origem do disparo do registro: interno, externo ou ambos.	录波触发来源：内部、外部或两者。
+DO	LevMod	How a recording is triggered by the level of a quantity.	Como se dispara um registro por nível de uma grandeza.	按某量的电平触发录波的方式。
+DO	InRef	Reference to the model signal that enters the function (for example, a recorder channel).	Referência ao sinal do modelo que entra na função (por exemplo, um canal do registrador).	输入该功能的模型信号引用（例如录波器的一个通道）。
+DO	BlkRef	Reference to the model signal that blocks the function.	Referência ao sinal do modelo que bloqueia a função.	闭锁该功能的模型信号引用。
+DO	FltZ	Impedance calculated up to the fault.	Impedância calculada até a falta.	计算得到的到故障点的阻抗。
+DO	FltDiskm	Distance calculated up to the fault, in km.	Distância calculada até a falta, em km.	计算得到的到故障点的距离，单位 km。
+DO	FltLoop	Loop with which the fault was calculated (phase-to-ground, phase-to-phase…).	Laço com que a falta foi calculada (fase-terra, fase-fase…).	计算故障所用的回路（相对地、相间…）。
+DO	St	True if the GOOSE or SV subscription is active (messages are arriving).	Verdadeiro se a assinatura GOOSE ou SV está ativa (as mensagens chegam).	GOOSE 或 SV 订阅有效（报文正在到达）时为真。
+DO	SimSt	Messages with the simulation flag are being received and accepted.	Estão sendo recebidas e aceitas mensagens com a marca de simulação.	正在接收并采用带仿真标志的报文。
+DO	LastStNum	Last state number (stNum) received in the subscribed GOOSE.	Último número de estado (stNum) recebido no GOOSE assinado.	所订阅 GOOSE 最后收到的状态号 (stNum)。
+DO	ConfRevNum	Configuration revision (confRev) expected from the subscribed GOOSE.	Revisão de configuração (confRev) esperada do GOOSE assinado.	所订阅 GOOSE 预期的配置版本 (confRev)。
+DO	NdsCom	The subscription needs to be checked: the configuration received does not match the expected one.	A assinatura precisa ser revisada: a configuração recebida não coincide com a esperada.	订阅需要检查：收到的配置与预期不符。
+DO	GoCBRef	Which GOOSE control block this instance supervises.	Qual bloco de controle GOOSE esta instância supervisiona.	该实例监视的 GOOSE 控制块。
+DO	TmSrc	Time synchronization source in use.	Fonte de sincronização horária em uso.	正在使用的对时源。
+DO	TmSyn	Time synchronization status of the device.	Estado de sincronização horária do equipamento.	设备的对时状态。
+DO	TmAcc	Number of significant bits of the fraction of second in the timestamps.	Quantidade de bits significativos da fração de segundo nas marcas de tempo.	时标中秒小数部分的有效位数。
+DO	TmChSt	Whether the time synchronization channel is active; each instance is a channel.	Se o canal de sincronização horária está ativo; cada instância é um canal.	对时通道是否有效；每个实例为一个通道。
+DO	TmSrcSet	Configured time synchronization source.	Fonte de sincronização horária configurada.	已配置的对时源。
+DO	SpcTrk	Last control service received by a single-bit controllable object.	Último serviço de controle recebido por um objeto controlável de um bit.	单点可控对象最后收到的控制服务。
+DO	DpcTrk	Last control service received by a double-bit controllable object (for example, a position).	Último serviço de controle recebido por um objeto controlável de dois bits (por exemplo, uma posição).	双点可控对象（例如位置）最后收到的控制服务。
+DO	GenTrk	Last common service executed on the server.	Último serviço comum executado sobre o servidor.	在服务器上执行的最后一次通用服务。
+DO	BrcbTrk	Last service executed on a buffered report control block.	Último serviço executado sobre um bloco de relatórios com buffer.	对缓存报告控制块执行的最后一次服务。
+DO	UrcbTrk	Last service executed on an unbuffered report control block.	Último serviço executado sobre um bloco de relatórios sem buffer.	对非缓存报告控制块执行的最后一次服务。
+DO	LocbTrk	Last service executed on a log control block.	Último serviço executado sobre um bloco de controle de log.	对日志控制块执行的最后一次服务。
+DO	GocbTrk	Last service executed on a GOOSE control block.	Último serviço executado sobre um bloco de controle GOOSE.	对 GOOSE 控制块执行的最后一次服务。
+DO	SgcbTrk	Last service executed on the setting group control block.	Último serviço executado sobre o bloco de controle de grupos de ajustes.	对定值组控制块执行的最后一次服务。
+DA	c3	Third component of a sequence quantity (CDC SEQ): depending on seqT, the zero sequence or the negative sequence.	Terceira componente de uma grandeza de sequências (CDC SEQ): conforme seqT, a de sequência zero ou a de sequência negativa.	序分量量 (CDC SEQ) 的第三个分量：依 seqT 为零序或负序。
+DA	res	Residual quantity of a three-phase set (CDC WYE): sum of the three phases.	Grandeza residual de um conjunto trifásico (CDC WYE): soma das três fases.	三相组 (CDC WYE) 的剩余量：三相之和。
+DA	net	Net quantity of a three-phase set (CDC WYE).	Grandeza líquida de um conjunto trifásico (CDC WYE).	三相组 (CDC WYE) 的净值。
+DA	seqT	What c1, c2 and c3 represent in a CDC SEQ (positive, negative, zero or another combination).	O que c1, c2 e c3 representam em um CDC SEQ (positiva, negativa, zero ou outra combinação).	CDC SEQ 中 c1、c2、c3 所代表的内容（正序、负序、零序或其他组合）。
+DA	cVal	Complex value (magnitude and angle) with deadband applied.	Valor complexo (magnitude e ângulo) com banda morta aplicada.	应用死区后的复数值（幅值和角度）。
+DA	instMag	Magnitude without deadband, as measured.	Magnitude sem banda morta, tal como é medida.	未经死区处理的测量幅值。
+DA	setVal	Value of a binary, integer, enumerated or text setting (SPG, ING, ENG, VSG).	Valor de um ajuste binário, inteiro, enumerado ou de texto (SPG, ING, ENG, VSG).	二进制、整数、枚举或文本定值的值（SPG、ING、ENG、VSG）。
+DA	setMag	Value of an analogue setting (ASG).	Valor de um ajuste analógico (ASG).	模拟量定值的值 (ASG)。
+DA	setSrcRef	Reference of the object the signal is taken from (ORG).	Referência do objeto do qual se toma o sinal (ORG).	信号来源对象的引用 (ORG)。
+DA	setSrcCB	Control block (GOOSE or SV) that publishes the source signal.	Bloco de controle (GOOSE ou SV) que publica o sinal de origem.	发布源信号的控制块（GOOSE 或 SV）。
+DA	setTstRef	Reference of the object used instead of the source when the input is under test.	Referência do objeto usado no lugar da origem quando a entrada está em teste.	输入处于测试时用于替代源的对象引用。
+DA	setTstCB	Control block of the test signal.	Bloco de controle do sinal de teste.	测试信号的控制块。
+DA	tstEna	If true, the input takes the test signal (setTstRef) instead of the source one.	Se verdadeiro, a entrada toma o sinal de teste (setTstRef) no lugar do de origem.	为真时，输入采用测试信号 (setTstRef) 而非源信号。
+DA	intAddr	Internal address of the value inside the device.	Endereço interno do valor dentro do equipamento.	该值在设备内部的地址。
+DA	purpose	What the reference is used for.	Para que a referência é usada.	该引用的用途。
+DA	minVal	Minimum value allowed for the setting.	Valor mínimo admitido do ajuste.	定值允许的最小值。
+DA	maxVal	Maximum value allowed for the setting.	Valor máximo admitido do ajuste.	定值允许的最大值。
+DA	stepSize	Step between allowed values of the setting.	Passo entre valores admitidos do ajuste.	定值允许取值之间的步长。
+DA	min	Minimum value allowed.	Valor mínimo admitido.	允许的最小值。
+DA	max	Maximum value allowed.	Valor máximo admitido.	允许的最大值。
+DA	range	Range the measurement is in: normal, high, low, high-high, low-low.	Faixa em que está a medida: normal, alta, baixa, muito alta, muito baixa.	测量值所在范围：正常、高、低、高高、低低。
+DA	rangeC	Limits that define the ranges of a measurement.	Limites que definem as faixas de uma medida.	定义测量值各范围的限值。
+DA	sVC	Scale and offset to convert the transmitted integer into the real quantity.	Escala e deslocamento para converter o inteiro transmitido na grandeza real.	将传输的整数换算为实际量的比例和偏移。
+DA	valRev	Incremented every time a setting of the node changes.	Incrementa-se cada vez que um ajuste do nó muda.	节点的定值每次变化时递增。
+DA	paramRev	Incremented every time a parameter of the node changes.	Incrementa-se cada vez que um parâmetro do nó muda.	节点的参数每次变化时递增。
+DA	pulsQty	Quantity represented by each pulse of a counter.	Grandeza que cada pulso de um contador representa.	计数器每个脉冲所代表的量。
+DA	frEna	Enables the periodic freezing of the counter.	Habilita o congelamento periódico do contador.	使能计数器的周期冻结。
+DA	frPd	Freezing period of the counter.	Período do congelamento do contador.	计数器的冻结周期。
+DA	frRs	Whether the counter goes back to zero when frozen.	Se o contador volta a zero ao ser congelado.	冻结时计数器是否清零。
+DA	frTm	Time of the last freezing of the counter.	Hora do último congelamento do contador.	计数器最后一次冻结的时间。
+DA	strTm	Start time of the freezing.	Hora de início do congelamento.	冻结的起始时间。
+DA	dirGeneral	Direction of the fault (forward, reverse or unknown) for the whole set.	Direção da falta (para frente, para trás ou desconhecida) para o conjunto.	整体的故障方向（正向、反向或未知）。
+DA	dirPhsA	Direction of the fault in phase A.	Direção da falta na fase A.	A 相故障方向。
+DA	dirPhsB	Direction of the fault in phase B.	Direção da falta na fase B.	B 相故障方向。
+DA	dirPhsC	Direction of the fault in phase C.	Direção da falta na fase C.	C 相故障方向。
+DA	dirNeut	Direction of the ground fault.	Direção da falta à terra.	接地故障方向。
+DA	stSeld	The object is selected (SBO) and waits for the order.	O objeto está selecionado (SBO) e espera a ordem.	对象已被选择 (SBO)，等待命令。
+DA	opRcvd	An operate order was received.	Foi recebida uma ordem de operação.	已收到操作命令。
+DA	opOk	The order was accepted.	A ordem foi aceita.	命令已被接受。
+DA	tOpOk	Time when the order was accepted.	Hora em que a ordem foi aceita.	命令被接受的时间。
+DA	ctlModel	How the object is controlled: status only (0), direct with normal security (1), SBO with normal security (2), direct with enhanced security (3), SBO with enhanced security (4).	Como o objeto é controlado: só estado (0), direto normal (1), SBO normal (2), direto reforçado (3), SBO reforçado (4).	对象的控制方式：仅状态 (0)、常规安全直控 (1)、常规安全 SBO (2)、增强安全直控 (3)、增强安全 SBO (4)。
+DA	sboTimeout	Maximum time between the selection and the operate order; once expired, the selection is cancelled.	Tempo máximo entre a seleção e a ordem de operação; vencido, a seleção é cancelada.	选择与操作命令之间的最长时间；超时后选择被取消。
+DA	sboClass	Whether a selection is valid for a single operation or for several.	Se uma seleção serve para uma só operação ou para várias.	一次选择仅用于一次操作还是多次操作。
+DA	operTimeout	Maximum time for the order to finish (for example, the travel of the apparatus).	Tempo máximo para que a ordem termine (por exemplo, o percurso do aparelho).	命令完成的最长时间（例如设备的行程时间）。
+DA	subEna	If true, the reported value is the substituted one (subVal) instead of the measured one.	Se verdadeiro, o valor informado é o substituído (subVal) no lugar do medido.	为真时，上报的是取代值 (subVal) 而非测量值。
+DA	subVal	Value reported while substitution is enabled.	Valor que se informa enquanto a substituição está habilitada.	取代使能期间上报的值。
+DA	subMag	Magnitude reported while substitution is enabled.	Magnitude que se informa enquanto a substituição está habilitada.	取代使能期间上报的幅值。
+DA	subCVal	Complex value reported while substitution is enabled.	Valor complexo que se informa enquanto a substituição está habilitada.	取代使能期间上报的复数值。
+DA	subQ	Quality reported while substitution is enabled.	Qualidade que se informa enquanto a substituição está habilitada.	取代使能期间上报的品质。
+DA	subID	Identification of whoever enabled the substitution.	Identificação de quem habilitou a substituição.	启用取代者的标识。
+DA	blkEna	If true, the value stays frozen (blocked) and is not updated.	Se verdadeiro, o valor fica congelado (bloqueado) e não se atualiza.	为真时，该值被冻结（闭锁）且不再更新。
+DA	cnfEdit	Writing true confirms the changes made in the setting group being edited.	Escrever verdadeiro confirma as mudanças feitas no grupo de ajustes em edição.	写入真值以确认对正在编辑的定值组所做的修改。
+DA	Oper	Structure written to execute an order: value, origin, ctlNum, time, Test and Check.	Estrutura que se escreve para executar uma ordem: valor, origem, ctlNum, hora, Test e Check.	为执行命令而写入的结构：值、来源、ctlNum、时间、Test 和 Check。
+DA	SBO	Read that selects the object before operating it (normal security).	Leitura que seleciona o objeto antes de operá-lo (segurança normal).	在操作前选择对象的读操作（常规安全）。
+DA	SBOw	Structure written to select the object with the value of the order (enhanced security).	Estrutura que se escreve para selecionar o objeto com o valor da ordem (segurança reforçada).	为以命令值选择对象而写入的结构（增强安全）。
+DA	Cancel	Structure written to cancel a selection or an order in progress.	Estrutura que se escreve para cancelar uma seleção ou ordem em curso.	为取消选择或进行中的命令而写入的结构。
+DA	Test	Marks the order as a test: the device processes it without acting on the process, depending on its mode.	Marca a ordem como de teste: o equipamento a processa sem atuar sobre o processo, conforme seu modo.	将命令标记为测试：设备依其模式处理该命令而不作用于过程。
+DA	Check	Which checks the order requests: synchrocheck and interlocking.	Quais verificações a ordem pede: sincronismo e intertravamento.	命令要求的检查：同期和联锁。
+DA	T	Time when the client issued the order.	Hora em que o cliente emitiu a ordem.	客户端发出命令的时间。
+DA	configRev	Configuration revision of the LD (in the nameplate of LLN0).	Revisão da configuração do LD (na placa de LLN0).	LD 的配置版本（位于 LLN0 的铭牌中）。
+DA	ldNs	Edition of the standard (namespace) of the LD, for example "IEC 61850-7-4:2007".	Edição da norma (espaço de nomes) do LD, por exemplo "IEC 61850-7-4:2007".	LD 所依据的标准版本（命名空间），例如 "IEC 61850-7-4:2007"。
+DA	dataNs	Namespace of the DO when it is not the one of the LN (extensions).	Espaço de nomes do DO quando não é o do LN (extensões).	DO 的命名空间与 LN 不同时使用（扩展）。
+DA	location	Location of the equipment, as text.	Localização do equipamento, como texto.	设备位置（文本）。
+DA	latitude	Latitude of the equipment.	Latitude do equipamento.	设备纬度。
+DA	longitude	Longitude of the equipment.	Longitude do equipamento.	设备经度。
+DA	altitude	Altitude of the equipment.	Altitude do equipamento.	设备海拔。
+DA	mRID	Unique identifier of the resource (link with the CIM model).	Identificador único do recurso (vínculo com o modelo CIM).	资源的唯一标识（与 CIM 模型的关联）。
+DA	owner	In a nameplate (DPL), the owner of the equipment. In a report control block, the client that owns the block.	Em uma placa (DPL), o proprietário do equipamento. Em um bloco de relatórios, o cliente dono do bloco.	在铭牌 (DPL) 中为设备所有者；在报告控制块中为拥有该控制块的客户端。
+DA	ePSName	Name of the equipment in the electric power system.	Nome do equipamento no sistema elétrico.	设备在电力系统中的名称。
+DA	primeOper	Main operator of the equipment.	Operador principal do equipamento.	设备的主要运行方。
+DA	secondOper	Secondary operator of the equipment.	Operador secundário do equipamento.	设备的次要运行方。
+DA	name	Name of the element.	Nome do elemento.	元素的名称。
+DA	maxTime	Time when the maximum value was recorded.	Hora em que o valor máximo foi registrado.	记录最大值的时间。
+DA	minTime	Time when the minimum value was recorded.	Hora em que o valor mínimo foi registrado.	记录最小值的时间。
+DA	fixedOffs	Fixed time offset from UTC.	Deslocamento horário fixo em relação ao UTC.	相对 UTC 的固定时差。
+DA	pulseConfig	Shape of the output pulse the order generates (type, duration, count).	Forma do pulso de saída que a ordem gera (tipo, duração, quantidade).	命令产生的输出脉冲形式（类型、宽度、个数）。
+DA	rptID	Identifier carried in every report of the block.	Identificador que viaja em cada relatório do bloco.	该控制块每份报告所携带的标识。
+DA	rptEna	Enables sending the reports of the block.	Habilita o envio de relatórios do bloco.	使能该控制块的报告发送。
+DA	resv	The URCB is reserved by a client.	O URCB está reservado por um cliente.	该 URCB 已被某客户端保留。
+DA	resvTms	Time the BRCB stays reserved for a client after it disconnects.	Tempo que o BRCB fica reservado para um cliente após desconectar-se.	客户端断开后 BRCB 仍为其保留的时间。
+DA	datSet	Reference of the DataSet the block reports.	Referência do DataSet que o bloco informa.	该控制块所上报的 DataSet 的引用。
+DA	confRev	Configuration revision of the block; it changes if its DataSet changes.	Revisão da configuração do bloco; muda se seu DataSet mudar.	控制块的配置版本；其 DataSet 变化时随之改变。
+DA	optFlds	Which optional fields each report carries (sequence number, time, reason, DataSet, etc.).	Quais campos opcionais cada relatório leva (número de sequência, hora, motivo, DataSet etc.).	每份报告包含的可选字段（序号、时间、原因、DataSet 等）。
+DA	bufTm	Time the server gathers changes before sending a report.	Tempo que o servidor junta mudanças antes de enviar um relatório.	服务器在发送报告前汇集变化的时间。
+DA	sqNum	Sequence number of the reports of the block.	Número de sequência dos relatórios do bloco.	该控制块报告的序号。
+DA	trgOps	What triggers a report: data change, quality change, data update, integrity or general interrogation.	O que dispara um relatório: mudança de dado, de qualidade, atualização, integridade ou interrogação geral.	触发报告的条件：数据变化、品质变化、数据更新、完整性或总召唤。
+DA	intgPd	Period of the integrity reports (the whole DataSet).	Período dos relatórios de integridade (todo o DataSet).	完整性报告（整个 DataSet）的周期。
+DA	gi	Writing true requests a report with the whole DataSet.	Escrever verdadeiro pede um relatório com todo o DataSet.	写入真值以请求包含整个 DataSet 的报告。
+DA	purgeBuf	Writing true discards the reports stored in the buffer.	Escrever verdadeiro descarta os relatórios guardados no buffer.	写入真值以丢弃缓冲区中保存的报告。
+DA	entryID	Identifier of the last report stored; allows resuming from there.	Identificador do último relatório guardado; permite retomar dali.	最后保存的报告的标识；可据此从该处续传。
+DA	timeOfEntry	Time of the last report stored.	Hora do último relatório guardado.	最后保存的报告的时间。
+DA	logEna	Enables logging.	Habilita o registro no log.	使能日志记录。
+DA	logRef	Log the block writes to.	Log no qual o bloco escreve.	该控制块写入的日志。
+DA	oldEntrTm	Time of the oldest log entry.	Hora da entrada mais antiga do log.	日志最早条目的时间。
+DA	newEntrTm	Time of the newest log entry.	Hora da entrada mais recente do log.	日志最新条目的时间。
+DA	oldEnt	Identifier of the oldest log entry.	Identificador da entrada mais antiga do log.	日志最早条目的标识。
+DA	newEnt	Identifier of the newest log entry.	Identificador da entrada mais recente do log.	日志最新条目的标识。
+DA	goEna	Enables publishing the GOOSE.	Habilita a publicação do GOOSE.	使能 GOOSE 发布。
+DA	goID	Identifier carried in every GOOSE message.	Identificador que viaja em cada mensagem GOOSE.	每条 GOOSE 报文所携带的标识。
+DA	ndsCom	The block needs to be checked (for example, its DataSet is not valid).	O bloco precisa ser revisado (por exemplo, seu DataSet não é válido).	该控制块需要检查（例如其 DataSet 无效）。
+DA	dstAddress	Multicast MAC address, priority, VLAN and APPID of the GOOSE.	Endereço MAC multicast, prioridade, VLAN e APPID do GOOSE.	GOOSE 的组播 MAC 地址、优先级、VLAN 和 APPID。
+DA	numOfSG	How many setting groups the LD has.	Quantos grupos de ajustes o LD tem.	该 LD 拥有的定值组数量。
+DA	actSG	Setting group in use.	Grupo de ajustes em uso.	正在使用的定值组。
+DA	editSG	Setting group selected for editing (0 = none).	Grupo de ajustes selecionado para edição (0 = nenhum).	选定用于编辑的定值组（0 = 无）。
+DA	lActTm	Time of the last activation of a setting group.	Hora da última ativação de um grupo de ajustes.	最近一次激活定值组的时间。
+DA	objRef	Object on which the recorded service was executed.	Objeto sobre o qual o serviço registrado foi executado.	所记录服务作用的对象。
+DA	serviceType	Which service was executed.	Qual serviço foi executado.	所执行的服务。
+DA	errorCode	Result of the service (0 = no error).	Resultado do serviço (0 = sem erro).	服务结果（0 = 无错误）。
+DA	originatorID	Who requested the service.	Quem pediu o serviço.	请求该服务者。
+DA	respAddCause	AddCause of the response to a control service.	AddCause da resposta a um serviço de controle.	控制服务响应的 AddCause。
+DA	phsAHar	Array with the harmonics of phase A (CDC HWYE): one per order, as a complex value.	Arranjo com os harmônicos da fase A (CDC HWYE): um por ordem, como valor complexo.	A 相谐波数组 (CDC HWYE)：每个次数一个复数值。
+DA	phsBHar	Array with the harmonics of phase B (CDC HWYE).	Arranjo com os harmônicos da fase B (CDC HWYE).	B 相谐波数组 (CDC HWYE)。
+DA	phsCHar	Array with the harmonics of phase C (CDC HWYE).	Arranjo com os harmônicos da fase C (CDC HWYE).	C 相谐波数组 (CDC HWYE)。
+DA	neutHar	Array with the harmonics of the neutral (CDC HWYE).	Arranjo com os harmônicos do neutro (CDC HWYE).	中性线谐波数组 (CDC HWYE)。
+DA	netHar	Array with the harmonics of the net quantity (CDC HWYE).	Arranjo com os harmônicos da grandeza líquida (CDC HWYE).	净值的谐波数组 (CDC HWYE)。
+DA	resHar	Array with the harmonics of the residual quantity (CDC HWYE).	Arranjo com os harmônicos da grandeza residual (CDC HWYE).	剩余量的谐波数组 (CDC HWYE)。
+DA	phsABHar	Array with the harmonics of the voltage between phases A and B (CDC HDEL).	Arranjo com os harmônicos da tensão entre as fases A e B (CDC HDEL).	A、B 相间电压的谐波数组 (CDC HDEL)。
+DA	phsBCHar	Array with the harmonics of the voltage between phases B and C (CDC HDEL).	Arranjo com os harmônicos da tensão entre as fases B e C (CDC HDEL).	B、C 相间电压的谐波数组 (CDC HDEL)。
+DA	phsCAHar	Array with the harmonics of the voltage between phases C and A (CDC HDEL).	Arranjo com os harmônicos da tensão entre as fases C e A (CDC HDEL).	C、A 相间电压的谐波数组 (CDC HDEL)。
+DA	numHar	Number of harmonic orders contained in the array.	Quantidade de ordens harmônicas que o arranjo contém.	数组所含的谐波次数数量。
+DA	numCyc	Number of cycles of the fundamental frequency used to calculate the harmonics.	Quantidade de ciclos da frequência fundamental usados para calcular os harmônicos.	计算谐波所用的基波周波数。
+DA	evalTm	Time window used to calculate the harmonics.	Janela de tempo usada para calcular os harmônicos.	计算谐波所用的时间窗口。
+DA	hvRef	Reference of the harmonic values: fundamental, RMS value or absolute.	Referência dos valores de harmônicos: fundamental, valor eficaz ou absoluto.	谐波值的参考：基波、有效值或绝对值。
+LN	PFRC	Rate of change of frequency protection (df/dt): operates when the frequency rises or falls faster than the setting.	Proteção por taxa de variação da frequência (df/dt): opera quando a frequência sobe ou desce mais rápido que o ajuste.	频率变化率保护 (df/dt)：频率上升或下降速度超过定值时动作。
+LN	PTUF	Underfrequency protection: operates when the frequency drops below the setting.	Proteção de subfrequência: opera quando a frequência cai abaixo do ajuste.	低频保护：频率低于定值时动作。
+DO	AutoRecSt	Status of the reclosing cycle (ready, in progress, blocked, etc.).	Estado do ciclo de religamento (pronto, em curso, bloqueado etc.).	重合闸循环的状态（就绪、进行中、闭锁等）。
+DO	AlmThm	Thermal protection alarm before the trip.	Alarme da proteção térmica antes do disparo.	热过负荷保护跳闸前的告警。
+DO	TmpRl	Thermal state as the ratio between the calculated temperature and the maximum allowed.	Estado térmico como relação entre a temperatura calculada e a máxima admitida.	以计算温度与最大允许温度之比表示的热状态。
+DO	DifAClc	Differential current calculated per phase.	Corrente diferencial calculada por fase.	按相计算的差动电流。
+DO	RstA	Restraint (stabilizing) current per phase of the differential protection.	Corrente de restrição (estabilização) por fase da proteção diferencial.	差动保护的分相制动（稳定）电流。
+DO	PwrUp	The device detected a start-up (power-on or restart).	O equipamento detectou uma partida (ligação ou reinício).	设备检测到启动（上电或重启）。
+DO	AvAmps	Average current over the evaluation interval.	Corrente média no intervalo de avaliação.	评估间隔内的平均电流。
+DO	MaxAmps	Maximum current recorded.	Corrente máxima registrada.	记录的最大电流。
+DO	MinAmps	Minimum current recorded.	Corrente mínima registrada.	记录的最小电流。
+DO	AvW	Average active power over the evaluation interval.	Potência ativa média no intervalo de avaliação.	评估间隔内的平均有功功率。
+DO	MaxW	Maximum active power recorded.	Potência ativa máxima registrada.	记录的最大有功功率。
+DO	MinW	Minimum active power recorded.	Potência ativa mínima registrada.	记录的最小有功功率。
+DO	AvVAr	Average reactive power over the evaluation interval.	Potência reativa média no intervalo de avaliação.	评估间隔内的平均无功功率。
+DO	MaxVAr	Maximum reactive power recorded.	Potência reativa máxima registrada.	记录的最大无功功率。
+DO	MinVAr	Minimum reactive power recorded.	Potência reativa mínima registrada.	记录的最小无功功率。
