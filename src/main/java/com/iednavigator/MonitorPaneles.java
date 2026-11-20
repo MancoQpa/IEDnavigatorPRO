@@ -688,7 +688,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
          * izquierda y las tres fases a la derecha. Con ángulos medidos, vectores llenos.
          *
          * Si el equipo publica solo magnitudes (ION 7400: su vector trae mag y no ang), los
-         * ángulos se calculan y se dibujan punteados, con "≈" y la leyenda de cómo: Va = 0°
+         * ángulos se calculan y se dibujan con "≈" y la leyenda de cómo: Va = 0°
          * y secuencia ABC para las tensiones (PhV, PPV); para las corrientes (A), el ángulo
          * de su tensión menos el desfase de cada fase (de W y VAr, del PF o de W/VA).
          * Verificado contra la pantalla del ION 7400 del banco: Ia -19,9° / Ib 217,0° /
@@ -750,9 +750,9 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             g.drawLine(cx - r, cy, cx + r, cy);
             g.drawLine(cx, cy - r, cx, cy + r);
             if ((hayAngulo || calculado) && max > 0) {
-                g.setStroke(calculado
-                        ? new BasicStroke(2.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f, new float[]{6f, 4f}, 0f)
-                        : new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                // Trazo continuo también para los calculados (pedido del usuario): lo calculado
+                // lo dicen el "≈" de los ángulos y la leyenda
+                g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 for (int i = 0; i < 3; i++) {
                     if (mag[i] == null || ang[i] == null) continue;
                     double a = Math.toRadians(ang[i]);
