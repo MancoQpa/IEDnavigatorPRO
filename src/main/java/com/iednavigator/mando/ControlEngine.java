@@ -277,7 +277,13 @@ public final class ControlEngine {
 
             EstadoLocal.Respuesta respuesta = EstadoLocal.respuestaPara(model, raiz);
             long tiempoNormal = EstadoLocal.tiempoManiobraMs(cerrar);
-            if (respuesta != EstadoLocal.Respuesta.NORMAL || tiempoNormal > 0) {
+            // Un aparato que ya está en la posición pedida no se mueve: sin recorrido, sin pasar
+            // por intermedio y sin contar maniobra (2026-11-16, al dejar 100 ms por defecto).
+            boolean yaEsta = EstadoLocal.yaEnPosicion(model, raiz, cerrar);
+            boolean recorre = !yaEsta && (respuesta == EstadoLocal.Respuesta.LENTO
+                    || (respuesta == EstadoLocal.Respuesta.NORMAL && tiempoNormal > 0));
+            if (respuesta == EstadoLocal.Respuesta.TRABADO || respuesta == EstadoLocal.Respuesta.SIN_CABLEAR
+                    || recorre) {
                 selecciones.remove(raiz);
                 List<BasicDataAttribute> c = new ArrayList<>();
                 ponerStSeld(model, raiz, false, c);
@@ -363,6 +369,10 @@ public final class ControlEngine {
             }
         }
 
+        // Mando directo sobre el aparato (XCBR/XSWI controlable): cuenta en su OpCnt
+        if (n instanceof BdaDoubleBitPos || n instanceof BdaBoolean) {
+            EstadoLocal.contarManiobra(model, raiz, cerrar, cambiados);
+        }
         if (n instanceof BdaDoubleBitPos) {
             // Posicion de doble punto: 1=off (abierto), 2=on (cerrado)
             // La libreria expone el doble punto como enum, no como byte crudo.

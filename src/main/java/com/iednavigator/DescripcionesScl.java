@@ -40,6 +40,10 @@ final class DescripcionesScl {
     private final Map<String, String> tipoDeDo = new HashMap<>();
     /** id de DOType + "." + DA/SDO → desc en el tipo */
     private final Map<String, String> descEnDoType = new HashMap<>();
+    /** id de DOType → cdc (el SclParser de iec61850bean lo descarta) */
+    private final Map<String, String> cdcDeDoType = new HashMap<>();
+    /** id de DOType + "." + SDO → id del DOType del SDO */
+    private final Map<String, String> tipoDeSdo = new HashMap<>();
 
     private static File ultimoArchivo;
     private static long ultimaFecha;
@@ -97,6 +101,25 @@ final class DescripcionesScl {
         return descEnDoType.get(doType + "." + resto[resto.length - 1]);
     }
 
+    /**
+     * El CDC que el SCL declara para el DO o SDO con esa referencia ({@code LD/LN.DO} o
+     * {@code LD/LN.DO.SDO}), o null si el archivo no lo describe.
+     */
+    String cdc(String ref) {
+        if (ref == null || ref.isBlank()) return null;
+        ref = ref.replaceAll("\\s*\\[[A-Z]{2}\\]\\s*$", "").trim();
+        int barra = ref.indexOf('/');
+        if (barra < 0) return null;
+        int punto = ref.indexOf('.', barra);
+        if (punto < 0) return null;
+        String lnType = tipoDeLn.get(ref.substring(0, punto));
+        if (lnType == null) return null;
+        String[] resto = ref.substring(punto + 1).split("\\.");
+        String tipo = tipoDeDo.get(lnType + "." + resto[0]);
+        for (int i = 1; i < resto.length && tipo != null; i++) tipo = tipoDeSdo.get(tipo + "." + resto[i]);
+        return tipo == null ? null : cdcDeDoType.get(tipo);
+    }
+
     // ── Lectura ──────────────────────────────────────────────────────────────
 
     private void leer(InputStream in) throws Exception {
@@ -151,9 +174,12 @@ final class DescripcionesScl {
                     case "LNodeType":
                         lnodeType = r.getAttributeValue(null, "id");
                         break;
-                    case "DOType":
+                    case "DOType": {
                         doType = r.getAttributeValue(null, "id");
+                        String cdc = r.getAttributeValue(null, "cdc");
+                        if (doType != null && cdc != null && !cdc.isBlank()) cdcDeDoType.put(doType, cdc.trim());
                         break;
+                    }
                     case "DO":
                         if (lnodeType != null) {
                             String k = lnodeType + "." + r.getAttributeValue(null, "name");
@@ -166,6 +192,9 @@ final class DescripcionesScl {
                     case "SDO":
                         if (doType != null && desc != null && !desc.isBlank()) {
                             descEnDoType.put(doType + "." + r.getAttributeValue(null, "name"), desc.trim());
+                        }
+                        if ("SDO".equals(tag) && doType != null && r.getAttributeValue(null, "type") != null) {
+                            tipoDeSdo.put(doType + "." + r.getAttributeValue(null, "name"), r.getAttributeValue(null, "type"));
                         }
                         break;
                     default:

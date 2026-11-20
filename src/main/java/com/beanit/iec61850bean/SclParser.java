@@ -31,6 +31,12 @@
  * FCDA ... not found in Model": tanto el CID exportado por la app como un CID de fabricante.
  * Ahora cada DA con fc="SG" se crea también con fc="SE", con los mismos valores.
  *
+ * SGCB (2026-11-15): un &lt;SettingControl&gt; en LN0 crea LLN0$SP$SGCB (crearSgcb); antes no
+ * existia por MMS.
+ *
+ * configRef y dataRef (2026-11-15): el OptFields del SCL ya no los pierde. El Urcb arma
+ * conf-rev; las referencias las agrega ServerAssociation (ReferenciasEnReporte).
+ *
  * La clase se resuelve antes que la del jar porque el classpath de ejecución es
  * "classes;lib\*.jar" y maven-assembly-plugin da precedencia a las clases del proyecto.
  */
@@ -354,6 +360,12 @@ public class SclParser {
       Node childNode = lnXmlNode.getChildNodes().item(i);
       if ("ReportControl".equals(childNode.getNodeName())) {
         dataObjects.addAll(createReportControlBlocks(childNode, ref));
+      } else if ("SettingControl".equals(childNode.getNodeName())) {
+        // PARCHE IEDNavigator (2026-11-15): la biblioteca ignoraba SettingControl y el SGCB
+        // no existia por MMS (IEDScout: "IED has no Setting Group Control Blocks").
+        boolean yaEsta = false;
+        for (FcDataObject d : dataObjects) yaEsta |= d.getFc() == Fc.SP && "SGCB".equals(d.getName());
+        if (!yaEsta) dataObjects.add(crearSgcb(childNode, ref));
       }
     }
 
@@ -473,6 +485,48 @@ public class SclParser {
     return dataSet;
   }
 
+  /**
+   * SGCB de IEC 61850-8-1 (LLN0$SP$SGCB) a partir de &lt;SettingControl numOfSGs actSG resvTms&gt;:
+   * NumOfSG, ActSG y EditSG (INT8U), CnfEdit (BOOLEAN), LActTm (TimeStamp) y ResvTms (INT16U).
+   * EditSG arranca en 0 (ninguno en edicion).
+   */
+  private static FcDataObject crearSgcb(Node settingControl, String lnRef) {
+    NamedNodeMap at = settingControl.getAttributes();
+    int numOfSG = entero(at.getNamedItem("numOfSGs"), 1);
+    int actSG = entero(at.getNamedItem("actSG"), 1);
+    int resvTms = entero(at.getNamedItem("resvTms"), 0);
+    String base = lnRef + ".SGCB";
+    List<FcModelNode> hijos = new ArrayList<>();
+    BdaInt8U num = new BdaInt8U(new ObjectReference(base + ".NumOfSG"), Fc.SP, null, false, false);
+    num.setValue((short) numOfSG);
+    BdaInt8U act = new BdaInt8U(new ObjectReference(base + ".ActSG"), Fc.SP, null, true, false);
+    act.setValue((short) Math.max(1, Math.min(actSG, numOfSG)));
+    BdaInt8U edit = new BdaInt8U(new ObjectReference(base + ".EditSG"), Fc.SP, null, true, false);
+    edit.setValue((short) 0);
+    BdaBoolean cnf = new BdaBoolean(new ObjectReference(base + ".CnfEdit"), Fc.SP, null, false, false);
+    cnf.setValue(false);
+    BdaTimestamp lact = new BdaTimestamp(new ObjectReference(base + ".LActTm"), Fc.SP, null, false, false);
+    lact.setInstant(java.time.Instant.now());
+    BdaInt16U resv = new BdaInt16U(new ObjectReference(base + ".ResvTms"), Fc.SP, null, false, false);
+    resv.setValue(resvTms);
+    hijos.add(num);
+    hijos.add(act);
+    hijos.add(edit);
+    hijos.add(cnf);
+    hijos.add(lact);
+    hijos.add(resv);
+    return new FcDataObject(new ObjectReference(base), Fc.SP, hijos);
+  }
+
+  private static int entero(Node atributo, int porDefecto) {
+    if (atributo == null) return porDefecto;
+    try {
+      return Integer.parseInt(atributo.getNodeValue().trim());
+    } catch (NumberFormatException e) {
+      return porDefecto;
+    }
+  }
+
   private List<Rcb> createReportControlBlocks(Node xmlNode, String parentRef)
       throws SclParseException {
 
@@ -572,21 +626,23 @@ public class SclParser {
                 optFields.setDataSetName(node.getNodeValue().equalsIgnoreCase("true"));
 
               }
-              // not supported for now
-              // else if (nodeName.equals("dataRef")) {
-              // optFields.setDataReference(node.getNodeValue().equals("true"));
-              //
-              // }
+              // PARCHE IEDNavigator (2026-11-15): dataRef se respeta; ServerAssociation agrega
+              // las referencias al reporte (ReferenciasEnReporte).
+              else if (nodeName.equals("dataRef")) {
+                optFields.setDataReference(node.getNodeValue().equalsIgnoreCase("true"));
+              }
               else if (nodeName.equals("bufOvfl")) {
                 optFields.setBufferOverflow(node.getNodeValue().equalsIgnoreCase("true"));
 
               } else if (nodeName.equals("entryID")) {
                 optFields.setEntryId(node.getNodeValue().equalsIgnoreCase("true"));
               }
-              // not supported for now:
-              // else if (nodeName.equals("configRef")) {
-              // optFields.setConfigRevision(node.getNodeValue().equals("true"));
-              // }
+              // PARCHE IEDNavigator (2026-11-15): configRef se respeta. El Urcb de la biblioteca
+              // sí arma conf-rev en el reporte; el parser lo descartaba y el RCB quedaba sin el
+              // campo que pide el CID (el simulador de OMICRON IEDScout sí lo manda).
+              else if (nodeName.equals("configRef")) {
+                optFields.setConfigRevision(node.getNodeValue().equalsIgnoreCase("true"));
+              }
             }
           }
         } else if ("RptEnabled".equals(childNode.getNodeName())) {

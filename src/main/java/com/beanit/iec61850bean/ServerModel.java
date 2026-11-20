@@ -24,6 +24,10 @@
  * consulta posterior respondía PARAMETER_VALUE_INAPPROPRIATE "DataSet with that reference does
  * not exist". Reproducido con la librería sola y un SCL mínimo (LD A / A_B).
  *
+ * Segundo cambio (2026-11-15), en getNodeFromVariableDef(): la lectura de todo un FC de un LN
+ * ("LLN0$ST") devuelve una estructura con sus DO (NodoFcDeLn) en vez de tirar "invalid mms
+ * item id". OMICRON IEDScout la usa al descubrir un IED (test/TestLecturaFcDeLn).
+ *
  * La clase se resuelve antes que la del jar porque el classpath de ejecución es
  * "classes;lib\*.jar" y maven-assembly-plugin da precedencia a las clases del proyecto.
  */
@@ -47,6 +51,9 @@ public final class ServerModel extends ModelNode {
 
   private final Map<String, Urcb> urcbs = new HashMap<>();
   private final Map<String, Brcb> brcbs = new HashMap<>();
+
+  // PARCHE IEDNavigator (2026-11-15): motor de cada BRCB (reportes con buffer). Ver ReportadorBrcb.
+  final Map<Brcb, ReportadorBrcb> reportadoresBrcb = new java.util.IdentityHashMap<>();
 
   public ServerModel(List<LogicalDevice> logicalDevices, Collection<DataSet> dataSets) {
     children = new LinkedHashMap<>();
@@ -332,8 +339,17 @@ public final class ServerModel extends ModelNode {
     int index2 = mmsItemId.indexOf('$', index1 + 1);
 
     if (index2 == -1) {
-      throw new ServiceError(
-          ServiceError.FAILED_DUE_TO_COMMUNICATIONS_CONSTRAINT, "invalid mms item id");
+      // PARCHE IEDNavigator (2026-11-15): "LN$FC" es la lectura de todo un FC del LN (IEDScout
+      // lo hace al descubrir). La biblioteca tiraba "invalid mms item id" y el pedido entero
+      // fallaba; ahora se devuelve una estructura con los DO de esa FC (NodoFcDeLn), la misma
+      // que describe GetVariableAccessAttributes. Sin DO en esa FC: object-non-existent.
+      Fc fcLn = Fc.fromString(mmsItemId.substring(index1 + 1));
+      if (fcLn == null) {
+        throw new ServiceError(
+            ServiceError.FAILED_DUE_TO_COMMUNICATIONS_CONSTRAINT,
+            "unknown functional constraint: " + mmsItemId.substring(index1 + 1));
+      }
+      return NodoFcDeLn.de(ln, fcLn);
     }
 
     Fc fc = Fc.fromString(mmsItemId.substring(index1 + 1, index2));

@@ -22,6 +22,8 @@ class ConnectionManager {
 
     interface Context {
         void log(String msg);
+        /** Se eligio un SCL para cargar (lista de recientes, titulo de la ventana). */
+        default void sclElegido(File f) { }
         void updateStatus(boolean active, String msg);
         Component parentWindow();
         ExecutorService backgroundExecutor();
@@ -113,6 +115,15 @@ class ConnectionManager {
     private int currentPort = 0;
     private String connectedLocalIp = "";
 
+    // Etapa de una conexión en curso, para la barra de contexto: clave I18n del título
+    // ("Conectando…", "Leyendo modelo…", "Leyendo valores") y detalle (host:puerto o el avance).
+    // Mientras hay etapa, el botón principal dice Cancelar.
+    private volatile String etapa = null;
+    private volatile String etapaDetalle = "";
+    private volatile boolean leyendoValores = false;
+    private final java.util.concurrent.atomic.AtomicBoolean cancelarLectura =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
     // ─── Constructor ─────────────────────────────────────────────────────────────────
 
     ConnectionManager(Context ctx) {
@@ -127,9 +138,39 @@ class ConnectionManager {
     int getCurrentPort() { return currentPort; }
     String getConnectedLocalIp() { return connectedLocalIp; }
 
+    /** Clave I18n de la etapa en curso de la conexión, o null si no hay ninguna. */
+    String etapa() { return etapa; }
+    String etapaDetalle() { return etapaDetalle; }
+    /** Hay una conexión o una lectura de valores que se puede cancelar. */
+    boolean cancelable() { return etapa != null; }
+
+    private void ponerEtapa(String clave, String detalle) {
+        etapa = clave;
+        etapaDetalle = detalle == null ? "" : detalle;
+    }
+
+    /**
+     * Botón Cancelar. Durante la conexión o la lectura del modelo corta la asociación (la UI
+     * vuelve a Desconectado cuando connect() termina); durante "Leer todo" corta la lectura y
+     * deja la conexión como está.
+     */
+    void cancelar() {
+        if (etapa == null || "ctx.cli.cancelling".equals(etapa)) return;
+        if (leyendoValores) {
+            cancelarLectura.set(true);
+            return;
+        }
+        ctx.log(I18n.t("log.cm.conncancelleduser"));
+        ponerEtapa("ctx.cli.cancelling", etapaDetalle);
+        // Cerrar el socket puede tardar lo que tarde el sistema operativo: fuera del EDT
+        new Thread(() -> ctx.getClient().cancelarConexion(), "cancelar-conexion").start();
+    }
+
     // ─── Public API (called from IEDNavigatorApp) ──────────────────────────────────────
 
     void switchToServerMode() {
+        // Una conexión o lectura en curso se cancela; una establecida se cierra
+        if (cancelable()) cancelar();
         // Si estamos conectados como cliente, desconectar primero
         if (ctx.isConnected() && ctx.getClient() != null) {
             disconnect();
@@ -155,7 +196,7 @@ class ConnectionManager {
         if (ctx.isServerRunning() && ctx.getServer() != null) {
             ctx.getServer().stop();
             ctx.setServerRunning(false);
-            ctx.setBtnStartStopText("Iniciar Simulacion");
+            ctx.setBtnStartStopText(I18n.t("ctx.btn.start"));
             ctx.log(I18n.t("log.cm.srvstop.tomodecli"));
         }
         ctx.switchUiToClientMode();
@@ -168,8 +209,8 @@ class ConnectionManager {
      */
     void obtenerCidDelIed() {
         if (!ctx.isConnected() || ctx.getClient() == null) {
-            JOptionPane.showMessageDialog(ctx.parentWindow(), "Primero conecte a un IED",
-                "No conectado", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(ctx.parentWindow(), I18n.t("err.notconnected.msg"),
+                I18n.t("err.notconnected.title"), JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -698,9 +739,16 @@ class ConnectionManager {
             }
         });
 
+        File ultimo = ctx.getLoadedSclFile();
+        if (ultimo != null && ultimo.getParentFile() != null) fc.setCurrentDirectory(ultimo.getParentFile());
         if (fc.showOpenDialog(ctx.parentWindow()) == JFileChooser.APPROVE_OPTION) {
-            File file = fc.getSelectedFile();
+            cargarSclArchivo(fc.getSelectedFile());
+        }
+    }
 
+    /** Carga un SCL ya elegido: desde el selector o desde Archivo > Recientes. */
+    void cargarSclArchivo(File file) {
+        {
             // Con la simulación activa, cargar otro SCL reemplazaba el árbol, la placa y la
             // cabecera, pero el servidor seguía sirviendo el modelo anterior: el 2026-10-19 se
             // cargó un ABB sobre la simulación de un 7SL87 y durante dos días la pantalla
@@ -728,6 +776,7 @@ class ConnectionManager {
 
             final File anterior = ctx.getLoadedSclFile();
             ctx.setLoadedSclFile(file);
+            ctx.sclElegido(file);
             ctx.setLblFileName(file.getName());
             ctx.updateStatus(false, I18n.t("status.analyzingscl"));
             ctx.setStatusIndicatorConnecting();
@@ -764,12 +813,14 @@ class ConnectionManager {
                             SwingUtilities.invokeLater(() -> {
                                 espera.terminar();
                                 ctx.updateStatus(false, I18n.t("status.loadcancelled"));
-                                ctx.setLblFileName("");
-                                // Se había detenido la simulación para este archivo y no se
-                                // cargó nada: el modelo anterior sigue, se la reanuda.
+                                // No se cargó nada: vuelve el archivo anterior (o ninguno). Antes
+                                // quedaba el cancelado, y el título y la barra lo mostraban como
+                                // cargado sin serlo.
+                                ctx.setLoadedSclFile(anterior);
+                                ctx.setLblFileName(anterior != null ? anterior.getName() : "");
+                                // Se había detenido la simulación para este archivo: el modelo
+                                // anterior sigue, se la reanuda.
                                 if (reiniciar && !ctx.isServerRunning()) {
-                                    ctx.setLoadedSclFile(anterior);
-                                    if (anterior != null) ctx.setLblFileName(anterior.getName());
                                     ctx.log(I18n.t("log.cm.reloadwhilesim.resumed"));
                                     toggleServer();
                                 }
@@ -853,7 +904,7 @@ class ConnectionManager {
         if (ctx.isServerRunning()) {
             ctx.getServer().stop();
             ctx.setServerRunning(false);
-            ctx.setBtnStartStopText("Iniciar Simulacion");
+            ctx.setBtnStartStopText(I18n.t("ctx.btn.start"));
             ctx.updateStatus(false, I18n.t("status.simstopped"));
             ctx.updateConnectionInfo("", 0);
             dejarDeVigilarIpLocal();
@@ -874,7 +925,7 @@ class ConnectionManager {
                             currentPort = finalPort;
                             String localIp = getLocalIpAddress();
                             currentHost = localIp;
-                            ctx.setBtnStartStopText("Detener Simulacion");
+                            ctx.setBtnStartStopText(I18n.t("ctx.btn.stop"));
                             ctx.updateStatus(true, I18n.t("status.simactive"));
                             ctx.updateConnectionInfo(localIp + " (servidor)", finalPort);
                             ctx.log(I18n.t("log.cm.simactive"));
@@ -905,13 +956,15 @@ class ConnectionManager {
                 });
 
             } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(ctx.parentWindow(), "Puerto invalido");
+                JOptionPane.showMessageDialog(ctx.parentWindow(), I18n.t("err.port.invalid"));
             }
         }
     }
 
     void toggleConnection() {
-        if (ctx.isConnected()) {
+        if (cancelable()) {
+            cancelar();
+        } else if (ctx.isConnected()) {
             disconnect();
         } else {
             connect();
@@ -940,7 +993,7 @@ class ConnectionManager {
     private void connect() {
         String host = ctx.getTfHost().trim();
         if (host.isEmpty()) {
-            JOptionPane.showMessageDialog(ctx.parentWindow(), "Ingrese el host");
+            JOptionPane.showMessageDialog(ctx.parentWindow(), I18n.t("err.host.empty"));
             return;
         }
 
@@ -948,14 +1001,15 @@ class ConnectionManager {
         try {
             port = Integer.parseInt(ctx.getTfClientPort().trim());
         } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(ctx.parentWindow(), "Puerto invalido");
+            JOptionPane.showMessageDialog(ctx.parentWindow(), I18n.t("err.port.invalid"));
             return;
         }
 
         // También acá, no sólo al desconectar: si la conexión anterior se cortó por un
         // camino que no pasó por handleDisconnect(), el equipo nuevo no hereda nada.
         olvidarEquipoAnterior();
-        ctx.setBtnConnectEnabled(false);
+        // El botón queda habilitado: mientras se conecta dice Cancelar (toggleConnection)
+        ponerEtapa("ctx.cli.connecting", host + ":" + port);
         ctx.updateStatus(false, I18n.t("status.connecting", host, String.valueOf(port)));
         ctx.setStatusIndicatorConnecting();
         ctx.log(I18n.t("log.cm.connectingto", host, String.valueOf(port)));
@@ -966,7 +1020,9 @@ class ConnectionManager {
                 long startTime = System.currentTimeMillis();
 
                 ctx.getClient().setConnectionTimeoutMs(ctx.getConnectionTimeoutMs());
+                ctx.getClient().setAlAsociar(() -> ponerEtapa("ctx.cli.readingmodel", host + ":" + port));
                 ctx.getClient().connect(host, port);
+                ponerEtapa(null, "");
 
                 long elapsed = System.currentTimeMillis() - startTime;
                 ctx.log(I18n.t("log.cm.connestablished", formatDuration(elapsed)));
@@ -1002,18 +1058,10 @@ class ConnectionManager {
                         ctx.displayClientModel();
                         // Lectura completa opcional. Apagada de fabrica: contra un IED de
                         // 106.000 nodos son 22 s mas sobre los 17 de la conexion, y crece
-                        // con el modelo. Quien la necesita la enciende.
+                        // con el modelo. Quien la necesita la enciende. Corre fuera del EDT
+                        // (antes congelaba la ventana esos 22 s) y se puede cancelar.
                         if (ctx.leerTodoAlConectar() && ctx.getClient() != null) {
-                            ctx.log(I18n.t("log.cid.leyendovalores"));
-                            IEC61850Client.LecturaValores lv =
-                                ctx.getClient().leerTodosLosValores((hechos, total) -> {
-                                    if (hechos % 500 == 0 || hechos == total) {
-                                        ctx.log(I18n.t("log.cid.avance", hechos, total));
-                                    }
-                                });
-                            ctx.log(I18n.t("log.cid.valoresleidos",
-                                    lv.leidos.size(), lv.pedidos, lv.fallidos));
-                            ctx.displayClientModel();
+                            leerTodoEnSegundoPlano();
                         }
                         ctx.log(I18n.t("log.cm.connectedmodelreceived"));
 
@@ -1058,7 +1106,17 @@ class ConnectionManager {
                 });
 
             } catch (Exception e) {
+                ponerEtapa(null, "");
                 String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                if (ctx.getClient().fueCancelada()) {
+                    // Cancelar: se descarta el modelo a medias y la UI vuelve a Desconectado
+                    try { ctx.getClient().disconnect(); } catch (Exception ignorada) { }
+                    SwingUtilities.invokeLater(() -> {
+                        ctx.setBtnConnectEnabled(true);
+                        ctx.updateStatus(false, I18n.t("status.conncancelled"));
+                    });
+                    return;
+                }
                 if (errMsg.startsWith("SCL_FALLBACK:")) {
                     // El IED rechazó retrieveModel() por DataSet inexistente, pero la asociación MMS
                     // sigue activa. Pedimos al usuario un archivo SCL local para usarlo como modelo.
@@ -1070,11 +1128,11 @@ class ConnectionManager {
 
                     SwingUtilities.invokeLater(() -> {
                         int choice = JOptionPane.showConfirmDialog(ctx.parentWindow(),
-                            "<html><b>El IED rechazó la descarga del modelo</b><br><br>" +
-                            "Causa: " + errMsg.substring("SCL_FALLBACK:".length()).trim() + "<br><br>" +
-                            "¿Desea cargar un archivo SCL/CID local para continuar?<br>" +
-                            "<small>(La conexión MMS sigue activa — solo se usará el SCL para navegación)</small></html>",
-                            "Fallback SCL", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                            "<html><b>" + I18n.t("dlg.fallback.head") + "</b><br><br>"
+                            + I18n.t("dlg.fallback.cause", errMsg.substring("SCL_FALLBACK:".length()).trim())
+                            + "<br><br>" + I18n.t("dlg.fallback.ask") + "<br>"
+                            + "<small>" + I18n.t("dlg.fallback.note") + "</small></html>",
+                            I18n.t("dlg.fallback.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 
                         if (choice != JOptionPane.YES_OPTION) {
                             ctx.getClient().cancelPendingAssociation();
@@ -1085,7 +1143,7 @@ class ConnectionManager {
                         }
 
                         JFileChooser fc = new JFileChooser();
-                        fc.setDialogTitle("Seleccionar SCL/CID del IED");
+                        fc.setDialogTitle(I18n.t("dlg.fallback.choose"));
                         fc.setFileFilter(new javax.swing.filechooser.FileFilter() {
                             public boolean accept(File f) {
                                 if (f.isDirectory()) return true;
@@ -1113,7 +1171,7 @@ class ConnectionManager {
                                 java.util.List<String> iedNames = tmpServer.getAvailableIEDs(sclFile.getAbsolutePath());
 
                                 if (iedNames.isEmpty()) {
-                                    throw new Exception("No se encontraron IEDs en el archivo SCL");
+                                    throw new Exception(I18n.t("err.scl.noieds"));
                                 }
 
                                 int iedIdx = 0;
@@ -1134,7 +1192,7 @@ class ConnectionManager {
                                 }
 
                                 ServerModel model = tmpServer.getMergedModel(iedIdx);
-                                if (model == null) throw new Exception("No se pudo obtener el modelo del IED " + iedIdx);
+                                if (model == null) throw new Exception(I18n.t("err.scl.nomodel", String.valueOf(iedIdx)));
 
                                 boolean ok = ctx.getClient().attachExternalModel(model);
                                 if (!ok) throw new Exception("attachExternalModel falló");
@@ -1194,6 +1252,42 @@ class ConnectionManager {
         });
     }
 
+    /**
+     * "Leer todo al conectar": la lectura de todos los valores, fuera del EDT. La píldora
+     * muestra el avance y el botón principal dice Cancelar; cancelar corta la lectura y deja
+     * la conexión. Al terminar se repinta el árbol con lo leído.
+     */
+    private void leerTodoEnSegundoPlano() {
+        cancelarLectura.set(false);
+        leyendoValores = true;
+        ponerEtapa("ctx.cli.readingvalues", "");
+        ctx.log(I18n.t("log.cid.leyendovalores"));
+        ctx.backgroundExecutor().submit(() -> {
+            IEC61850Client.LecturaValores lv = null;
+            try {
+                lv = ctx.getClient().leerTodosLosValores((hechos, total) -> {
+                    etapaDetalle = hechos + "/" + total;
+                    if (hechos % 500 == 0 || hechos == total) {
+                        ctx.log(I18n.t("log.cid.avance", String.valueOf(hechos), String.valueOf(total)));
+                    }
+                }, cancelarLectura::get);
+            } catch (Exception e) {
+                ctx.log(I18n.t("log.cm.connerror", e.getClass().getSimpleName(), String.valueOf(e.getMessage())));
+            } finally {
+                leyendoValores = false;
+                ponerEtapa(null, "");
+            }
+            final IEC61850Client.LecturaValores fin = lv;
+            SwingUtilities.invokeLater(() -> {
+                if (fin != null) {
+                    ctx.log(I18n.t(fin.cancelada ? "log.cid.lecturacancelada" : "log.cid.valoresleidos",
+                            String.valueOf(fin.leidos.size()), String.valueOf(fin.pedidos), String.valueOf(fin.fallidos)));
+                }
+                if (ctx.isConnected()) ctx.displayClientModel();
+            });
+        });
+    }
+
     private void disconnect() {
         ctx.stopPolling();
         ctx.getClient().disconnect();
@@ -1238,7 +1332,7 @@ class ConnectionManager {
         currentHost = "";
         currentPort = 0;
         connectedLocalIp = "";
-        ctx.setBtnConnectText("Conectar");
+        ctx.setBtnConnectText(I18n.t("ctx.btn.connect"));
         ctx.setBtnConnectEnabled(true);
         ctx.setCbPollingEnabled(false);
         ctx.setCbPollingSelected(false);

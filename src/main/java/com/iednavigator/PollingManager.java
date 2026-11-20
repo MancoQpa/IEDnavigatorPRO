@@ -261,7 +261,7 @@ class PollingManager {
                     ctx.getClient().readNodeValues((FcModelNode) info.node);
                     if (info.node instanceof BasicDataAttribute) {
                         BasicDataAttribute bda = (BasicDataAttribute) info.node;
-                        info.value = ValorBda.texto(bda);
+                        info.ponerValor(ValorBda.texto(bda));
                         ctx.getTreeModel().nodeChanged(treeNode);
                         ctx.log(I18n.t("log.value", info.value));
                     } else {
@@ -324,7 +324,7 @@ class PollingManager {
                 String newValue = ctx.formatEnumValue(info.node, ValorBda.texto(bda));
                 if (newValue == null) newValue = "";
                 if (!newValue.equals(info.value == null ? "" : info.value)) {
-                    info.value = newValue;
+                    info.ponerValor(newValue);
                     ctx.getTreeModel().nodeChanged(treeNode);
                 }
             }

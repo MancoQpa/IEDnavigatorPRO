@@ -39,6 +39,12 @@ class ModelTreeBuilder {
      * @param logger       Consumer<String> para logging
      * @param enumFormatter BiFunction (ModelNode, rawValue) → formattedValue
      */
+    /**
+     * Ver › Agrupar DO por FC. Apagado, el arbol vuelve a tener un DO por cada FC, como antes
+     * del rediseño: es la red de seguridad si el agrupado confunde algo.
+     */
+    static volatile boolean agruparDo = true;
+
     static void buildTree(
             ServerModel model,
             DefaultMutableTreeNode rootNode,
@@ -112,7 +118,7 @@ class ModelTreeBuilder {
         if (treeNode != null) {
             Object userObj = treeNode.getUserObject();
             if (userObj instanceof NodeInfo) {
-                ((NodeInfo) userObj).value = value;
+                ((NodeInfo) userObj).ponerValor(value);
                 treeModel.nodeChanged(treeNode);
             }
         }
@@ -133,7 +139,7 @@ class ModelTreeBuilder {
         if (treeNode != null && treeNode.getUserObject() instanceof NodeInfo) {
             NodeInfo info = (NodeInfo) treeNode.getUserObject();
             if (info.node instanceof BasicDataAttribute) {
-                info.value = formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node));
+                info.ponerValor(formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node)));
                 treeModel.nodeChanged(treeNode);
                 return;
             }
@@ -145,7 +151,7 @@ class ModelTreeBuilder {
                 if (node.getUserObject() instanceof NodeInfo) {
                     NodeInfo info = (NodeInfo) node.getUserObject();
                     if (info.node instanceof BasicDataAttribute) {
-                        info.value = formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node));
+                        info.ponerValor(formatFn.apply(info.node, ValorBda.texto((BasicDataAttribute) info.node)));
                         treeModel.nodeChanged(node);
                     }
                 }
@@ -177,6 +183,52 @@ class ModelTreeBuilder {
             BiFunction<ModelNode, String, String> enumFormatter) {
         Collection<ModelNode> children = modelNode.getChildren();
         if (children == null) return;
+        agregarHijos(parent, modelNode, new ArrayList<>(children), nodeMap, enumFormatter);
+    }
+
+    /**
+     * Agrega al nodo del arbol los hijos de un nodo del modelo (o, para un DO agrupado, los de
+     * todas sus variantes).
+     *
+     * Un DO aparece una sola vez aunque la libreria lo tenga una vez por FC (Beh [ST],
+     * Beh [SV]...): sus atributos de todos los FC cuelgan del mismo nodo y el FC se ve junto a
+     * cada atributo. Lo mismo un SDO dentro de un DO (phsA de un WYE). Rediseño de 2026-11.
+     */
+    private static void agregarHijos(
+            DefaultMutableTreeNode parent,
+            ModelNode padreModelo,
+            List<ModelNode> children,
+            Map<String, DefaultMutableTreeNode> nodeMap,
+            BiFunction<ModelNode, String, String> enumFormatter) {
+        if (agruparDo && (padreModelo instanceof LogicalNode || padreModelo instanceof FcDataObject)) {
+            Map<String, List<ModelNode>> porNombre = new LinkedHashMap<>();
+            List<ModelNode> otros = new ArrayList<>();
+            for (ModelNode child : children) {
+                if (child instanceof FcDataObject) {
+                    porNombre.computeIfAbsent(child.getName(), k -> new ArrayList<>()).add(child);
+                } else {
+                    otros.add(child);
+                }
+            }
+            for (List<ModelNode> variantes : porNombre.values()) {
+                ModelNode principal = variantes.get(0);
+                for (ModelNode v : variantes) {
+                    if (((FcModelNode) v).getFc() == Fc.ST) { principal = v; break; }
+                }
+                DefaultMutableTreeNode doNode = createTreeNode(principal, getNodePrefix(principal), enumFormatter);
+                NodeInfo info = (NodeInfo) doNode.getUserObject();
+                info.fc = null;
+                info.variantes = variantes;
+                parent.add(doNode);
+                nodeMap.put(principal.getReference().toString(), doNode);
+                List<ModelNode> hijos = new ArrayList<>();
+                for (ModelNode v : variantes) {
+                    if (v.getChildren() != null) hijos.addAll(v.getChildren());
+                }
+                agregarHijos(doNode, principal, hijos, nodeMap, enumFormatter);
+            }
+            children = otros;
+        }
 
         for (ModelNode child : children) {
             String prefix = getNodePrefix(child);
@@ -217,12 +269,19 @@ class ModelTreeBuilder {
         return new DefaultMutableTreeNode(info);
     }
 
-    private static String getNodePrefix(ModelNode node) {
+    /**
+     * Marca de cada nodo, como en el SCL: DO (de un LN), SDO (un DO dentro de otro), DA
+     * (atributo de un DO, simple o compuesto: stVal, q, Oper) y BDA (componente de un DA
+     * compuesto: Oper.ctlVal, mag.f). Hasta 2026-11 un DA compuesto salia como "SDO" y un
+     * SDO de verdad como "DO".
+     */
+    static String getNodePrefix(ModelNode node) {
         if (node instanceof LogicalDevice)          return "LD";
         if (node instanceof LogicalNode)            return "LN";
-        if (node instanceof FcDataObject)           return "DO";
-        if (node instanceof ConstructedDataAttribute) return "SDO";
-        if (node instanceof BasicDataAttribute)     return "DA";
+        if (node instanceof FcDataObject)           return node.getParent() instanceof FcDataObject ? "SDO" : "DO";
+        if (node instanceof ConstructedDataAttribute || node instanceof BasicDataAttribute || node instanceof Array) {
+            return node.getParent() instanceof FcDataObject || node.getParent() == null ? "DA" : "BDA";
+        }
         return "";
     }
 
@@ -490,7 +549,7 @@ class ModelTreeBuilder {
             NodeInfo info = (NodeInfo) userObj;
             if (info.node instanceof BasicDataAttribute) {
                 BasicDataAttribute bda = (BasicDataAttribute) info.node;
-                info.value = ValorBda.texto(bda);
+                info.ponerValor(ValorBda.texto(bda));
                 treeModel.nodeChanged(treeNode);
             }
         }

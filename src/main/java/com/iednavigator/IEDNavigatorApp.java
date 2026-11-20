@@ -88,6 +88,55 @@ public class IEDNavigatorApp extends JFrame {
     private DefaultTreeModel treeModel;
     private Map<String, DefaultMutableTreeNode> nodeMap = new HashMap<>();
     private JTextArea logArea;
+    /** Registro del rediseño: niveles, filtros, ×N (PanelRegistro). */
+    private PanelRegistro registro;
+    private JSplitPane splitDerecha;
+    /** Alto del registro abierto; se recuerda al cerrarlo. Al principio, 190 px. */
+    private int altoRegistro = -1;
+    /** Lo que la densidad ajusta ademas de las filas: margen exterior y separacion entre paneles. */
+    private JPanel panelContenido;
+    private JSplitPane splitPrincipal;
+    private int tamDivisor;
+    /** Boton Registro de la fila de pestañas, con el badge de avisos y errores. */
+    private final BotonRegistro btnRegistro = new BotonRegistro();
+    /** Contador y Limpiar de la watchlist, en la barra del Monitor (solo en Cliente). */
+    private JPanel panelWatchlist;
+    private final JLabel lblWatchlistMonitor = new JLabel();
+    private final JLabel vacioPasos = new JLabel();
+    /** Paneles que el menu Ver muestra u oculta, y las pestañas que Herramientas selecciona. */
+    private JScrollPane treeScroll, logScroll;
+    private JTabbedPane rightTabbedPane;
+    /** Nombre del IED que muestra la ventana (para el titulo). */
+    private String iedEnPantalla = "";
+    private String hostEnPantalla = "";
+    /** "modelo · fabricante · cfg" del IED en pantalla (barra de contexto). */
+    private String subEnPantalla = "";
+    private BarraContexto barraContexto;
+    /** Arbol o estado vacio ("no hay SCL" / "sin conexion"). */
+    private JPanel panelArbol;
+    /** Panel Propiedades debajo del arbol, y el split vertical que los separa. */
+    private PanelPropiedades panelPropiedades;
+    private JSplitPane splitIzquierda;
+    private JCheckBoxMenuItem miPropiedades;
+    private final CardLayout cardsArbol = new CardLayout();
+    private final JLabel vacioTitulo = new JLabel();
+    private final JLabel vacioTexto = new JLabel();
+    private final JButton vacioBoton = new JButton();
+    private JPanel tarjetaRegistro;
+    /** Arbol: cartas (arbol / vacio), busqueda, ruta del seleccionado y contador. */
+    private JPanel cartasArbol;
+    private BuscadorArbol buscador;
+    private final JTextField campoBusqueda = new JTextField();
+    private final JLabel lblCoincidencias = new JLabel();
+    private final JLabel lblRuta = new JLabel(" ");
+    private final JLabel lblCuentaNodos = new JLabel();
+    private ArbolCeldaRenderer rendererArbol;
+    /** Herramientas que salieron de las pestañas: su panel y la ventana que lo muestra. */
+    private final Map<String, JComponent> panelesHerramienta = new HashMap<>();
+    private final Map<String, JDialog> ventanasHerramienta = new HashMap<>();
+    private static final String URL_DOCUMENTACION = "https://mancoqpa.github.io/IEDnavigatorPRO/";
+    private static final java.util.prefs.Preferences PREFS_UI =
+            java.util.prefs.Preferences.userRoot().node("com/iednavigator");
     /** Registro de la sesión en disco; null si no se pudo abrir (ver SessionLog). */
     private SessionLog sessionLog;
 
@@ -228,6 +277,30 @@ public class IEDNavigatorApp extends JFrame {
                 }
             }
         });
+
+        // La vista de paneles también recibe lo que se suelta desde el árbol
+        if (monitorPanelesScroll != null) {
+            monitorPanelesScroll.getViewport().setDropTarget(new DropTarget() {
+                @Override public synchronized void dragEnter(DropTargetDragEvent dtde) {
+                    if (dtde.isDataFlavorSupported(DataFlavor.stringFlavor)) dtde.acceptDrag(DnDConstants.ACTION_COPY);
+                    else dtde.rejectDrag();
+                }
+                @Override public synchronized void drop(DropTargetDropEvent dtde) {
+                    try {
+                        dtde.acceptDrop(DnDConstants.ACTION_COPY);
+                        TreePath[] paths = modelTree.getSelectionPaths();
+                        if (paths != null) {
+                            for (TreePath path : paths) addNodeToMonitor((DefaultMutableTreeNode) path.getLastPathComponent());
+                        }
+                        dtde.dropComplete(true);
+                        if (monitorPaneles != null) monitorPaneles.actualizar();
+                    } catch (Exception e) {
+                        log(I18n.t("log.app.droperror", e.getMessage()));
+                        dtde.dropComplete(false);
+                    }
+                }
+            });
+        }
     }
 
     // Colores
@@ -290,7 +363,7 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private void initUI() {
-        setTitle(I18n.t("app.title") + " - " + Version.etiqueta());
+        actualizarTitulo();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 800);
         setLocationRelativeTo(null);
@@ -309,13 +382,12 @@ public class IEDNavigatorApp extends JFrame {
         // Panel principal
         JPanel mainPanel = new JPanel(new BorderLayout(0, 0));
 
-        // === TOOLBAR PROFESIONAL ===
-        JToolBar toolbar = createToolbar();
-        mainPanel.add(toolbar, BorderLayout.NORTH);
-
         // === Panel de contenido ===
         JPanel contentPanel = new JPanel(new BorderLayout(5, 5));
-        contentPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(separacionPaneles(), separacionPaneles(),
+                separacionPaneles(), separacionPaneles()));
+        panelContenido = contentPanel;
+        contentPanel.setBackground(fondoVentana());
 
         // === Panel Superior: Modo + Status + Connection Info ===
         JPanel topPanel = new JPanel(new BorderLayout(10, 0));
@@ -350,7 +422,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Info de conexion (IP:Puerto)
         lblConnectionInfo = new JLabel(I18n.t("status.noconn"));
-        lblConnectionInfo.setFont(new Font("Monospaced", Font.BOLD, 12));
+        lblConnectionInfo.setFont(Estilo.mono(Font.BOLD, 12));
         lblConnectionInfo.setForeground(new Color(0, 80, 160));
         statusPanel.add(new JLabel(I18n.t("lbl.connection")));
         statusPanel.add(lblConnectionInfo);
@@ -359,7 +431,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Panel EAST: nombre del IED/equipo activo destacado
         lblIedDisplay = new JLabel("  " + I18n.t("status.nodevice") + "  ");
-        lblIedDisplay.setFont(new Font("Dialog", Font.BOLD, 15));
+        lblIedDisplay.setFont(Estilo.ui(Font.BOLD, 15));
         lblIedDisplay.setForeground(new Color(15, 55, 120));
         lblIedDisplay.setHorizontalAlignment(SwingConstants.CENTER);
         lblIedDisplay.setVerticalAlignment(SwingConstants.CENTER);
@@ -371,7 +443,7 @@ public class IEDNavigatorApp extends JFrame {
         iedDisplayPanel.add(lblIedDisplay, BorderLayout.CENTER);
         topPanel.add(iedDisplayPanel, BorderLayout.EAST);
 
-        contentPanel.add(topPanel, BorderLayout.NORTH);
+        // El modo, el estado y el IED pasan a la barra de contexto (topPanel queda sin mostrar).
 
         // === Panel Central: Cards (Server/Client) + Tree ===
         JPanel centerPanel = new JPanel(new BorderLayout(5, 5));
@@ -385,30 +457,28 @@ public class IEDNavigatorApp extends JFrame {
 
         // Panel izquierdo (cards + log)
         JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
-        leftPanel.add(cardPanel, BorderLayout.NORTH);
+        // Los paneles Servidor/Cliente no se muestran: sus campos van al engranaje de la barra.
 
         // Log
         logArea = new JTextArea(8, 30);
         logArea.setEditable(false);
-        logArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        logArea.setFont(Estilo.mono(Font.PLAIN, 12));
         // Estilo consola: fondo levemente diferenciado (solo cosmético)
         logArea.setBackground(new Color(0xF7F9FB));
         logArea.setForeground(new Color(0x37474F));
         logArea.setMargin(new Insets(4, 8, 4, 8));
+        registro = new PanelRegistro(this::exportarRegistro, () -> mostrarRegistro(false));
+        registro.alCambiarPendientes(this::actualizarBotonRegistro);
+        btnRegistro.addActionListener(e -> mostrarRegistro(!tarjetaRegistro.isVisible()));
 
         // Menú contextual del Log: reemplaza al botón "Limpiar Log" que estaba en la barra
         // superior, donde quedaba lejos del contenido sobre el que actúa.
         JPopupMenu logMenu = new JPopupMenu();
         JMenuItem miClearLog = new JMenuItem(I18n.t("toolbar.clearlog"));
-        miClearLog.addActionListener(e -> logArea.setText(""));
+        miClearLog.addActionListener(e -> registro.limpiar());
         logMenu.add(miClearLog);
         JMenuItem miCopyLog = new JMenuItem(I18n.t("log.menu.copy"));
-        miCopyLog.addActionListener(e -> {
-            String sel = logArea.getSelectedText();
-            String txt = (sel != null && !sel.isEmpty()) ? sel : logArea.getText();
-            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
-                .setContents(new java.awt.datatransfer.StringSelection(txt), null);
-        });
+        miCopyLog.addActionListener(e -> registro.copiar());
         logMenu.add(miCopyLog);
         // Acceso al registro en disco de esta sesión (ver SessionLog).
         if (sessionLog != null) {
@@ -426,29 +496,41 @@ public class IEDNavigatorApp extends JFrame {
             });
             logMenu.add(miOpenLogDir);
         }
-        logArea.setComponentPopupMenu(logMenu);
+        registro.areaTexto().setComponentPopupMenu(logMenu);
 
-        JScrollPane logScroll = new JScrollPane(logArea);
+        logScroll = new JScrollPane(logArea);
         logScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.log")));
         logScroll.setToolTipText(I18n.t("border.log.tip"));
-        leftPanel.add(logScroll, BorderLayout.CENTER);
 
         // Tree del modelo con soporte Drag
         rootNode = new DefaultMutableTreeNode(I18n.t("tree.root"));
         treeModel = new DefaultTreeModel(rootNode);
         modelTree = new JTree(treeModel);
-        modelTree.setRootVisible(true);
-        modelTree.setCellRenderer(new ModelTreeCellRenderer(iconCache, watchlist)); // F18: usa clase externa
+        // Guias verticales, hover, barra de seleccion y resalte de cambios (ArbolUI)
+        modelTree.setUI(new ArbolUI());
+        // Rediseño: sin raiz visible (los LD arriba) y filas nuevas (ArbolCeldaRenderer)
+        modelTree.setRootVisible(false);
+        modelTree.setShowsRootHandles(true);
+        rendererArbol = new ArbolCeldaRenderer(watchlist, () -> loadedSclFile, iconCache);
+        rendererArbol.modoServidor = () -> currentMode == AppMode.SERVER;
+        rendererArbol.sinLeer = n -> currentMode == AppMode.CLIENT && client != null && !client.fueLeido(n);
+        modelTree.setCellRenderer(rendererArbol);
+        // El CDC deducido lleva un tooltip que lo aclara
+        ToolTipManager.sharedInstance().registerComponent(modelTree);
         modelTree.setDragEnabled(true);
-        modelTree.setRowHeight(20);  // Altura consistente para iconos
+        ModelTreeBuilder.agruparDo = PREFS_UI.getBoolean(PREF_AGRUPAR, true);
+        rendererArbol.mostrarDescripciones = PREFS_UI.getBoolean(PREF_DESCRIPCIONES, true);
         modelTree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         modelTree.setLargeModel(true);
-        JScrollPane treeScroll = new JScrollPane(modelTree);
+        treeScroll = new JScrollPane(modelTree);
         treeScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         treeScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("border.datamodel")));
 
         // Panel derecho con tabs: Activity Monitor, Reports, GOOSE, Setting Groups, Dataset, Data Model
-        JTabbedPane rightTabbedPane = new JTabbedPane();
+        rightTabbedPane = new JTabbedPane();
+        // Una sola fila: con la ventana angosta las pestañas se partían en dos filas y el
+        // botón Registro quedaba sobre la segunda; así se desplazan con flechas
+        rightTabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         rightTabbedPane.addTab(I18n.t("tab.monitor"), createMonitorPanel());
         Supplier<ServerModel> panelModelSupplier = () -> {
             if (currentMode == AppMode.SERVER && server != null) return server.getServerModel();
@@ -463,22 +545,32 @@ public class IEDNavigatorApp extends JFrame {
         goosePanel = new GoosePanel(createGooseContext());
         rightTabbedPane.addTab(I18n.t("tab.goose"), goosePanel.createPanel());
         // rightTabbedPane.addTab("SV (SMV)", createSampledValuesPanel()); // SIN SMV
-        rightTabbedPane.addTab(I18n.t("tab.sg"),
+        // Rediseño: cinco pestañas. "Ajustes" junta Setting Groups (el grupo activo y sus
+        // valores, arriba) y los ajustes sin grupo (SP, abajo).
+        rightTabbedPane.addTab(I18n.t("tab.ajustes"), panelAjustes(
             new SettingGroupsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
-                backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.sp"),
+                backgroundExecutor, this::navigateToFcdaInModel).createPanel(),
             new ProtectionSettingsPanel(this, this::log, panelModelSupplier, panelClientSupplier,
-                backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.dataset"),
+                backgroundExecutor, this::navigateToFcdaInModel).createPanel()));
+        rightTabbedPane.addTab(I18n.t("tab.datasets"),
             new DatasetPanel(this, this::log, panelModelSupplier, panelClientSupplier,
                 backgroundExecutor, this::navigateToFcdaInModel).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.datamodel"),
-            new DataModelPanel(this, this::log, panelModelSupplier, iconCache).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.sclcmp"),
-            new SclComparePanel(this, this::log).createPanel());
-        rightTabbedPane.addTab(I18n.t("tab.goosemap"),
-            new GooseMapPanel(this, this::log).createPanel());
+        // Comparar SCL y Mapa GOOSE: ventanas propias desde Herramientas. El Explorador del
+        // Data Model se reemplazo por el panel Propiedades, debajo del arbol.
+        panelesHerramienta.put("tab.sclcmp", new SclComparePanel(this, this::log).createPanel());
+        panelesHerramienta.put("tab.goosemap", new GooseMapPanel(this, this::log).createPanel());
         rightTabbedPane.setTabPlacement(JTabbedPane.TOP);
+        estilarPestanias(rightTabbedPane);
+        // Boton Registro al extremo derecho de la fila de pestañas
+        // (FlatLaf estira el componente final hasta el borde: va opaco y con el boton a la derecha)
+        JPanel finFila = new JPanel(new GridBagLayout());
+        finFila.setBackground(superficie());
+        finFila.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        GridBagConstraints gf = new GridBagConstraints();
+        gf.weightx = 1;
+        gf.anchor = GridBagConstraints.EAST;
+        finFila.add(btnRegistro, gf);
+        rightTabbedPane.putClientProperty("JTabbedPane.trailingComponent", finFila);
 
         // Check for native library availability
         checkNativeLibrary();
@@ -489,97 +581,1257 @@ public class IEDNavigatorApp extends JFrame {
         rightTabbedPane.setMinimumSize(new Dimension(400, 200));
         leftPanel.setMinimumSize(new Dimension(250, 200));
 
-        JSplitPane rightSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treeScroll, rightTabbedPane);
-        rightSplit.setDividerLocation(350);
-        rightSplit.setResizeWeight(0.4);
-        rightSplit.setOneTouchExpandable(true);  // Flechitas para expandir/colapsar
+        // Rediseño: el arbol a la izquierda a toda la altura; a la derecha las pestañas y,
+        // debajo, el registro. Cada bloque es una tarjeta blanca sobre el fondo gris.
+        treeScroll.setBorder(BorderFactory.createEmptyBorder());
+        logScroll.setBorder(BorderFactory.createEmptyBorder());
+        panelArbol = tarjeta(null, crearPanelArbol());
+        tarjetaRegistro = tarjeta(null, registro);
+        JPanel tarjetaPestanias = tarjeta(null, rightTabbedPane);
 
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, rightSplit);
-        mainSplit.setDividerLocation(310);
-        mainSplit.setResizeWeight(0.2);
-        mainSplit.setOneTouchExpandable(true);  // Flechitas para expandir/colapsar
-
+        JSplitPane derecha = separador(JSplitPane.VERTICAL_SPLIT, tarjetaPestanias, tarjetaRegistro);
+        splitDerecha = derecha;
+        // Minimos chicos: si no, ni el registro ni la pestaña se pueden achicar
+        tarjetaPestanias.setMinimumSize(new Dimension(200, 120));
+        tarjetaRegistro.setMinimumSize(new Dimension(200, 60));
+        // Al agrandar la ventana crece la pestaña; el registro conserva su alto
+        derecha.setResizeWeight(1.0);
+        derecha.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) { ajustarAltoRegistro(); }
+        });
+        if (derecha.getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI) {
+            ((javax.swing.plaf.basic.BasicSplitPaneUI) derecha.getUI()).getDivider().addMouseListener(new MouseAdapter() {
+                @Override public void mouseReleased(MouseEvent e) { recordarAltoRegistro(); }
+            });
+        }
+        // Propiedades del nodo seleccionado, debajo del arbol: plegable y con su alto recordado
+        panelPropiedades = new PanelPropiedades(rendererArbol);
+        JPanel tarjetaPropiedades = tarjeta(null, panelPropiedades);
+        tarjetaPropiedades.setMinimumSize(new Dimension(200, 30));
+        splitIzquierda = separador(JSplitPane.VERTICAL_SPLIT, panelArbol, tarjetaPropiedades);
+        splitIzquierda.setResizeWeight(1.0);
+        splitIzquierda.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) { ajustarAltoPropiedades(); }
+        });
+        if (splitIzquierda.getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI) {
+            ((javax.swing.plaf.basic.BasicSplitPaneUI) splitIzquierda.getUI()).getDivider().addMouseListener(new MouseAdapter() {
+                @Override public void mouseReleased(MouseEvent e) { recordarAltoPropiedades(); }
+            });
+        }
+        panelPropiedades.alPlegar(p -> {
+            PREFS_UI.putBoolean(PREF_PROPS_PLEGADO, p);
+            if (miPropiedades != null) miPropiedades.setSelected(!p);
+            SwingUtilities.invokeLater(this::ajustarAltoPropiedades);
+        });
+        JSplitPane mainSplit = separador(JSplitPane.HORIZONTAL_SPLIT, splitIzquierda, derecha);
+        splitPrincipal = mainSplit;
+        mainSplit.setResizeWeight(0.3);
+        mainSplit.setDividerLocation(380);
+        centerPanel.setOpaque(false);
         centerPanel.add(mainSplit, BorderLayout.CENTER);
 
         contentPanel.add(centerPanel, BorderLayout.CENTER);
         mainPanel.add(contentPanel, BorderLayout.CENTER);
+        barraContexto = new BarraContexto(estadoParaBarra(), accionesDeBarra());
+        mainPanel.add(barraContexto, BorderLayout.NORTH);
+        // La barra y el estado vacio leen el estado de la ventana: un reloj liviano los refresca.
+        new javax.swing.Timer(400, e -> {
+            refrescarContexto();
+            if (panelPropiedades != null) panelPropiedades.refrescar();
+        }).start();
+        SwingUtilities.invokeLater(() -> panelPropiedades.ponerPlegado(PREFS_UI.getBoolean(PREF_PROPS_PLEGADO, false)));
 
-        // Barra de estado inferior
-        JPanel statusBar = createStatusBar();
-        mainPanel.add(statusBar, BorderLayout.SOUTH);
+        // Barra de estado inferior: ya no se muestra (la placa del IED esta en la barra de
+        // contexto; el reloj y "Listo" no aportaban). Se arma igual porque lblIedInfo y
+        // lblStatus se siguen escribiendo y la barra lee el error de lblStatus.
+        createStatusBar();
+        // Preferencias de Ver guardadas: registro (oculto por defecto) y densidad
+        tamDivisor = separacionPaneles();
+        tarjetaRegistro.setVisible(false);
+        splitDerecha.setDividerSize(0);
+        if (PREFS_UI.getBoolean(PREF_REGISTRO, false)) SwingUtilities.invokeLater(() -> mostrarRegistro(true));
+        aplicarDensidad();
 
         setContentPane(mainPanel);
     }
 
+    // Menus que cambian con el modo (rediseño 2026-11, segunda vuelta)
+    private JMenu menuModo;
+    private JMenuItem miIniciarDetener;
+    private JCheckBoxMenuItem miRegistroVisible;
+    /** Simulacion › Modo test del IED (solo en Servidor): lo mismo que el toggle de la barra. */
+    private JCheckBoxMenuItem miModoTest;
+    /** Herramientas › Interruptor virtual: el dialogo del interruptor simulado (InterruptorVirtualDialog). */
+    private JMenuItem miInterruptorVirtual;
+
+    // Preferencias de Ver, guardadas como el idioma (Preferences de com/iednavigator)
+    private static final String PREF_PROPS_PLEGADO = "view.props.collapsed", PREF_PROPS_ALTO = "view.props.height";
+    private static final String PREF_REGISTRO = "view.log", PREF_AGRUPAR = "view.groupdo",
+            PREF_DESCRIPCIONES = "view.descriptions", PREF_COMPACTA = "view.compact";
+
     private JMenuBar createMenuBar() {
         JMenuBar menuBar = new JMenuBar();
+        int ctrl = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
 
-        // Menu Archivo
-        JMenu menuFile = new JMenu(I18n.t("menu.file"));
-        JMenuItem miLoadScl = new JMenuItem(I18n.t("menu.file.loadscl"));
-        miLoadScl.addActionListener(e -> {
-            if (currentMode == AppMode.SERVER) {
-                selectSclFile();
-            } else {
-                // En modo cliente, permitir cargar SCL para GoCBs
-                loadSclForGoCBs();
-            }
+        // ── Archivo ─────────────────────────────────────────────────────────
+        JMenu menuFile = menu("menu.file");
+        menuFile.add(item(I18n.t("menu.file.open"), KeyStroke.getKeyStroke(KeyEvent.VK_O, ctrl), e -> abrirScl()));
+        JMenu menuRecent = new JMenu(I18n.t("menu.file.recent"));
+        menuRecent.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) { llenarRecientes(menuRecent); }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) { }
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) { }
         });
-        menuFile.add(miLoadScl);
+        menuFile.add(menuRecent);
+        JMenuItem miNuevaVentana = item(I18n.t("menu.file.newwindow"),
+                KeyStroke.getKeyStroke(KeyEvent.VK_N, ctrl | InputEvent.SHIFT_DOWN_MASK), e -> abrirNuevaVentana());
+        miNuevaVentana.setToolTipText(I18n.t("menu.file.newwindow.tip"));
+        menuFile.add(miNuevaVentana);
         menuFile.addSeparator();
-        JMenuItem miExit = new JMenuItem(I18n.t("menu.file.exit"));
-        miExit.addActionListener(e -> System.exit(0));
-        menuFile.add(miExit);
+        menuFile.add(item(I18n.t("menu.file.exportmonitor"), KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrl), e -> exportarMonitor()));
+        menuFile.add(item(I18n.t("menu.file.exportlog"), null, e -> exportarRegistro()));
+        menuFile.addSeparator();
+        menuFile.add(item(I18n.t("menu.file.exit"), null, e -> System.exit(0)));
         menuBar.add(menuFile);
 
-        // Menu Herramientas
-        JMenu menuTools = new JMenu(I18n.t("menu.tools"));
-        JMenuItem miGetCid = new JMenuItem(I18n.t("menu.tools.getcid"));
-        miGetCid.addActionListener(e -> obtenerCidDelIed());
-        menuTools.add(miGetCid);
-        JMenuItem miSaveCid = new JMenuItem(I18n.t("menu.tools.savecid"));
-        miSaveCid.addActionListener(e -> guardarCid());
-        menuTools.add(miSaveCid);
+        // ── Simulacion (Servidor) / Conexion (Cliente) ──────────────────────
+        // El titulo y los items cambian con el modo: actualizarMenuModo().
+        menuModo = new JMenu();
+        miIniciarDetener = item("", KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), e -> iniciarODetener());
+        miModoTest = new JCheckBoxMenuItem(I18n.t("modo.boton"));
+        miModoTest.setToolTipText(I18n.t("modo.boton.tip"));
+        miModoTest.addActionListener(e -> { alternarModoTest(); refrescarContexto(); });
+        JMenuItem miPuerto = item(I18n.t("menu.sim.port"), null, e -> configurarPuerto());
+        JMenuItem miCheck = item(I18n.t("menu.sim.checkport"), null, e -> checkPort());
+        JMenuItem miRelease = item(I18n.t("menu.sim.releaseport"), null, e -> releasePort());
+        JCheckBoxMenuItem miPolling = new JCheckBoxMenuItem(I18n.t("cb.polling"));
+        miPolling.addActionListener(e -> cbPolling.doClick());
+        JMenuItem miIntervalo = item(I18n.t("menu.conn.interval"), null, e -> pedirNumero(spinnerInterval, "menu.conn.interval", "lbl.interval"));
+        JCheckBoxMenuItem miLeerTodo = new JCheckBoxMenuItem(I18n.t("cb.leertodo"));
+        miLeerTodo.addActionListener(e -> cbLeerTodo.doClick());
+        JMenuItem miTimeout = item(I18n.t("menu.conn.timeout"), null, e -> pedirNumero(spinnerTimeout, "menu.conn.timeout", "lbl.timeout"));
+        ButtonGroup grupoModo = new ButtonGroup();
+        JRadioButtonMenuItem miServidor = new JRadioButtonMenuItem(I18n.t("menu.sim.server"));
+        JRadioButtonMenuItem miCliente = new JRadioButtonMenuItem(I18n.t("menu.sim.client"));
+        miServidor.addActionListener(e -> { if (!rbServer.isSelected()) rbServer.doClick(); });
+        miCliente.addActionListener(e -> { if (!rbClient.isSelected()) rbClient.doClick(); });
+        grupoModo.add(miServidor);
+        grupoModo.add(miCliente);
+        JSeparator sepServidor = new JSeparator(), sepCliente = new JSeparator();
+        menuModo.add(miIniciarDetener);
+        menuModo.add(miModoTest);
+        menuModo.add(sepServidor);
+        menuModo.add(miPuerto);
+        menuModo.add(miCheck);
+        menuModo.add(miRelease);
+        menuModo.add(sepCliente);
+        menuModo.add(miPolling);
+        menuModo.add(miIntervalo);
+        menuModo.add(miLeerTodo);
+        menuModo.add(miTimeout);
+        menuModo.addSeparator();
+        menuModo.add(miServidor);
+        menuModo.add(miCliente);
+        menuModo.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) {
+                boolean srv = currentMode == AppMode.SERVER;
+                actualizarMenuModo();
+                for (Component c : new Component[]{miModoTest, sepServidor, miPuerto, miCheck, miRelease}) c.setVisible(srv);
+                boolean hayServidor = srv && server != null && server.getServerModel() != null && isServerRunning;
+                Integer modo = hayServidor ? server.modoIed() : null;
+                miModoTest.setEnabled(hayServidor);
+                miModoTest.setSelected(modo != null && (modo == 3 || modo == 4));
+                for (Component c : new Component[]{sepCliente, miPolling, miIntervalo, miLeerTodo, miTimeout}) c.setVisible(!srv);
+                miServidor.setSelected(srv);
+                miCliente.setSelected(!srv);
+                miIniciarDetener.setEnabled(srv ? btnStartStop.isEnabled() : btnConnect.isEnabled());
+                miPolling.setSelected(cbPolling.isSelected());
+                miPolling.setEnabled(cbPolling.isEnabled());
+                miLeerTodo.setSelected(cbLeerTodo.isSelected());
+                miLeerTodo.setEnabled(cbLeerTodo.isEnabled());
+            }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) { }
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) { }
+        });
+        actualizarMenuModo();
+        menuBar.add(menuModo);
+
+        // ── Ver ─────────────────────────────────────────────────────────────
+        JMenu menuView = menu("menu.view");
+        miRegistroVisible = new JCheckBoxMenuItem(I18n.t("menu.view.log"), PREFS_UI.getBoolean(PREF_REGISTRO, false));
+        miRegistroVisible.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L, ctrl));
+        miRegistroVisible.addActionListener(e -> mostrarRegistro(miRegistroVisible.isSelected()));
+        JCheckBoxMenuItem miArbol = new JCheckBoxMenuItem(I18n.t("menu.view.tree"), true);
+        miArbol.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_1, ctrl));
+        miArbol.addActionListener(e -> mostrarPanel(splitIzquierda, miArbol.isSelected()));
+        miPropiedades = new JCheckBoxMenuItem(I18n.t("menu.view.props"), !PREFS_UI.getBoolean(PREF_PROPS_PLEGADO, false));
+        miPropiedades.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl));
+        miPropiedades.addActionListener(e -> panelPropiedades.ponerPlegado(!miPropiedades.isSelected()));
+        menuView.add(miRegistroVisible);
+        menuView.add(miArbol);
+        menuView.add(miPropiedades);
+        menuView.addSeparator();
+        menuView.add(item(I18n.t("menu.view.expand"), null, e -> expandirArbol()));
+        menuView.add(item(I18n.t("menu.view.collapse"), null, e -> contraerArbol()));
+        JCheckBoxMenuItem miAgrupar = new JCheckBoxMenuItem(I18n.t("menu.view.groupdo"), ModelTreeBuilder.agruparDo);
+        miAgrupar.addActionListener(e -> {
+            ModelTreeBuilder.agruparDo = miAgrupar.isSelected();
+            PREFS_UI.putBoolean(PREF_AGRUPAR, miAgrupar.isSelected());
+            reconstruirArbol();
+        });
+        JCheckBoxMenuItem miDescripciones = new JCheckBoxMenuItem(I18n.t("menu.view.descriptions"),
+                PREFS_UI.getBoolean(PREF_DESCRIPCIONES, true));
+        miDescripciones.addActionListener(e -> {
+            PREFS_UI.putBoolean(PREF_DESCRIPCIONES, miDescripciones.isSelected());
+            rendererArbol.mostrarDescripciones = miDescripciones.isSelected();
+            modelTree.repaint();
+        });
+        menuView.add(miAgrupar);
+        menuView.add(miDescripciones);
+        menuView.addSeparator();
+        JCheckBoxMenuItem miCompacta = new JCheckBoxMenuItem(I18n.t("menu.view.compact"), PREFS_UI.getBoolean(PREF_COMPACTA, true));
+        miCompacta.addActionListener(e -> {
+            PREFS_UI.putBoolean(PREF_COMPACTA, miCompacta.isSelected());
+            aplicarDensidad();
+        });
+        menuView.add(miCompacta);
+        menuView.add(item(I18n.t("menu.view.theme"), null, e -> alternarTema()));
+        menuBar.add(menuView);
+
+        // ── Herramientas ────────────────────────────────────────────────────
+        JMenu menuTools = menu("menu.tools");
+        menuTools.add(item(I18n.t("menu.tools.getcid"), null, e -> obtenerCidDelIed()));
+        menuTools.add(item(I18n.t("menu.tools.savecid"), null, e -> guardarCid()));
+        menuTools.add(item(I18n.t("menu.tools.htmlreport"), null, e -> generateModelReport()));
+        miInterruptorVirtual = new JMenuItem(I18n.t("menu.tools.interruptor"));
+        miInterruptorVirtual.addActionListener(e -> abrirInterruptorVirtual());
+        menuTools.add(miInterruptorVirtual);
         menuTools.addSeparator();
-        JMenuItem miHtmlReport = new JMenuItem(I18n.t("menu.tools.htmlreport"));
-        miHtmlReport.addActionListener(e -> generateModelReport());
-        menuTools.add(miHtmlReport);
+        menuTools.add(item(I18n.t("menu.tools.sclcmp"), KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrl), e -> abrirHerramienta("tab.sclcmp")));
+        menuTools.add(item(I18n.t("menu.tools.goosemap"), KeyStroke.getKeyStroke(KeyEvent.VK_G, ctrl), e -> abrirHerramienta("tab.goosemap")));
         menuTools.addSeparator();
-        JMenuItem miInterruptor = new JMenuItem(I18n.t("menu.tools.interruptor"));
-        miInterruptor.addActionListener(e -> abrirInterruptorVirtual());
-        menuTools.add(miInterruptor);
+        menuTools.add(menuIdioma());
+        menuTools.add(item(I18n.t("menu.tools.prefs"), KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, ctrl), e -> mostrarPreferencias()));
         menuBar.add(menuTools);
 
-        // Menu Ayuda
-        JMenu menuHelp = new JMenu(I18n.t("menu.help"));
-        JMenuItem miAbout = new JMenuItem(I18n.t("menu.help.about"));
-        miAbout.addActionListener(e -> showAboutDialog());
-        menuHelp.add(miAbout);
-        JMenuItem miLegend = new JMenuItem(I18n.t("menu.help.legend"));
-        miLegend.addActionListener(e -> showLegendDialog());
-        menuHelp.add(miLegend);
+        // ── Ayuda ───────────────────────────────────────────────────────────
+        JMenu menuHelp = menu("menu.help");
+        menuHelp.add(item(I18n.t("menu.help.about"), null, e -> showAboutDialog()));
+        menuHelp.add(item(I18n.t("menu.help.legend"), null, e -> showLegendDialog()));
+        menuHelp.add(item(I18n.t("menu.help.keys"), null, e -> mostrarAtajos()));
+        menuHelp.addSeparator();
+        menuHelp.add(item(I18n.t("menu.help.docs"), KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0), e -> abrirDocumentacion()));
         menuBar.add(menuHelp);
 
-        // Menú de idioma (Idioma / Language / 语言). Los nombres van en su propio idioma.
+        return menuBar;
+    }
+
+    /** Menu de primer nivel con su mnemonico (la letra va en el bundle: menu.x.mn). */
+    private static JMenu menu(String clave) {
+        JMenu m = new JMenu(I18n.t(clave));
+        ponerMnemonico(m, clave);
+        return m;
+    }
+
+    private static void ponerMnemonico(JMenu m, String clave) {
+        String mn = I18n.t(clave + ".mn");
+        if (mn != null && mn.length() == 1) m.setMnemonic(Character.toUpperCase(mn.charAt(0)));
+    }
+
+    /**
+     * Simulacion (Servidor) o Conexion (Cliente): el titulo del menu y la etiqueta de F5
+     * siguen al modo y al estado. Se llama al cambiar de modo y al abrir el menu.
+     */
+    private void actualizarMenuModo() {
+        if (menuModo == null) return;
+        boolean srv = currentMode == AppMode.SERVER;
+        String clave = srv ? "menu.sim" : "menu.conn";
+        menuModo.setText(I18n.t(clave));
+        ponerMnemonico(menuModo, clave);
+        boolean activo = srv ? isServerRunning : isConnected;
+        miIniciarDetener.setText(I18n.t(srv ? (activo ? "ctx.btn.stop" : "ctx.btn.start")
+                                            : (activo ? "ctx.btn.disconnect" : "ctx.btn.connect")));
+    }
+
+    /** Herramientas › Idioma: los nombres en su propio idioma; se aplica al reiniciar. */
+    private JMenu menuIdioma() {
         JMenu menuLang = new JMenu(I18n.t("menu.lang"));
-        ButtonGroup langGroup = new ButtonGroup();
-        String[][] langs = { {"es", "Español"}, {"zh", "中文 (简体)"}, {"en", "English"}, {"pt", "Português"} };
-        String currentTag = I18n.currentTag();
+        ButtonGroup grupo = new ButtonGroup();
+        String[][] langs = { {"es", "Español"}, {"en", "English"}, {"pt", "Português"}, {"zh", "中文 (简体)"} };
+        String actual = I18n.currentTag();
         for (String[] lg : langs) {
             final String tag = lg[0];
-            JRadioButtonMenuItem mi = new JRadioButtonMenuItem(lg[1]);
-            if (currentTag.startsWith(tag)) mi.setSelected(true);
+            JRadioButtonMenuItem mi = new JRadioButtonMenuItem(lg[1], actual.startsWith(tag));
             mi.addActionListener(e -> {
+                if (I18n.currentTag().startsWith(tag)) return;
                 I18n.setLocaleAndSave(tag);
                 JOptionPane.showMessageDialog(this, I18n.t("lang.restart"),
                         I18n.t("menu.lang"), JOptionPane.INFORMATION_MESSAGE);
             });
-            langGroup.add(mi);
+            grupo.add(mi);
             menuLang.add(mi);
         }
-        menuBar.add(menuLang);
+        return menuLang;
+    }
 
-        return menuBar;
+    /** Conexion › Intervalo de polling / Timeout: el mismo spinner del panel, en un dialogo. */
+    private void pedirNumero(JSpinner origen, String claveTitulo, String claveEtiqueta) {
+        SpinnerNumberModel mo = (SpinnerNumberModel) origen.getModel();
+        JSpinner sp = new JSpinner(new SpinnerNumberModel(((Number) mo.getValue()).intValue(),
+                (int) (Integer) mo.getMinimum(), (int) (Integer) mo.getMaximum(), mo.getStepSize().intValue()));
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        p.add(new JLabel(I18n.t(claveEtiqueta)));
+        p.add(sp);
+        int r = JOptionPane.showConfirmDialog(this, p, I18n.t(claveTitulo).replace("…", "").trim(),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (r == JOptionPane.OK_OPTION) origen.setValue(sp.getValue());
+    }
+
+    /** Ver › Agrupar DO por FC: rearma el arbol del modelo que se esta viendo. */
+    private void reconstruirArbol() {
+        ServerModel model = null;
+        if (currentMode == AppMode.SERVER && server != null) model = server.getServerModel();
+        else if (currentMode == AppMode.CLIENT && client != null && isConnected) model = client.getServerModel();
+        if (model != null) buildTree(model);
+    }
+
+    /**
+     * Ver › Densidad compacta: alto de las filas del arbol y del monitor, en un solo lugar.
+     * Arbol: 20 / 24 px. Tablas: 24 / 28 px. Margen y separacion entre paneles: 8 / 12 px.
+     */
+    private void aplicarDensidad() {
+        boolean compacta = PREFS_UI.getBoolean(PREF_COMPACTA, true);
+        int fila = compacta ? 20 : 24;
+        UIManager.put("Tree.rowHeight", fila);
+        if (modelTree != null) modelTree.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(fila));
+        // Tablas: el monitor y las de las otras pestañas que usan el alto por defecto
+        int tablaAntes = UIManager.getInt("Table.rowHeight");
+        int tabla = compacta ? 24 : 28;
+        UIManager.put("Table.rowHeight", tabla);
+        if (monitorTable != null) monitorTable.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(tabla));
+        for (JTable t : tablas(getContentPane())) {
+            if (t != monitorTable && t.getRowHeight() == com.formdev.flatlaf.util.UIScale.scale(tablaAntes)) {
+                t.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(tabla));
+            }
+        }
+        // Margen exterior y separacion entre paneles
+        int sep = separacionPaneles();
+        if (panelContenido != null) panelContenido.setBorder(BorderFactory.createEmptyBorder(sep, sep, sep, sep));
+        if (splitPrincipal != null) splitPrincipal.setDividerSize(sep);
+        tamDivisor = sep;
+        if (splitDerecha != null && tarjetaRegistro != null && tarjetaRegistro.isVisible()) splitDerecha.setDividerSize(sep);
+        if (getContentPane() != null) { getContentPane().revalidate(); getContentPane().repaint(); }
+    }
+
+    /** Separacion entre paneles y margen exterior: 8 px compacta, 12 px comoda. */
+    private static int separacionPaneles() {
+        return com.formdev.flatlaf.util.UIScale.scale(PREFS_UI.getBoolean(PREF_COMPACTA, true) ? 8 : 12);
+    }
+
+    private static java.util.List<JTable> tablas(Container c) {
+        java.util.List<JTable> l = new java.util.ArrayList<>();
+        if (c == null) return l;
+        for (Component x : c.getComponents()) {
+            if (x instanceof JTable) l.add((JTable) x);
+            else if (x instanceof Container) l.addAll(tablas((Container) x));
+        }
+        return l;
+    }
+
+    private static JMenuItem item(String texto, KeyStroke atajo, java.awt.event.ActionListener accion) {
+        JMenuItem mi = new JMenuItem(texto);
+        if (atajo != null) mi.setAccelerator(atajo);
+        mi.addActionListener(accion);
+        return mi;
+    }
+
+    // ── Acciones de los menus ──────────────────────────────────────────────
+
+    /** Titulo: "IED Navigator PRO — IED · archivo · version" (lo que haya de cada cosa). */
+    private void actualizarTitulo() {
+        java.util.List<String> partes = new java.util.ArrayList<>();
+        if (iedEnPantalla != null && !iedEnPantalla.isEmpty()) partes.add(iedEnPantalla);
+        if (currentMode == AppMode.SERVER && loadedSclFile != null) partes.add(loadedSclFile.getName());
+        else if (currentMode == AppMode.CLIENT && hostEnPantalla != null && !hostEnPantalla.isEmpty()) partes.add(hostEnPantalla);
+        partes.add(Version.etiqueta());
+        String titulo = "IED Navigator PRO \u2014 " + String.join(" \u00b7 ", partes);
+        if (!titulo.equals(getTitle())) setTitle(titulo);
+    }
+
+    // ── Barra de contexto y distribucion (rediseño, etapa 2) ─────────────────
+
+    private static Color fondoVentana() {
+        return Estilo.temaOscuro() ? UIManager.getColor("Panel.background").darker() : Estilo.FONDO;
+    }
+
+    private static Color superficie() {
+        return Estilo.temaOscuro() ? UIManager.getColor("Panel.background") : Estilo.SUPERFICIE;
+    }
+
+    /** Tarjeta: fondo blanco, borde gris redondeado (10 px) y un titulo opcional arriba. */
+    private static JPanel tarjeta(String titulo, JComponent contenido) {
+        JPanel t = new JPanel(new BorderLayout()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(superficie());
+                int arco = com.formdev.flatlaf.util.UIScale.scale(16);   // radio de 8 px
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, arco, arco);
+                g2.setColor(Estilo.BORDE);
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, arco, arco);
+                g2.dispose();
+            }
+        };
+        t.setOpaque(false);
+        t.setBorder(BorderFactory.createEmptyBorder(1, 1, 1, 1));
+        if (titulo != null) {
+            JLabel l = new JLabel(titulo);
+            l.setFont(Estilo.ui(Font.BOLD, 13));
+            l.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0xEEF0F3)),
+                    BorderFactory.createEmptyBorder(10, 14, 8, 14)));
+            t.add(l, BorderLayout.NORTH);
+        }
+        contenido.setOpaque(true);
+        contenido.setBackground(superficie());
+        t.add(contenido, BorderLayout.CENTER);
+        return t;
+    }
+
+    /** Separador entre tarjetas: 12 px del color del fondo, sin borde. */
+    private static JSplitPane separador(int orientacion, Component a, Component b) {
+        JSplitPane sp = new JSplitPane(orientacion, a, b);
+        sp.setBorder(null);
+        sp.setDividerSize(separacionPaneles());
+        sp.setOpaque(false);
+        sp.setContinuousLayout(true);
+        if (sp.getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI) {
+            javax.swing.plaf.basic.BasicSplitPaneDivider d =
+                    ((javax.swing.plaf.basic.BasicSplitPaneUI) sp.getUI()).getDivider();
+            d.setBorder(null);
+            d.setBackground(fondoVentana());
+        }
+        return sp;
+    }
+
+    /** El arbol, o el estado vacio cuando no hay modelo que mostrar. */
+    private JPanel crearCartasArbol() {
+        JPanel cartas = new JPanel(cardsArbol);
+        cartas.setBackground(superficie());
+        cartas.add(treeScroll, "arbol");
+
+        JPanel vacio = new JPanel(new GridBagLayout());
+        vacio.setBackground(superficie());
+        JPanel caja = new JPanel();
+        caja.setOpaque(false);
+        caja.setLayout(new BoxLayout(caja, BoxLayout.Y_AXIS));
+        vacioTitulo.setFont(Estilo.ui(Font.BOLD, 15));
+        vacioTexto.setFont(Estilo.ui(Font.PLAIN, 13));
+        vacioTexto.setForeground(Estilo.TEXTO_2);
+        vacioPasos.setFont(Estilo.ui(Font.PLAIN, 12));
+        vacioPasos.setForeground(Estilo.TEXTO_2);
+        vacioBoton.putClientProperty("FlatLaf.style", "arc:8; borderWidth:0; focusWidth:0; innerFocusWidth:0;"
+                + " background:#1F5FBF; hoverBackground:#174A96; foreground:#FFFFFF; margin:8,18,8,18");
+        vacioBoton.setFont(Estilo.ui(Font.BOLD, 13));
+        vacioBoton.addActionListener(e -> {
+            if (currentMode == AppMode.SERVER) abrirScl(); else iniciarODetener();
+        });
+        for (JComponent c : new JComponent[]{vacioTitulo, vacioTexto, vacioPasos, vacioBoton}) c.setAlignmentX(0.5f);
+        caja.add(vacioTitulo);
+        caja.add(Box.createVerticalStrut(6));
+        caja.add(vacioTexto);
+        caja.add(Box.createVerticalStrut(8));
+        caja.add(vacioPasos);
+        caja.add(Box.createVerticalStrut(16));
+        caja.add(vacioBoton);
+        vacio.add(caja);
+        cartas.add(vacio, "vacio");
+        return cartas;
+    }
+
+    /** Refresco de la barra de contexto y del estado vacio (reloj de 400 ms). */
+    private void refrescarContexto() {
+        // El titulo depende del archivo cargado, que cambia por varios caminos (cargar,
+        // cancelar la eleccion del IED, cambiar de modo): se recalcula aca y solo se
+        // escribe si cambio.
+        actualizarTitulo();
+        if (barraContexto != null) barraContexto.refrescar();
+        if (panelWatchlist != null) panelWatchlist.setVisible(currentMode == AppMode.CLIENT);
+        if (barraSondeo != null) barraSondeo.setVisible(currentMode == AppMode.CLIENT);
+        if (panelArbol == null) return;
+        boolean hayModelo = rootNode != null && rootNode.getChildCount() > 0;
+        if (!hayModelo) {
+            boolean srv = currentMode == AppMode.SERVER;
+            vacioTitulo.setText(I18n.t(srv ? "vacio.srv.title" : "vacio.cli.title"));
+            vacioTexto.setText("<html><div style='text-align:center;width:250px'>"
+                    + I18n.t(srv ? "vacio.srv.text" : "vacio.cli.text") + "</div></html>");
+            // server.usage trae <small> (era para el panel viejo): aca va a 12 px
+            vacioPasos.setText(srv ? I18n.t("server.usage").replace("<small>", "").replace("</small>", "") : "");
+            vacioPasos.setVisible(srv);
+            boolean cancelando = !srv && connectionManager != null && connectionManager.cancelable();
+            vacioBoton.setText(I18n.t(srv ? "menu.file.open" : cancelando ? "ctx.btn.cancel" : "ctx.btn.connect"));
+            vacioBoton.setEnabled(srv || (btnConnect != null && btnConnect.isEnabled()));
+        }
+        cardsArbol.show(cartasArbol, hayModelo ? "arbol" : "vacio");
+        campoBusqueda.setEnabled(hayModelo);
+        lblCuentaNodos.setText(hayModelo ? cuentaNodos() : "");
+        if (hayModelo && buscador != null && !buscador.filtrando()) {
+            TreePath raiz = new TreePath(rootNode);
+            if (!modelTree.isExpanded(raiz)) modelTree.expandPath(raiz);
+        }
+        // Con la busqueda activa el arbol muestra copias: se repinta para ver los valores al dia
+        if (buscador != null && buscador.filtrando()) modelTree.repaint();
+    }
+
+    /** "109.629 nodos" a partir del texto de la raiz que deja ModelTreeBuilder. */
+    private String cuentaNodos() {
+        String t = String.valueOf(rootNode.getUserObject());
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d[\\d.,]*)").matcher(t);
+        return m.find() ? I18n.t("tree.nodes", m.group(1)) : "";
+    }
+
+    /**
+     * Tarjeta del arbol: encabezado "Modelo de datos" + contador, busqueda (Ctrl+F), ruta del
+     * nodo seleccionado, el arbol (o el estado vacio) y la pista de como monitorear.
+     */
+    private JPanel crearPanelArbol() {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setOpaque(false);
+
+        JPanel arriba = new JPanel();
+        arriba.setOpaque(false);
+        arriba.setLayout(new BoxLayout(arriba, BoxLayout.Y_AXIS));
+
+        JPanel enc = new JPanel(new BorderLayout());
+        enc.setOpaque(false);
+        enc.setBorder(BorderFactory.createEmptyBorder(12, 14, 8, 14));
+        JLabel titulo = new JLabel(I18n.t("tree.title"));
+        titulo.setFont(Estilo.ui(Font.BOLD, 13));
+        lblCuentaNodos.setFont(Estilo.ui(Font.PLAIN, 12));
+        lblCuentaNodos.setForeground(Estilo.TEXTO_2);
+        enc.add(titulo, BorderLayout.WEST);
+        enc.add(lblCuentaNodos, BorderLayout.EAST);
+        enc.setAlignmentX(0f);
+        arriba.add(enc);
+
+        JPanel busq = new JPanel(new BorderLayout());
+        busq.setOpaque(false);
+        busq.setBorder(BorderFactory.createEmptyBorder(0, 14, 8, 14));
+        campoBusqueda.putClientProperty("JTextField.placeholderText", I18n.t("tree.search.placeholder"));
+        campoBusqueda.putClientProperty("JTextField.showClearButton", true);
+        campoBusqueda.putClientProperty("JTextField.leadingIcon", new IconoLupa());
+        JLabel atajo = new JLabel("Ctrl F ");
+        atajo.setFont(Estilo.mono(Font.PLAIN, 11));
+        atajo.setForeground(Estilo.TEXTO_2);
+        campoBusqueda.putClientProperty("JTextField.trailingComponent", atajo);
+        campoBusqueda.setFont(Estilo.ui(Font.PLAIN, 13));
+        busq.add(campoBusqueda, BorderLayout.CENTER);
+        lblCoincidencias.setFont(Estilo.ui(Font.PLAIN, 11));
+        lblCoincidencias.setForeground(Estilo.TEXTO_2);
+        lblCoincidencias.setBorder(BorderFactory.createEmptyBorder(4, 2, 0, 0));
+        busq.add(lblCoincidencias, BorderLayout.SOUTH);
+        busq.setAlignmentX(0f);
+        arriba.add(busq);
+
+        lblRuta.setFont(Estilo.mono(Font.PLAIN, 11));
+        lblRuta.setForeground(Estilo.TEXTO_2);
+        lblRuta.setOpaque(true);
+        lblRuta.setBackground(Estilo.temaOscuro() ? superficie() : new Color(0xF7F8FA));
+        lblRuta.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 1, 0, new Color(0xEEF0F3)),
+                BorderFactory.createEmptyBorder(4, 14, 4, 14)));
+        lblRuta.setAlignmentX(0f);
+        lblRuta.setMaximumSize(new Dimension(Integer.MAX_VALUE, lblRuta.getPreferredSize().height + 14));
+        arriba.add(lblRuta);
+        p.add(arriba, BorderLayout.NORTH);
+
+        cartasArbol = crearCartasArbol();
+        p.add(cartasArbol, BorderLayout.CENTER);
+
+        JLabel pista = new JLabel(I18n.t("tree.hint"));
+        pista.setFont(Estilo.ui(Font.PLAIN, 12));
+        pista.setForeground(Estilo.TEXTO_2);
+        pista.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0xEEF0F3)),
+                BorderFactory.createEmptyBorder(7, 14, 7, 14)));
+        p.add(pista, BorderLayout.SOUTH);
+
+        // Hilo propio: backgroundExecutor tiene uno solo y lo ocupan tareas largas (leer un CID)
+        java.util.concurrent.ExecutorService hiloBusqueda = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "busqueda-arbol");
+            t.setDaemon(true);
+            return t;
+        });
+        buscador = new BuscadorArbol(modelTree, treeModel, campoBusqueda, hiloBusqueda, t -> {
+            lblCoincidencias.setText(t);
+            lblCoincidencias.setVisible(!t.isEmpty());
+        });
+        lblCoincidencias.setVisible(false);
+        campoBusqueda.addKeyListener(new KeyAdapter() {
+            @Override public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ESCAPE) buscador.limpiar();
+                else if (e.getKeyCode() == KeyEvent.VK_DOWN || e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    modelTree.requestFocusInWindow();
+                    if (modelTree.getSelectionCount() == 0 && modelTree.getRowCount() > 0) modelTree.setSelectionRow(0);
+                }
+            }
+        });
+
+        // Ruta del seleccionado: LD › LN › DO › DA
+        modelTree.addTreeSelectionListener(e -> {
+            TreePath tp = modelTree.getSelectionPath();
+            if (panelPropiedades != null) {
+                Object sel = tp == null ? null : ((DefaultMutableTreeNode) tp.getLastPathComponent()).getUserObject();
+                panelPropiedades.mostrar(sel instanceof NodeInfo ? (NodeInfo) sel : null);
+            }
+            if (tp == null) { lblRuta.setText(" "); return; }
+            java.util.List<String> partes = new java.util.ArrayList<>();
+            for (Object o : tp.getPath()) {
+                Object uo = ((DefaultMutableTreeNode) o).getUserObject();
+                if (uo instanceof NodeInfo && ((NodeInfo) uo).name != null) partes.add(((NodeInfo) uo).name);
+            }
+            if (partes.isEmpty()) { lblRuta.setText(" "); return; }
+            String ultimo = partes.remove(partes.size() - 1);
+            StringBuilder sb = new StringBuilder("<html>");
+            for (String x : partes) sb.append(escaparHtml(x)).append(" &rsaquo; ");
+            sb.append("<span style='color:#1B1F24'>").append(escaparHtml(ultimo)).append("</span></html>");
+            lblRuta.setText(sb.toString());
+        });
+
+        // Ctrl+F: a la busqueda. Enter en el arbol: al monitor.
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()), "buscarArbol");
+        getRootPane().getActionMap().put("buscarArbol", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) {
+                campoBusqueda.requestFocusInWindow();
+                campoBusqueda.selectAll();
+            }
+        });
+        modelTree.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "monitorear");
+        modelTree.getActionMap().put("monitorear", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { monitorearSeleccion(); }
+        });
+        return p;
+    }
+
+    private static String escaparHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /** Agrega al monitor lo seleccionado en el arbol (Enter, doble clic, menu). */
+    private void monitorearSeleccion() {
+        TreePath[] paths = modelTree.getSelectionPaths();
+        if (paths == null) return;
+        for (TreePath tp : paths) addNodeToMonitor((DefaultMutableTreeNode) tp.getLastPathComponent());
+    }
+
+    /** Lupa del campo de busqueda (dibujada: sin archivos de imagen). */
+    private static final class IconoLupa implements Icon {
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(Estilo.TEXTO_2);
+            g2.setStroke(new BasicStroke(1.7f));
+            g2.drawOval(x + 1, y + 1, 10, 10);
+            g2.drawLine(x + 10, y + 10, x + 14, y + 14);
+            g2.dispose();
+        }
+        @Override public int getIconWidth() { return 16; }
+        @Override public int getIconHeight() { return 16; }
+    }
+
+    /** "modelo · fabricante · cfg x" desde el texto de la placa ("IED: .. | Fabricante: .."). */
+    private static String subtituloDe(String info) {
+        if (info == null || !info.contains("IED:")) return "";
+        String modelo = campoPlaca(info, "Modelo:");
+        String tipo = campoPlaca(info, "Tipo:");
+        String fab = campoPlaca(info, "Fabricante:");
+        String cfg = campoPlaca(info, "cfg:");
+        java.util.List<String> l = new java.util.ArrayList<>();
+        String equipo = !modelo.isEmpty() ? modelo : tipo;
+        if (!equipo.isEmpty() && !equipo.equals("?")) l.add(equipo);
+        if (!fab.isEmpty() && !fab.equals("?")) l.add(fab);
+        if (!cfg.isEmpty()) l.add("cfg " + cfg);
+        return String.join(" \u00b7 ", l);
+    }
+
+    private static String campoPlaca(String info, String clave) {
+        int a = info.indexOf(clave);
+        if (a < 0) return "";
+        a += clave.length();
+        int b = info.length();
+        for (String fin : new String[]{"|", "cfg:"}) {
+            int k = info.indexOf(fin, a);
+            if (k >= 0 && k < b) b = k;
+        }
+        return info.substring(a, b).trim();
+    }
+
+    private BarraContexto.Estado estadoParaBarra() {
+        return new BarraContexto.Estado() {
+            public boolean modoServidor() { return currentMode == AppMode.SERVER; }
+            public boolean servidorCorriendo() { return isServerRunning; }
+            public boolean conectado() { return isConnected; }
+            public boolean conectando() {
+                return !isConnected && statusIndicator != null
+                        && COLOR_CONNECTING.equals(statusIndicator.getBackground());
+            }
+            public String error() {
+                String t = lblStatus == null ? null : lblStatus.getText();
+                String pre = I18n.t("err.title");
+                return (t != null && t.startsWith(pre)) ? t.substring(pre.length()).replaceFirst("^[:\\s]+", "") : null;
+            }
+            public String puertoServidor() { return tfServerPort == null ? "" : tfServerPort.getText().trim(); }
+            public String destinoServidor() {
+                // ConnectionManager informa "IP (servidor)" como host: en la pildora va solo IP:puerto
+                return hostEnPantalla == null ? "" : hostEnPantalla.replaceAll("\\s*\\([^)]*\\)", "");
+            }
+            public String host() { return tfHost == null ? "" : tfHost.getText().trim(); }
+            public String puertoCliente() { return tfClientPort == null ? "" : tfClientPort.getText().trim(); }
+            public String ied() { return iedEnPantalla; }
+            public String subtitulo() { return subEnPantalla; }
+            public String archivoScl() { return loadedSclFile == null ? null : loadedSclFile.getName(); }
+            public boolean modoTestDisponible() {
+                return server != null && server.getServerModel() != null && isServerRunning;
+            }
+            public boolean enModoTest() {
+                if (!modoTestDisponible()) return false;
+                Integer m = server.modoIed();
+                return m != null && (m == 3 || m == 4);
+            }
+            public String etapa() { return connectionManager == null ? null : connectionManager.etapa(); }
+            public String etapaDetalle() { return connectionManager == null ? "" : connectionManager.etapaDetalle(); }
+            public boolean accionHabilitada() {
+                JButton b = currentMode == AppMode.SERVER ? btnStartStop : btnConnect;
+                return b != null && b.isEnabled();
+            }
+        };
+    }
+
+    private BarraContexto.Acciones accionesDeBarra() {
+        return new BarraContexto.Acciones() {
+            public void abrirScl() { IEDNavigatorApp.this.abrirScl(); }
+            public void elegirModo(boolean servidor) {
+                if (servidor) { if (!rbServer.isSelected()) rbServer.doClick(); }
+                else { if (!rbClient.isSelected()) rbClient.doClick(); }
+                refrescarContexto();
+            }
+            public void accionPrincipal() { iniciarODetener(); }
+            public void alternarModoTest() { IEDNavigatorApp.this.alternarModoTest(); refrescarContexto(); }
+            public void cambiarDestino(String host, String puerto) {
+                // Los mismos campos que lee la conexion (tfHost, tfClientPort), ya sin panel propio
+                if (!host.equals(tfHost.getText())) tfHost.setText(host);
+                if (puerto != null && !puerto.equals(tfClientPort.getText())) tfClientPort.setText(puerto);
+            }
+        };
+    }
+
+    /**
+     * Archivo > Abrir: en modo servidor carga el SCL a simular. En modo cliente pregunta: pasar a
+     * Servidor y cargarlo (lo habitual), o solo leer sus GoCB para la pestaña GOOSE.
+     */
+    private void abrirScl() {
+        if (currentMode == AppMode.SERVER) {
+            selectSclFile();
+            return;
+        }
+        int r = preguntarModoParaScl(true);
+        if (r == 0) selectSclFile();
+        else if (r == 1) loadSclForGoCBs();
+    }
+
+    /**
+     * La aplicación abre en modo Cliente. Abrir un SCL ahí no simulaba nada: solo leía sus GoCB
+     * para la pestaña GOOSE, y quien no conocía los modos veía que "falla en silencio"
+     * (reporte de usuarios, 2026-11-19). Ahora se avisa y se ofrece pasar a Servidor; si hay
+     * una conexión, el aviso dice que se cierra.
+     *
+     * @param ofrecerGoose si se ofrece también "solo leer los GoCB" (Abrir; no en Recientes)
+     * @return 0 = ya se pasó a modo Servidor, 1 = solo los GoCB, -1 = cancelado
+     */
+    private int preguntarModoParaScl(boolean ofrecerGoose) {
+        String msg;
+        if (isConnected) {
+            msg = I18n.t("mode.scl.msg.connected",
+                    connectionManager.getCurrentHost() + ":" + connectionManager.getCurrentPort());
+        } else if (connectionManager.cancelable()) {
+            msg = I18n.t("mode.scl.msg.connecting", tfHost.getText().trim() + ":" + tfClientPort.getText().trim());
+        } else {
+            msg = I18n.t("mode.scl.msg");
+        }
+        Object[] opciones = ofrecerGoose
+                ? new Object[]{I18n.t("mode.scl.toserver"), I18n.t("mode.scl.goose"), I18n.t("mode.confirm.cancel")}
+                : new Object[]{I18n.t("mode.scl.toserver"), I18n.t("mode.confirm.cancel")};
+        int r = JOptionPane.showOptionDialog(this, msg, I18n.t("mode.scl.title"), JOptionPane.DEFAULT_OPTION,
+                JOptionPane.QUESTION_MESSAGE, null, opciones, opciones[0]);
+        if (r == 0) {
+            // El aviso ya dijo que se cierra la conexión: no se vuelve a confirmar
+            rbServer.setSelected(true);
+            switchToServerMode();
+            refrescarContexto();
+            log(I18n.t("log.mode.scl.toserver"));
+            return 0;
+        }
+        if (ofrecerGoose && r == 1) return 1;
+        log(I18n.t("log.mode.scl.cancelled"));
+        return -1;
+    }
+
+    private static final int MAX_RECIENTES = 8;
+
+    private java.util.List<String> recientes() {
+        java.util.List<String> l = new java.util.ArrayList<>();
+        for (int i = 0; i < MAX_RECIENTES; i++) {
+            String r = PREFS_UI.get("recent." + i, null);
+            if (r != null && !r.isEmpty()) l.add(r);
+        }
+        return l;
+    }
+
+    private void guardarRecientes(java.util.List<String> l) {
+        for (int i = 0; i < MAX_RECIENTES; i++) {
+            if (i < l.size()) PREFS_UI.put("recent." + i, l.get(i));
+            else PREFS_UI.remove("recent." + i);
+        }
+    }
+
+    /** Se eligio un SCL: va primero en la lista de recientes y al titulo. */
+    private void agregarReciente(File f) {
+        java.util.List<String> l = recientes();
+        String ruta = f.getAbsolutePath();
+        l.remove(ruta);
+        l.add(0, ruta);
+        while (l.size() > MAX_RECIENTES) l.remove(l.size() - 1);
+        guardarRecientes(l);
+        SwingUtilities.invokeLater(this::actualizarTitulo);
+    }
+
+    private void llenarRecientes(JMenu menu) {
+        menu.removeAll();
+        java.util.List<String> l = recientes();
+        if (l.isEmpty()) {
+            JMenuItem vacio = new JMenuItem(I18n.t("menu.file.recent.empty"));
+            vacio.setEnabled(false);
+            menu.add(vacio);
+            return;
+        }
+        boolean servidor = currentMode == AppMode.SERVER;
+        // Dos archivos con el mismo nombre en carpetas distintas se veian iguales: a esos se
+        // les agrega la carpeta que los contiene.
+        java.util.Map<String, Integer> repetidos = new java.util.HashMap<>();
+        for (String ruta : l) repetidos.merge(new File(ruta).getName().toLowerCase(java.util.Locale.ROOT), 1, Integer::sum);
+        for (String ruta : l) {
+            File f = new File(ruta);
+            String etiqueta = f.getName();
+            if (repetidos.get(f.getName().toLowerCase(java.util.Locale.ROOT)) > 1 && f.getParentFile() != null) {
+                etiqueta += "  (" + f.getParentFile().getName() + ")";
+            }
+            JMenuItem mi = new JMenuItem(etiqueta);
+            mi.setToolTipText(servidor ? ruta : I18n.t("menu.file.recent.server"));
+            mi.addActionListener(e -> {
+                // En modo Cliente estaban deshabilitados sin más: ahora se ofrece pasar a Servidor
+                if (currentMode != AppMode.SERVER && preguntarModoParaScl(false) != 0) return;
+                if (!f.isFile()) {
+                    JOptionPane.showMessageDialog(this, I18n.t("menu.file.recent.missing", ruta),
+                            I18n.t("menu.file.recent"), JOptionPane.WARNING_MESSAGE);
+                    java.util.List<String> n = recientes();
+                    n.remove(ruta);
+                    guardarRecientes(n);
+                    return;
+                }
+                connectionManager.cargarSclArchivo(f);
+            });
+            menu.add(mi);
+        }
+        menu.addSeparator();
+        JMenuItem borrar = new JMenuItem(I18n.t("menu.file.recent.clear"));
+        borrar.addActionListener(e -> guardarRecientes(new java.util.ArrayList<>()));
+        menu.add(borrar);
+    }
+
+    /** Archivo > Exportar monitor: la tabla del monitor tal como se ve, en CSV (separador ;). */
+    private void exportarMonitor() {
+        if (monitorTableModel == null || monitorTableModel.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this, I18n.t("export.monitor.empty"),
+                    I18n.t("menu.file.exportmonitor"), JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        File destino = elegirDestino("monitor_" + marcaArchivo() + ".csv");
+        if (destino == null) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append(campoCsv(I18n.t("mon.col.signal"))).append(";FC;").append(campoCsv(I18n.t("col.type"))).append(';')
+          .append(campoCsv(I18n.t("col.value"))).append(';').append(campoCsv(I18n.t("mon.col.quality"))).append(';')
+          .append(campoCsv(I18n.t("mon.col.changed"))).append("\r\n");
+        for (MonitorItem it : monitorItems.values()) {
+            sb.append(campoCsv(it.reference)).append(';').append(campoCsv(it.fc)).append(';')
+              .append(campoCsv(it.type == null ? "" : it.type)).append(';')
+              .append(campoCsv(it.value == null ? "" : it.value)).append(';')
+              .append(campoCsv(MonitorManager.calidadDe(it))).append(';')
+              .append(campoCsv(MonitorManager.hora(it.ultimoCambio))).append("\r\n");
+        }
+        escribirExportacion(destino, sb.toString());
+    }
+
+    /**
+     * Ver › Registro (Ctrl+L), el boton Registro y la ✕ del panel: el registro acoplado debajo
+     * de las pestañas, de unos 190 px (o el alto que tenia al cerrarlo), redimensionable.
+     * Al abrirlo, los avisos y errores pendientes se dan por vistos.
+     */
+    private void mostrarRegistro(boolean visible) {
+        if (tarjetaRegistro == null || splitDerecha == null) return;
+        tarjetaRegistro.setVisible(visible);
+        // Cerrado, sin divisor (si no, queda su agarre al pie de las pestañas)
+        splitDerecha.setDividerSize(visible ? tamDivisor : 0);
+        PREFS_UI.putBoolean(PREF_REGISTRO, visible);
+        if (miRegistroVisible != null) miRegistroVisible.setSelected(visible);
+        if (visible) {
+            registro.marcarVisto();
+            splitDerecha.validate();
+            ajustarAltoRegistro();
+            SwingUtilities.invokeLater(this::ajustarAltoRegistro);
+        }
+        splitDerecha.revalidate();
+        splitDerecha.repaint();
+        actualizarBotonRegistro();
+    }
+
+    /**
+     * El registro abierto conserva su alto: al abrirlo y cada vez que cambia el tamaño de la
+     * ventana se vuelve a poner el divisor. Lo maneja la ventana y no el resizeWeight del split,
+     * que al mostrar el panel y redimensionar a la vez lo dejaba en el minimo. El alto solo
+     * cambia cuando el usuario arrastra el divisor (ver recordarAltoRegistro).
+     */
+    private void ajustarAltoRegistro() {
+        if (tarjetaRegistro == null || !tarjetaRegistro.isVisible() || splitDerecha.getHeight() <= 0) return;
+        if (altoRegistro <= 0) altoRegistro = com.formdev.flatlaf.util.UIScale.scale(190);
+        splitDerecha.setDividerLocation(Math.max(0, splitDerecha.getHeight() - altoRegistro - splitDerecha.getDividerSize()));
+    }
+
+    private void recordarAltoRegistro() {
+        if (tarjetaRegistro == null || !tarjetaRegistro.isVisible() || splitDerecha.getHeight() <= 0) return;
+        altoRegistro = splitDerecha.getHeight() - splitDerecha.getDividerLocation() - splitDerecha.getDividerSize();
+    }
+
+    private void actualizarBotonRegistro() {
+        if (registro == null) return;
+        btnRegistro.poner(registro.avisosNuevos(), registro.erroresNuevos(),
+                tarjetaRegistro != null && tarjetaRegistro.isVisible());
+    }
+
+    /** Archivo > Exportar registro: el panel de registro a un archivo de texto. */
+    private void exportarRegistro() {
+        File destino = elegirDestino("registro_" + marcaArchivo() + ".txt");
+        if (destino == null) return;
+        escribirExportacion(destino, registro.getTexto());
+    }
+
+    private File elegirDestino(String nombre) {
+        JFileChooser fc = new JFileChooser();
+        fc.setSelectedFile(new File(nombre));
+        return fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION ? fc.getSelectedFile() : null;
+    }
+
+    private void escribirExportacion(File destino, String texto) {
+        try {
+            // BOM para que Excel abra bien los acentos del CSV
+            java.nio.file.Files.write(destino.toPath(),
+                    ("\uFEFF" + texto).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            log(I18n.t("export.ok", destino.getAbsolutePath()));
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, I18n.t("export.fail", ex.getMessage()),
+                    I18n.t("err.title"), JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private static String campoCsv(String v) {
+        if (v.contains(";") || v.contains("\"") || v.contains("\n")) return "\"" + v.replace("\"", "\"\"") + "\"";
+        return v;
+    }
+
+    private static String marcaArchivo() {
+        return new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+    }
+
+    /** Simulacion > Iniciar / Detener (F5): el servidor en modo servidor, la conexion en cliente. */
+    private void iniciarODetener() {
+        if (currentMode == AppMode.SERVER) {
+            if (btnStartStop.isEnabled()) toggleServer();
+        } else {
+            if (btnConnect.isEnabled()) toggleConnection();
+        }
+    }
+
+    /** Simulacion > Configurar puerto: el del servidor simulado, o el del IED en modo cliente. */
+    private void configurarPuerto() {
+        boolean srv = currentMode == AppMode.SERVER;
+        JTextField campo = srv ? tfServerPort : tfClientPort;
+        String nuevo = (String) JOptionPane.showInputDialog(this,
+                I18n.t(srv ? "port.dlg.server" : "port.dlg.client"), I18n.t("port.dlg.title"),
+                JOptionPane.PLAIN_MESSAGE, null, null, campo.getText().trim());
+        if (nuevo == null) return;
+        nuevo = nuevo.trim();
+        try {
+            int p = Integer.parseInt(nuevo);
+            if (p < 1 || p > 65535) throw new NumberFormatException();
+            campo.setText(String.valueOf(p));
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, I18n.t("port.dlg.invalid", nuevo),
+                    I18n.t("port.dlg.title"), JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    /** Ver > Arbol / Registro: muestra u oculta el panel; el divisor se acomoda solo. */
+    /**
+     * Archivo › Nueva ventana: otra instancia del programa, con su modelo, su arbol, su monitor
+     * y su registro de sesion. Es la forma de tener la simulacion corriendo en una y el Cliente
+     * en la otra (INFORME_SERVIDOR_DE_FONDO.md, opcion 0): en una sola ventana el arbol, el
+     * monitor y la placa GOOSE son unicos y los comparten los dos modos.
+     *
+     * El IEDNavigatorPRO.exe carga la JVM dentro de su propio proceso: relanzar el mismo comando
+     * abre otra instancia. Corriendo con java (desde el repo), se relanza java con los mismos
+     * argumentos de la JVM y la misma ruta de clases.
+     */
+    private void abrirNuevaVentana() {
+        try {
+            java.util.List<String> cmd = comandoNuevaVentana();
+            Process p = new ProcessBuilder(cmd)
+                    .directory(new File(System.getProperty("user.dir")))
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            log(I18n.t("log.newwindow", String.valueOf(p.pid())));
+        } catch (Exception ex) {
+            log(I18n.t("err.newwindow", String.valueOf(ex.getMessage())));
+            JOptionPane.showMessageDialog(this, I18n.t("err.newwindow", String.valueOf(ex.getMessage())),
+                    I18n.t("menu.file.newwindow"), JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    static java.util.List<String> comandoNuevaVentana() {
+        String actual = ProcessHandle.current().info().command().orElse(null);
+        java.util.List<String> cmd = new java.util.ArrayList<>();
+        String nombre = actual == null ? "" : new File(actual).getName().toLowerCase(java.util.Locale.ROOT);
+        if (actual != null && !nombre.startsWith("java")) {
+            cmd.add(actual);   // el lanzador .exe
+            return cmd;
+        }
+        cmd.add(actual != null ? actual
+                : System.getProperty("java.home") + File.separator + "bin" + File.separator + "java");
+        for (String arg : java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+            if (arg.startsWith("-agentlib") || arg.startsWith("-javaagent") || arg.startsWith("-Xdebug")) continue;
+            cmd.add(arg);
+        }
+        cmd.add("-cp");
+        cmd.add(System.getProperty("java.class.path"));
+        cmd.add(IEDNavigatorApp.class.getName());
+        return cmd;
+    }
+
+    /** Plegado: solo la cabecera. Desplegado: el alto recordado (por defecto 220 px). */
+    private void ajustarAltoPropiedades() {
+        if (splitIzquierda == null || panelPropiedades == null || splitIzquierda.getHeight() <= 0) return;
+        int total = splitIzquierda.getHeight();
+        int div = splitIzquierda.getDividerSize();
+        int alto = panelPropiedades.plegado() ? panelPropiedades.altoCabecera()
+                : PREFS_UI.getInt(PREF_PROPS_ALTO, com.formdev.flatlaf.util.UIScale.scale(220));
+        alto = Math.max(panelPropiedades.altoCabecera(), Math.min(alto, total - 150));
+        splitIzquierda.setDividerLocation(total - alto - div);
+    }
+
+    private void recordarAltoPropiedades() {
+        if (splitIzquierda == null || panelPropiedades == null || panelPropiedades.plegado()) return;
+        int alto = splitIzquierda.getHeight() - splitIzquierda.getDividerLocation() - splitIzquierda.getDividerSize();
+        if (alto > panelPropiedades.altoCabecera() + 20) PREFS_UI.putInt(PREF_PROPS_ALTO, alto);
+    }
+
+    private void mostrarPanel(JComponent panel, boolean visible) {
+        if (panel == null) return;
+        panel.setVisible(visible);
+        Container padre = panel.getParent();
+        if (padre instanceof JSplitPane) ((JSplitPane) padre).resetToPreferredSizes();
+        if (padre != null) { padre.revalidate(); padre.repaint(); }
+    }
+
+    /**
+     * Ver > Expandir todo: hasta los LN de cada LD. Abrir los DO y sus atributos en un modelo
+     * de cien mil nodos deja la ventana trabada varios segundos y no se puede leer.
+     */
+    private void expandirArbol() {
+        if (modelTree == null) return;
+        modelTree.expandRow(0);
+        DefaultMutableTreeNode raiz = (DefaultMutableTreeNode) treeModel.getRoot();
+        for (int i = 0; i < raiz.getChildCount(); i++) {
+            DefaultMutableTreeNode ld = (DefaultMutableTreeNode) raiz.getChildAt(i);
+            modelTree.expandPath(new TreePath(ld.getPath()));
+        }
+    }
+
+    /** Ver > Contraer todo: deja visible solo la raiz y los LD. */
+    private void contraerArbol() {
+        if (modelTree == null) return;
+        for (int r = modelTree.getRowCount() - 1; r > 0; r--) modelTree.collapseRow(r);
+        modelTree.expandRow(0);
+    }
+
+    /** Ver > Tema claro / oscuro: se guarda y se aplica al reiniciar (como el idioma). */
+    private void alternarTema() {
+        boolean oscuro = !Estilo.temaOscuro();
+        Estilo.guardarTemaOscuro(oscuro);
+        JOptionPane.showMessageDialog(this, I18n.t("prefs.restart"),
+                I18n.t("menu.view.theme"), JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /** Herramientas: Comparar SCL, Mapa GOOSE y Data Model (por ahora, sus pestañas). */
+    private void irAPestania(String claveTitulo) {
+        if (rightTabbedPane == null) return;
+        int i = rightTabbedPane.indexOfTab(I18n.t(claveTitulo));
+        if (i >= 0) rightTabbedPane.setSelectedIndex(i);
+    }
+
+    /**
+     * Herramientas > Comparar SCL / Mapa GOOSE / Data Model: una ventana propia, no modal, que
+     * se reutiliza (al cerrarla se oculta y conserva lo que tenia).
+     */
+    private void abrirHerramienta(String clave) {
+        JDialog d = ventanasHerramienta.get(clave);
+        if (d == null) {
+            JComponent panel = panelesHerramienta.get(clave);
+            if (panel == null) return;
+            String menu = "tab.sclcmp".equals(clave) ? "menu.tools.sclcmp" : "menu.tools.goosemap";
+            d = new JDialog(this, I18n.t(menu).replace("…", "").replace("...", "").trim(), false);
+            d.setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+            JPanel fondo = new JPanel(new BorderLayout());
+            fondo.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            fondo.add(panel, BorderLayout.CENTER);
+            d.setContentPane(fondo);
+            d.setSize(Math.min(1100, getWidth() - 80), Math.min(760, getHeight() - 80));
+            d.setLocationRelativeTo(this);
+            ventanasHerramienta.put(clave, d);
+        }
+        d.setVisible(true);
+        d.toFront();
+    }
+
+    /**
+     * Fila de pestañas de 34 px (rediseño 2026-11): 12 px, la seleccionada en el acento y en
+     * negrita con el subrayado de 2 px; las demas en gris oscuro. FlatLaf no pone en negrita solo
+     * la seleccionada, asi que cada pestaña lleva su etiqueta y se actualiza al cambiar.
+     */
+    private static void estilarPestanias(JTabbedPane tp) {
+        tp.putClientProperty("JTabbedPane.tabHeight", 34);
+        tp.putClientProperty("JTabbedPane.tabInsets", new Insets(0, 10, 0, 10));
+        tp.putClientProperty("JTabbedPane.tabAreaInsets", new Insets(0, 8, 0, 0));
+        tp.setFont(Estilo.ui(Font.PLAIN, 12));
+        Runnable marcar = () -> {
+            for (int i = 0; i < tp.getTabCount(); i++) {
+                Component c = tp.getTabComponentAt(i);
+                if (!(c instanceof JLabel)) continue;
+                boolean sel = i == tp.getSelectedIndex();
+                c.setFont(Estilo.ui(sel ? Font.BOLD : Font.PLAIN, 12));
+                c.setForeground(sel ? Estilo.ACENTO : new Color(0x3F4752));
+            }
+        };
+        for (int i = 0; i < tp.getTabCount(); i++) {
+            JLabel l = new JLabel(tp.getTitleAt(i));
+            // El ancho de la negrita: asi la fila no se mueve al cambiar de pestaña
+            l.setFont(Estilo.ui(Font.BOLD, 12));
+            l.setPreferredSize(l.getPreferredSize());
+            l.setHorizontalAlignment(SwingConstants.CENTER);
+            tp.setTabComponentAt(i, l);
+        }
+        tp.addChangeListener(e -> marcar.run());
+        marcar.run();
+    }
+
+    /** Pestaña Ajustes: el grupo de ajustes activo arriba y los ajustes sin grupo (SP) abajo. */
+    private JComponent panelAjustes(JComponent grupos, JComponent sp) {
+        JPanel arriba = new JPanel(new BorderLayout());
+        arriba.add(tituloSeccion(I18n.t("ajustes.sg")), BorderLayout.NORTH);
+        arriba.add(grupos, BorderLayout.CENTER);
+        JPanel abajo = new JPanel(new BorderLayout());
+        abajo.add(tituloSeccion(I18n.t("ajustes.sp")), BorderLayout.NORTH);
+        abajo.add(sp, BorderLayout.CENTER);
+        JSplitPane sep = new JSplitPane(JSplitPane.VERTICAL_SPLIT, arriba, abajo);
+        sep.setResizeWeight(0.5);
+        sep.setBorder(null);
+        sep.setContinuousLayout(true);
+        return sep;
+    }
+
+    private static JLabel tituloSeccion(String texto) {
+        JLabel l = new JLabel(texto);
+        l.setFont(Estilo.ui(Font.BOLD, 13));
+        l.setBorder(BorderFactory.createEmptyBorder(10, 10, 2, 10));
+        return l;
+    }
+
+    /** Herramientas > Preferencias: idioma y tema, que se aplican al reiniciar. */
+    private void mostrarPreferencias() {
+        String[][] langs = { {"es", "Español"}, {"en", "English"}, {"pt", "Português"}, {"zh", "中文 (简体)"} };
+        JComboBox<String> cbIdioma = new JComboBox<>();
+        int sel = 0;
+        for (int k = 0; k < langs.length; k++) {
+            cbIdioma.addItem(langs[k][1]);
+            if (I18n.currentTag().startsWith(langs[k][0])) sel = k;
+        }
+        cbIdioma.setSelectedIndex(sel);
+        JComboBox<String> cbTema = new JComboBox<>(new String[]{I18n.t("prefs.theme.light"), I18n.t("prefs.theme.dark")});
+        cbTema.setSelectedIndex(Estilo.temaOscuro() ? 1 : 0);
+
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(4, 4, 4, 4);
+        g.anchor = GridBagConstraints.WEST;
+        g.gridx = 0; g.gridy = 0; p.add(new JLabel(I18n.t("prefs.lang")), g);
+        g.gridx = 1; p.add(cbIdioma, g);
+        g.gridx = 0; g.gridy = 1; p.add(new JLabel(I18n.t("prefs.theme")), g);
+        g.gridx = 1; p.add(cbTema, g);
+        g.gridx = 0; g.gridy = 2; g.gridwidth = 2;
+        JLabel nota = new JLabel(I18n.t("prefs.restart"));
+        nota.setForeground(Estilo.TEXTO_2);
+        p.add(nota, g);
+
+        int r = JOptionPane.showConfirmDialog(this, p, I18n.t("prefs.title"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (r != JOptionPane.OK_OPTION) return;
+        String tag = langs[cbIdioma.getSelectedIndex()][0];
+        if (!I18n.currentTag().startsWith(tag)) I18n.setLocaleAndSave(tag);
+        Estilo.guardarTemaOscuro(cbTema.getSelectedIndex() == 1);
+    }
+
+    /** Ayuda > Documentacion (F1): la pagina del proyecto. */
+    private void abrirDocumentacion() {
+        try {
+            Desktop.getDesktop().browse(new java.net.URI(URL_DOCUMENTACION));
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, URL_DOCUMENTACION, I18n.t("menu.help.docs"),
+                    JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    /** Ayuda > Atajos de teclado: la tabla de atajos de los menus. */
+    private void mostrarAtajos() {
+        String[][] filas = {
+            {"Ctrl+O", I18n.t("menu.file.open")},
+            {"Ctrl+Shift+N", I18n.t("menu.file.newwindow")},
+            {"Ctrl+E", I18n.t("menu.file.exportmonitor")},
+            {"F5", I18n.t("menu.sim.startstop")},
+            {"Ctrl+L", I18n.t("menu.view.log")},
+            {"Ctrl+1", I18n.t("menu.view.tree")},
+            {"Ctrl+D", I18n.t("menu.tools.sclcmp")},
+            {"Ctrl+G", I18n.t("menu.tools.goosemap")},
+            {"Ctrl+M", I18n.t("menu.view.props")},
+            {"Ctrl+,", I18n.t("menu.tools.prefs")},
+            {"F1", I18n.t("menu.help.docs")},
+        };
+        JTable t = new JTable(filas, new String[]{I18n.t("keys.col.key"), I18n.t("keys.col.action")}) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        t.getColumnModel().getColumn(0).setMaxWidth(90);
+        t.setFont(Estilo.ui(Font.PLAIN, 13));
+        JScrollPane sp = new JScrollPane(t);
+        sp.setPreferredSize(new Dimension(420, 260));
+        JOptionPane.showMessageDialog(this, sp, I18n.t("menu.help.keys"), JOptionPane.PLAIN_MESSAGE);
     }
 
     private void generateModelReport() {
@@ -667,7 +1919,7 @@ public class IEDNavigatorApp extends JFrame {
     private void showAboutDialog() {
         String message =
             "<html><body style='width: 380px; padding: 10px;'>" +
-            "<h2 style='color: #2E86AB; margin-bottom: 5px;'>IED Navigator</h2>" +
+            "<h2 style='color: #2E86AB; margin-bottom: 5px;'>IEDNavigatorPRO</h2>" +
             "<p style='color: #666; font-size: 11px;'>" + I18n.t("about.version", Version.etiqueta()) + "</p>" +
             "<hr style='margin: 10px 0;'>" +
             "<p><b>IEC 61850 Explorer Tool</b></p>" +
@@ -687,6 +1939,9 @@ public class IEDNavigatorApp extends JFrame {
             "<p style='font-size: 11px;'>" + I18n.t("about.role") + "</p>" +
             "<p style='font-size: 11px;'>\uD83C\uDDF5\uD83C\uDDFE Paraguay</p>" +
             "<br>" +
+            "<p><b>" + I18n.t("about.collab") + "</b></p>" +
+            "<p style='color: #2E86AB; font-size: 13px;'><b>" + I18n.t("about.collab.name") + "</b></p>" +
+            "<br>" +
             "<p style='color: #B71C1C; font-size: 10px;'>" +
             "<b>" + I18n.t("about.edu.title") + "</b> " + I18n.t("about.edu.body") + "</p>" +
             "<p style='color: #888; font-size: 10px;'>" +
@@ -696,7 +1951,7 @@ public class IEDNavigatorApp extends JFrame {
             "&copy; 2024-" + java.time.Year.now().getValue() + " - " + I18n.t("about.rights") + "</p>" +
             "</body></html>";
 
-        JOptionPane.showMessageDialog(this, message, I18n.t("about.title"),
+        JOptionPane.showMessageDialog(this, message, I18n.t("about.title", Version.etiqueta()),
             JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -720,71 +1975,68 @@ public class IEDNavigatorApp extends JFrame {
         main.setLayout(new BoxLayout(main, BoxLayout.Y_AXIS));
         main.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
 
+        // Lo que el arbol muestra, con los mismos iconos y colores (SimbolosArbol)
         main.add(legendTitle(I18n.t("legend.nodetypes.title")));
-        main.add(legendRow(IconFactory.createNodeIcon("LD", new Color(100,100,200)),
-                I18n.t("legend.nodetypes.ld")));
-        main.add(legendRow(IconFactory.createNodeIcon("DO", new Color(150,150,200)),
-                I18n.t("legend.nodetypes.do")));
-        main.add(legendRow(IconFactory.createCircleIcon(new Color(100,180,100), 14),
-                I18n.t("legend.nodetypes.da")));
+        main.add(legendRow(iconCache.get("ld"), I18n.t("legend.nodetypes.ld")));
+        main.add(legendRow(iconCache.get("ln_default"), I18n.t("legend.nodetypes.ln")));
+        main.add(legendRow(iconCache.get("do"), I18n.t("legend.nodetypes.do")));
+        main.add(legendRow(iconCache.get("da"), I18n.t("legend.nodetypes.da")));
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.lngroups.title")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(200, 50, 50)),
-                I18n.t("legend.lngroups.x")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(200,100, 50)),
-                I18n.t("legend.lngroups.xc")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(150,100,200)),
-                I18n.t("legend.lngroups.c")));
-        main.add(legendRow(IconFactory.createMeterIcon(new Color(0,100,200)),
-                I18n.t("legend.lngroups.m1")));
-        main.add(legendRow(IconFactory.createMeterIcon(new Color(0,150,100)),
-                I18n.t("legend.lngroups.m2")));
-        main.add(legendRow(IconFactory.createShieldIcon(new Color(180,30,30)),
-                I18n.t("legend.lngroups.p")));
-        main.add(legendRow(IconFactory.createShieldIcon(new Color(130,30,170)),
-                I18n.t("legend.lngroups.r")));
-        main.add(legendRow(IconFactory.createGearIcon(new Color(0,150,170)),
-                I18n.t("legend.lngroups.a")));
-        main.add(legendRow(IconFactory.createDiamondIcon(new Color(70,70,70)),
-                I18n.t("legend.lngroups.l")));
-        main.add(legendRow(IconFactory.createDiamondIcon(new Color(90,90,90)),
-                I18n.t("legend.lngroups.g")));
-        main.add(legendRow(IconFactory.createMeterIcon(new Color(20,140,120)),
-                I18n.t("legend.lngroups.s")));
-        main.add(legendRow(IconFactory.createMeterIcon(new Color(140,80,0)),
-                I18n.t("legend.lngroups.t")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(50,90,200)),
-                I18n.t("legend.lngroups.i")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(80,80,150)),
-                I18n.t("legend.lngroups.z")));
-        main.add(legendRow(IconFactory.createNodeIcon("LN", new Color(100,150,100)),
-                I18n.t("legend.lngroups.unclassified")));
+        String[][] grupos = {
+            {"XCBR1", "legend.lngroups.x"}, {"CSWI1", "legend.lngroups.xc"}, {"CPOW1", "legend.lngroups.c"},
+            {"MMXU1", "legend.lngroups.m1"}, {"MMTR1", "legend.lngroups.m2"}, {"PTOC1", "legend.lngroups.p"},
+            {"RREC1", "legend.lngroups.r"}, {"ATCC1", "legend.lngroups.a"}, {"LLN0", "legend.lngroups.l"},
+            {"GGIO1", "legend.lngroups.g"}, {"SIMG1", "legend.lngroups.s"}, {"TCTR1", "legend.lngroups.t"},
+            {"IHMI1", "legend.lngroups.i"}, {"ZBAT1", "legend.lngroups.z"}, {"", "legend.lngroups.unclassified"}};
+        for (String[] g : grupos) {
+            main.add(legendRow(ModelTreeCellRenderer.lnIcon(g[0], iconCache), I18n.t(g[1])));
+        }
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.breaker.title")));
-        main.add(legendRow(IconFactory.createBreakerIcon("on"),
-                I18n.t("legend.breaker.on")));
-        main.add(legendRow(IconFactory.createBreakerIcon("off"),
-                I18n.t("legend.breaker.off")));
-        main.add(legendRow(IconFactory.createBreakerIcon("intermediate"),
-                I18n.t("legend.breaker.intermediate")));
+        main.add(legendRow(iconCache.get("breaker_on"), "<b>ON</b> — " + I18n.t("legend.breaker.on")));
+        main.add(legendRow(iconCache.get("breaker_off"), "<b>OFF</b> — " + I18n.t("legend.breaker.off")));
+        main.add(legendRow(iconCache.get("breaker_intermediate"), "<b>INTERMEDIATE_STATE</b> — " + I18n.t("legend.breaker.intermediate")));
+        main.add(legendRow(iconCache.get("breaker_intermediate"), "<b>BAD_STATE</b> — " + I18n.t("legend.breaker.bad")));
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.colors.title")));
-        main.add(legendColorRow(new Color(0,150,0),
-                I18n.t("legend.colors.green")));
-        main.add(legendColorRow(new Color(200,0,0),
+        main.add(legendMuestra(muestraTexto("= ON", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_CERRADO, null),
                 I18n.t("legend.colors.red")));
-        main.add(legendColorRow(new Color(255,140,0),
+        main.add(legendMuestra(muestraTexto("= OFF", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ABIERTO, null),
+                I18n.t("legend.colors.green")));
+        main.add(legendMuestra(muestraTexto("= INTERMEDIATE_STATE", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ADVERTENCIA, null),
                 I18n.t("legend.colors.orange")));
-        main.add(legendColorRow(new Color(120,80,180),
+        main.add(legendMuestra(muestraTexto("blkEna", Estilo.mono(Font.PLAIN, 11), SimbolosArbol.BLOQUEO, null),
                 I18n.t("legend.colors.purple")));
-        main.add(legendColorRow(new Color(0,100,200),
+        main.add(legendMuestra(muestraTexto("stVal", Estilo.mono(Font.PLAIN, 11), SimbolosArbol.MONITOREADO, null),
                 I18n.t("legend.colors.blue")));
+        main.add(legendMuestra(muestraTexto("= 300000", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
+                I18n.t("legend.tree.value")));
+        main.add(legendMuestra(muestraTexto("invalid", Estilo.mono(Font.BOLD, 11), SimbolosArbol.VALOR_ADVERTENCIA, null),
+                I18n.t("legend.tree.quality")));
+        main.add(legendMuestra(muestraTexto("= 10:27:31.204", Estilo.mono(Font.PLAIN, 11), Estilo.ACENTO, null),
+                I18n.t("legend.tree.time")));
+        main.add(legendMuestra(muestraTexto("Abc", Estilo.ui(Font.PLAIN, 11), Estilo.TEXTO_2, null),
+                I18n.t("legend.tree.desc")));
+        main.add(legendMuestra(muestraTexto("  stVal  ", Estilo.mono(Font.PLAIN, 11), Estilo.TEXTO, Estilo.RESALTE),
+                I18n.t("legend.tree.flash")));
+        main.add(legendMuestra(muestraTexto("  Pos  ", Estilo.ui(Font.PLAIN, 12), Estilo.TEXTO, new Color(0xF4F6F8)),
+                I18n.t("legend.tree.hover")));
+        JLabel sel = muestraTexto("  stVal  ", Estilo.mono(Font.PLAIN, 11), Estilo.TEXTO, Estilo.ACENTO_SUAVE);
+        sel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 2, 0, 0, Estilo.ACENTO), BorderFactory.createEmptyBorder(0, 3, 0, 3)));
+        main.add(legendMuestra(sel, I18n.t("legend.tree.selected")));
         main.add(Box.createVerticalStrut(8));
 
         main.add(legendTitle(I18n.t("legend.fc.title")));
+        JLabel notaFc = new JLabel("<html><i>" + I18n.t("legend.fc.note") + "</i></html>");
+        notaFc.setForeground(Estilo.TEXTO_2);
+        notaFc.setBorder(BorderFactory.createEmptyBorder(0, 8, 4, 8));
+        notaFc.setAlignmentX(Component.LEFT_ALIGNMENT);
+        main.add(notaFc);
         main.add(legendFcRow("ST", new Color(21,101,192),
                 I18n.t("legend.fc.st")));
         main.add(legendFcRow("MX", new Color(0,105,92),
@@ -867,7 +2119,7 @@ public class IEDNavigatorApp extends JFrame {
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setBorder(null);
 
-        JDialog dlg = new JDialog(this, "Leyenda de íconos y colores — IED Navigator", false);
+        JDialog dlg = new JDialog(this, I18n.t("legend.title"), false);
         dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dlg.add(scroll);
         dlg.pack();
@@ -926,6 +2178,43 @@ public class IEDNavigatorApp extends JFrame {
         return row;
     }
 
+    /** Fila con la marca de tipo del arbol (LD, LN, DO, DA: monoespaciada de 9 px, sin recuadro). */
+    private static JPanel legendMarca(String marca, Color color, String descripcion) {
+        JLabel m = new JLabel(marca);
+        m.setFont(Estilo.mono(Font.BOLD, 9));
+        m.setForeground(color);
+        m.setPreferredSize(new Dimension(22, 16));
+        return legendMuestra(m, descripcion);
+    }
+
+    /** Fila con una muestra (como se ve en el arbol) y su explicacion. */
+    private static JPanel legendMuestra(JComponent muestra, String descripcion) {
+        // Muestra a la izquierda y el texto en el resto: un texto largo se parte en dos renglones
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        row.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel caja = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        caja.setOpaque(false);
+        caja.setPreferredSize(new Dimension(215, 18));
+        caja.add(muestra);
+        row.add(caja, BorderLayout.WEST);
+        row.add(new JLabel("<html><div style='width:190px'>" + descripcion + "</div></html>"), BorderLayout.CENTER);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+        return row;
+    }
+
+    private static JLabel muestraTexto(String t, Font f, Color tinta, Color fondo) {
+        JLabel l = new JLabel(t);
+        l.setFont(f);
+        l.setForeground(tinta);
+        if (fondo != null) {
+            l.setOpaque(true);
+            l.setBackground(fondo);
+            l.setBorder(BorderFactory.createEmptyBorder(0, 3, 0, 3));
+        }
+        return l;
+    }
+
     /** Fila de color de texto + descripción para el diálogo de leyenda. */
     private static JPanel legendColorRow(Color color, String description) {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
@@ -941,21 +2230,11 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     /** Fila de Functional Constraint con badge de color para el diálogo de leyenda. */
-    private static JPanel legendFcRow(String fc, Color badge, String html) {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        row.setOpaque(false);
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JLabel lbl = new JLabel(fc);
-        lbl.setOpaque(true);
-        lbl.setBackground(badge);
-        lbl.setForeground(Color.WHITE);
-        lbl.setFont(lbl.getFont().deriveFont(Font.BOLD, 10f));
-        lbl.setBorder(BorderFactory.createEmptyBorder(1, 5, 1, 5));
-        lbl.setPreferredSize(new java.awt.Dimension(30, 17));
-        lbl.setHorizontalAlignment(SwingConstants.CENTER);
-        row.add(lbl);
-        row.add(new JLabel("<html>" + html + "</html>"));
-        return row;
+    /** Fila de FC con la etiqueta del arbol: el color de ese FC (SimbolosArbol), texto blanco. */
+    private static JPanel legendFcRow(String fc, Color sinUso, String html) {
+        Insignia tag = new Insignia(Estilo.mono(Font.PLAIN, 10)).alto(14)
+                .poner(fc, SimbolosArbol.colorFc(fc), Color.WHITE, null);
+        return legendMuestra(tag, html);
     }
 
     /** Encabezado de subcategoría CDC (texto en cursiva). */
@@ -975,7 +2254,8 @@ public class IEDNavigatorApp extends JFrame {
         name.setPreferredSize(new java.awt.Dimension(46, 16));
         row.add(Box.createHorizontalStrut(26));
         row.add(name);
-        row.add(new JLabel("<html>" + html + "</html>"));
+        // Ancho acotado: el texto se parte en renglones y la leyenda entra sin barra horizontal
+        row.add(new JLabel("<html><div style='width:300px'>" + html + "</div></html>"));
         return row;
     }
 
@@ -1051,7 +2331,7 @@ public class IEDNavigatorApp extends JFrame {
 
         // Placa de identificación del IED (se llena tras conectar con FC=DC)
         lblIedInfo = new JLabel(" ");
-        lblIedInfo.setFont(new java.awt.Font("Monospaced", java.awt.Font.PLAIN, 11));
+        lblIedInfo.setFont(Estilo.mono(Font.PLAIN, 11));
         lblIedInfo.setForeground(new Color(40, 80, 160));
         statusBar.add(lblIedInfo, BorderLayout.CENTER);
 
@@ -1280,123 +2560,332 @@ public class IEDNavigatorApp extends JFrame {
     private void clearWatchlist() { monitorManager.clearWatchlist(); } // F24
 
     private void updateWatchlistLabel() {
-        lblWatchlistCount.setText(I18n.t("watchlist.count", watchlist.size()));
+        String t = I18n.t("watchlist.count", String.valueOf(watchlist.size()));
+        if (lblWatchlistCount != null) lblWatchlistCount.setText(t);
+        lblWatchlistMonitor.setText(t);
     }
 
     // ─── SECTION: MONITOR PANEL ──────────────────────────────────────────────────────
     private JPanel createMonitorPanel() {
-        JPanel panel = new JPanel(new BorderLayout(5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder(I18n.t("border.monitor")));
+        JPanel panel = new JPanel(new BorderLayout(0, 0));
+        panel.setOpaque(false);
         panel.setMinimumSize(new Dimension(300, 200));
 
-        // Tabla con mas columnas como IEDScout
-        String[] columns = {I18n.t("col.name"), "FC", I18n.t("col.type"), I18n.t("col.value"), I18n.t("col.status")};
+        // Columnas del rediseño. La columna Señal guarda el MonitorItem (ruta, FC, cambios).
+        String[] columns = {"", I18n.t("mon.col.signal"), I18n.t("col.type"), I18n.t("col.value"),
+                I18n.t("mon.col.quality"), I18n.t("mon.col.changed")};
         monitorTableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+            @Override public boolean isCellEditable(int row, int column) {
+                return column == MonitorCeldaRenderer.COL_SEL;
+            }
+            @Override public Class<?> getColumnClass(int c) {
+                return c == MonitorCeldaRenderer.COL_SEL ? Boolean.class : Object.class;
             }
         };
-        monitorTable = new JTable(monitorTableModel);
+        // Sin señales, la tabla misma muestra la pista para soltar (sigue siendo la zona de drop)
+        monitorTable = new JTable(monitorTableModel) {
+            @Override protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (getModel().getRowCount() == 0) pintarPistaMonitor((Graphics2D) g, this);
+            }
+        };
         monitorTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        monitorTable.setRowHeight(22);
-        monitorTable.setShowGrid(true);
-        monitorTable.setGridColor(new Color(220, 220, 220));
-
-        // Configurar anchos de columna
-        monitorTable.getColumnModel().getColumn(0).setPreferredWidth(180);  // Nombre
-        monitorTable.getColumnModel().getColumn(1).setPreferredWidth(35);   // FC
-        monitorTable.getColumnModel().getColumn(2).setPreferredWidth(70);   // Tipo
-        monitorTable.getColumnModel().getColumn(3).setPreferredWidth(100);  // Valor
-        monitorTable.getColumnModel().getColumn(4).setPreferredWidth(60);   // Estado
-
-        // Renderer para colorear valores
-        monitorTable.setDefaultRenderer(Object.class, new MonitorTableRenderer());
+        monitorTable.setRowHeight(com.formdev.flatlaf.util.UIScale.scale(PREFS_UI.getBoolean(PREF_COMPACTA, true) ? 24 : 28));
+        monitorTable.setShowGrid(false);
+        monitorTable.setShowHorizontalLines(true);
+        monitorTable.setShowVerticalLines(false);
+        monitorTable.setGridColor(new Color(0xF0F2F5));
+        monitorTable.setIntercellSpacing(new Dimension(0, 1));
+        MonitorCeldaRenderer celdas = new MonitorCeldaRenderer();
+        for (int c = 0; c < columns.length; c++) monitorTable.getColumnModel().getColumn(c).setCellRenderer(celdas);
+        javax.swing.table.TableColumnModel cm = monitorTable.getColumnModel();
+        cm.getColumn(0).setPreferredWidth(32);
+        cm.getColumn(0).setMaxWidth(36);
+        cm.getColumn(1).setPreferredWidth(300);
+        cm.getColumn(2).setPreferredWidth(90);
+        cm.getColumn(3).setPreferredWidth(130);
+        cm.getColumn(4).setPreferredWidth(110);
+        cm.getColumn(5).setPreferredWidth(120);
+        javax.swing.table.JTableHeader th = monitorTable.getTableHeader();
+        th.setFont(Estilo.ui(Font.BOLD, 11));
+        th.setForeground(Estilo.TEXTO_2);
+        th.putClientProperty("FlatLaf.style", "height:26; background:#F7F8FA; bottomSeparatorColor:#DDE1E7;"
+                + " separatorColor:#F7F8FA; showTrailingVerticalLine:false");
+        ((javax.swing.table.DefaultTableCellRenderer) th.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.LEFT);
 
         // Sorter para filtrado
         monitorSorter = new TableRowSorter<>(monitorTableModel);
         monitorTable.setRowSorter(monitorSorter);
 
-        // El drop se configura en setupDragAndDrop()
+        // Toda la tabla recibe lo que se suelta (setupDragAndDrop); la franja de abajo es una pista
         monitorTable.setFillsViewportHeight(true);
-
         JScrollPane tableScroll = new JScrollPane(monitorTable);
-        tableScroll.getViewport().setBackground(Color.WHITE);
+        tableScroll.setBorder(BorderFactory.createEmptyBorder());
+        tableScroll.getViewport().setBackground(superficie());
 
-        // Panel de area de drop visual
-        JPanel dropHintPanel = new JPanel(new BorderLayout());
-        dropHintPanel.setBackground(new Color(245, 250, 255));
-        dropHintPanel.setBorder(BorderFactory.createDashedBorder(
-            new Color(100, 150, 200), 2, 5, 3, true));
-        JLabel lblDropHint = new JLabel(I18n.t("monitor.drophint"));
-        lblDropHint.setForeground(new Color(100, 150, 200));
-        lblDropHint.setHorizontalAlignment(SwingConstants.CENTER);
-        dropHintPanel.add(lblDropHint, BorderLayout.CENTER);
-        dropHintPanel.setPreferredSize(new Dimension(250, 60));
+        // Barra superior (~40 px, sin titulo: ya lo dice la pestaña):
+        // contador · watchlist (Cliente) | filtro · FC · Quitar · Limpiar…
+        // BarraAdaptable: con la ventana angosta acorta el filtro y oculta la watchlist y el
+        // contador antes que encimar los dos grupos (con BorderLayout se pisaban)
+        BarraAdaptable distribucion = new BarraAdaptable(8, 16);
+        JPanel enc = new JPanel(distribucion);
+        enc.setOpaque(false);
+        enc.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+        JPanel izq = enc;
+        // Contador en pildora
+        JLabel lblCount = new JLabel(I18n.t("monitor.signals", 0)) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(0xEEF0F3));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        lblCount.setFont(Estilo.ui(Font.BOLD, 11));
+        lblCount.setForeground(new Color(0x3F4752));
+        lblCount.setBorder(BorderFactory.createEmptyBorder(3, 9, 3, 9));
+        izq.add(lblCount);
+        // Watchlist del cliente (lo que lee el polling): contador y Limpiar
+        panelWatchlist = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        panelWatchlist.setOpaque(false);
+        lblWatchlistMonitor.setFont(Estilo.ui(Font.PLAIN, 12));
+        lblWatchlistMonitor.setForeground(Estilo.TEXTO_2);
+        lblWatchlistMonitor.setText(I18n.t("watchlist.count", String.valueOf(watchlist.size())));
+        JButton limpiarWatchlist = new JButton(I18n.t("btn.clear"));
+        limpiarWatchlist.putClientProperty("JButton.buttonType", "borderless");
+        limpiarWatchlist.setForeground(Estilo.ACENTO);
+        limpiarWatchlist.setFont(Estilo.ui(Font.PLAIN, 12));
+        limpiarWatchlist.setToolTipText(I18n.t("watchlist.clear.tip"));
+        limpiarWatchlist.addActionListener(e -> clearWatchlist());
+        panelWatchlist.add(lblWatchlistMonitor);
+        panelWatchlist.add(limpiarWatchlist);
+        panelWatchlist.setVisible(false);
+        izq.add(panelWatchlist);
 
-        // Header fila 1: conteo + botones
-        JPanel headerRow1 = new JPanel(new BorderLayout());
-        JLabel lblCount = new JLabel(" " + I18n.t("monitor.items", 0));
-        lblCount.setFont(lblCount.getFont().deriveFont(Font.BOLD));
-        headerRow1.add(lblCount, BorderLayout.WEST);
-
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 2));
-        JButton btnRemove = new JButton(I18n.t("btn.remove"));
-        btnRemove.setMargin(new Insets(2, 8, 2, 8));
-        btnRemove.addActionListener(e -> removeSelectedFromMonitor());
-        btnPanel.add(btnRemove);
-        JButton btnClear = new JButton(I18n.t("btn.clear"));
-        btnClear.setMargin(new Insets(2, 8, 2, 8));
-        btnClear.addActionListener(e -> clearMonitor());
-        btnPanel.add(btnClear);
-        headerRow1.add(btnPanel, BorderLayout.EAST);
-
-        // Header fila 2: filtros
-        JPanel headerRow2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        headerRow2.add(new JLabel("FC:"));
-        monitorFcFilter = new JComboBox<>(new String[]{
-            I18n.t("filter.all"), "ST", "MX", "CF", "DC", "SP", "SV", "BL", "CO", "SE", "SG", "EX", "RP", "BR", "OR"
-        });
-        monitorFcFilter.setPreferredSize(new Dimension(70, 22));
-        monitorFcFilter.addActionListener(e -> applyMonitorFilter());
-        headerRow2.add(monitorFcFilter);
-        headerRow2.add(new JLabel("  " + I18n.t("col.name") + ":"));
-        monitorNameFilter = new javax.swing.JTextField(14);
+        JPanel der = enc;
+        int altoControl = com.formdev.flatlaf.util.UIScale.scale(28);
+        monitorNameFilter = new javax.swing.JTextField(16);
+        monitorNameFilter.setPreferredSize(new Dimension(com.formdev.flatlaf.util.UIScale.scale(200), altoControl));
+        monitorNameFilter.setFont(Estilo.ui(Font.PLAIN, 12));
+        monitorNameFilter.putClientProperty("JTextField.placeholderText", I18n.t("mon.filter.placeholder"));
+        monitorNameFilter.putClientProperty("JTextField.showClearButton", true);
+        monitorNameFilter.putClientProperty("JTextField.leadingIcon", new IconoLupa());
         monitorNameFilter.setToolTipText(I18n.t("monitor.namefilter.tip"));
         monitorNameFilter.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
             public void removeUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
             public void changedUpdate(javax.swing.event.DocumentEvent e) { applyMonitorFilter(); }
         });
-        headerRow2.add(monitorNameFilter);
-        JButton btnClearFilter = new JButton("✕");
-        btnClearFilter.setMargin(new Insets(1, 4, 1, 4));
-        btnClearFilter.setToolTipText(I18n.t("monitor.clearfilter.tip"));
-        btnClearFilter.addActionListener(e -> {
-            monitorFcFilter.setSelectedIndex(0);
-            monitorNameFilter.setText("");
+        der.add(monitorNameFilter);
+        JLabel etiquetaFc = new JLabel("FC");
+        etiquetaFc.setForeground(Estilo.TEXTO_2);
+        etiquetaFc.setFont(Estilo.ui(Font.PLAIN, 12));
+        der.add(etiquetaFc);
+        monitorFcFilter = new JComboBox<>(new String[]{
+            I18n.t("filter.all"), "ST", "MX", "CF", "DC", "SP", "SV", "BL", "CO", "SE", "SG", "EX", "RP", "BR", "OR"
         });
-        headerRow2.add(btnClearFilter);
+        monitorFcFilter.addActionListener(e -> applyMonitorFilter());
+        monitorFcFilter.setFont(Estilo.ui(Font.PLAIN, 12));
+        monitorFcFilter.setPreferredSize(new Dimension(monitorFcFilter.getPreferredSize().width, altoControl));
+        der.add(monitorFcFilter);
+        JButton btnRemove = new JButton(I18n.t("btn.remove"));
+        btnRemove.setFont(Estilo.ui(Font.PLAIN, 12));
+        btnRemove.setPreferredSize(new Dimension(btnRemove.getPreferredSize().width, altoControl));
+        btnRemove.setEnabled(false);
+        btnRemove.addActionListener(e -> { removeSelectedFromMonitor(); btnRemove.setEnabled(false); });
+        der.add(btnRemove);
+        JButton btnClear = new JButton(I18n.t("mon.clear"));
+        btnClear.setFont(Estilo.ui(Font.PLAIN, 12));
+        btnClear.setPreferredSize(new Dimension(btnClear.getPreferredSize().width, altoControl));
+        btnClear.addActionListener(e -> {
+            int n = monitorItems.size();
+            if (n == 0) return;
+            int r = JOptionPane.showConfirmDialog(this, I18n.t("mon.clear.confirm", String.valueOf(n)),
+                    I18n.t("mon.clear.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (r == JOptionPane.OK_OPTION) clearMonitor();
+        });
+        der.add(btnClear);
+        distribucion.derecha(monitorNameFilter, etiquetaFc, monitorFcFilter, btnRemove, btnClear)
+                .flexible(monitorNameFilter, com.formdev.flatlaf.util.UIScale.scale(110), com.formdev.flatlaf.util.UIScale.scale(60))
+                .prescindibles(panelWatchlist, lblCount, etiquetaFc);
 
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.add(headerRow1, BorderLayout.NORTH);
-        headerPanel.add(headerRow2, BorderLayout.SOUTH);
+        // Quitar: deshabilitado sin nada marcado ni seleccionado
+        Runnable habilitarQuitar = () -> btnRemove.setEnabled(monitorManager != null && monitorManager.cantidadParaQuitar() > 0);
+        monitorTable.getSelectionModel().addListSelectionListener(e -> habilitarQuitar.run());
+        monitorTableModel.addTableModelListener(e -> SwingUtilities.invokeLater(habilitarQuitar));
 
-        // Combinar todo
-        JPanel contentPanel = new JPanel(new BorderLayout());
-        contentPanel.add(tableScroll, BorderLayout.CENTER);
-        contentPanel.add(dropHintPanel, BorderLayout.SOUTH);
+        // Resaltado que se desvanece: el Timer repinta mientras alguna fila esta en el ambar y se
+        // detiene solo; lo arranca MonitorManager al marcar un cambio (alResaltar)
+        timerResalte = new javax.swing.Timer(60, e -> {
+            long ahora = System.currentTimeMillis();
+            boolean vivo = false;
+            for (MonitorItem it : monitorItems.values()) {
+                if (it.resaltarDesde > 0 && ahora - it.resaltarDesde < MonitorCeldaRenderer.DESVANECER_MS + 120) {
+                    vivo = true;
+                    break;
+                }
+            }
+            monitorTable.repaint();
+            if (!vivo) ((javax.swing.Timer) e.getSource()).stop();
+        });
 
-        panel.add(headerPanel, BorderLayout.NORTH);
-        panel.add(contentPanel, BorderLayout.CENTER);
+        // Dos vistas de las mismas señales: la tabla y los paneles (una tarjeta por señal,
+        // dibujada según su tipo). Réplica de la vista del paquete ui46 de un colaborador.
+        java.awt.CardLayout vistas = new java.awt.CardLayout();
+        JPanel cuerpo = new JPanel(vistas);
+        cuerpo.setOpaque(false);
+        cuerpo.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
+        cuerpo.add(tableScroll, "tabla");
+        monitorPaneles = new MonitorPaneles(() -> new ArrayList<>(monitorItems.values()), this::formatEnumValue);
+        // En Cliente, un valor sin leer es el por defecto del modelo (0): no sirve para calcular
+        monitorPaneles.ponerLeido(n -> currentMode != AppMode.CLIENT || client == null || client.fueLeido(n));
+        monitorPanelesScroll = new JScrollPane(monitorPaneles);
+        monitorPanelesScroll.setBorder(BorderFactory.createEmptyBorder());
+        monitorPanelesScroll.getViewport().setBackground(superficie());
+        monitorPanelesScroll.getVerticalScrollBar().setUnitIncrement(24);
+        cuerpo.add(monitorPanelesScroll, "paneles");
+
+        JToggleButton tbTabla = new JToggleButton(I18n.t("mon.view.table"));
+        JToggleButton tbPaneles = new JToggleButton(I18n.t("mon.view.panels"));
+        ButtonGroup gVista = new ButtonGroup();
+        gVista.add(tbTabla);
+        gVista.add(tbPaneles);
+        tbTabla.putClientProperty("JButton.buttonType", "segmented");
+        tbPaneles.putClientProperty("JButton.buttonType", "segmented");
+        for (JToggleButton t : new JToggleButton[]{tbTabla, tbPaneles}) {
+            t.setFont(Estilo.ui(Font.PLAIN, 12));
+            t.setFocusable(false);
+            t.setPreferredSize(new Dimension(t.getPreferredSize().width, altoControl));
+        }
+        JPanel selVista = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        selVista.setOpaque(false);
+        selVista.add(tbTabla);
+        selVista.add(tbPaneles);
+        izq.add(selVista, 0);
+        distribucion.izquierda(selVista, lblCount, panelWatchlist);
+        Runnable mostrarVista = () -> {
+            boolean paneles = tbPaneles.isSelected();
+            vistas.show(cuerpo, paneles ? "paneles" : "tabla");
+            PREFS_UI.putBoolean("view.monitor.paneles", paneles);
+            if (paneles) monitorPaneles.actualizar();
+        };
+        tbTabla.addActionListener(e -> mostrarVista.run());
+        tbPaneles.addActionListener(e -> mostrarVista.run());
+        if (PREFS_UI.getBoolean("view.monitor.paneles", false)) tbPaneles.setSelected(true); else tbTabla.setSelected(true);
+        mostrarVista.run();
+
+        panel.add(enc, BorderLayout.NORTH);
+        panel.add(cuerpo, BorderLayout.CENTER);
+        barraSondeo = barraSondeo();
+        panel.add(barraSondeo, BorderLayout.SOUTH);
 
         // Guardar referencia al label de conteo para actualizar
         monitorCountLabel = lblCount;
-
         return panel;
     }
 
     private JLabel monitorCountLabel;
+    private MonitorPaneles monitorPaneles;
+    private JScrollPane monitorPanelesScroll;
+    private JPanel barraSondeo;
+    private JToggleButton tbSondeo;
+    private JComboBox<String> cbIntervaloSondeo;
+
+    /**
+     * Barra del pie del monitor (modo Cliente): pausar o reanudar el sondeo y su intervalo en
+     * ms, a la vista en vez de solo en el menú Conexión. Usa los mismos controles (cbPolling,
+     * spinnerInterval); se enlaza en enlazarBarraSondeo(), cuando ya existen.
+     */
+    private JPanel barraSondeo() {
+        JPanel b = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        b.setOpaque(false);
+        b.setBorder(BorderFactory.createEmptyBorder(2, 10, 4, 10));
+        tbSondeo = new JToggleButton(I18n.t("mon.poll.start"));
+        tbSondeo.setFont(Estilo.ui(Font.PLAIN, 12));
+        tbSondeo.setFocusable(false);
+        tbSondeo.setEnabled(false);
+        b.add(tbSondeo);
+        JLabel li = new JLabel(I18n.t("mon.poll.interval"));
+        li.setFont(Estilo.ui(Font.PLAIN, 12));
+        li.setForeground(Estilo.TEXTO_2);
+        b.add(li);
+        cbIntervaloSondeo = new JComboBox<>(new String[]{"500", "1000", "2000", "5000"});
+        cbIntervaloSondeo.setEditable(true);
+        cbIntervaloSondeo.setPrototypeDisplayValue("100000");
+        cbIntervaloSondeo.setFont(Estilo.mono(Font.PLAIN, 12));
+        b.add(cbIntervaloSondeo);
+        JLabel ms = new JLabel("ms");
+        ms.setFont(Estilo.ui(Font.PLAIN, 12));
+        ms.setForeground(Estilo.TEXTO_2);
+        b.add(ms);
+        b.setVisible(false);
+        return b;
+    }
+
+    private void enlazarBarraSondeo() {
+        if (tbSondeo == null || cbPolling == null || spinnerInterval == null) return;
+        Runnable reflejar = () -> {
+            boolean activo = cbPolling.isSelected();
+            tbSondeo.setSelected(activo);
+            tbSondeo.setText(I18n.t(activo ? "mon.poll.pause" : "mon.poll.start"));
+            tbSondeo.setEnabled(cbPolling.isEnabled());
+        };
+        cbPolling.addItemListener(e -> reflejar.run());
+        cbPolling.addPropertyChangeListener("enabled", e -> reflejar.run());
+        tbSondeo.addActionListener(e -> {
+            if (tbSondeo.isSelected() != cbPolling.isSelected()) cbPolling.doClick();
+            reflejar.run();
+        });
+        cbIntervaloSondeo.setSelectedItem(String.valueOf(spinnerInterval.getValue()));
+        spinnerInterval.addChangeListener(e -> {
+            String v = String.valueOf(spinnerInterval.getValue());
+            if (!v.equals(cbIntervaloSondeo.getSelectedItem())) cbIntervaloSondeo.setSelectedItem(v);
+        });
+        cbIntervaloSondeo.addActionListener(e -> {
+            int ms;
+            try {
+                ms = Integer.parseInt(String.valueOf(cbIntervaloSondeo.getSelectedItem()).trim());
+            } catch (NumberFormatException ex) {
+                cbIntervaloSondeo.setSelectedItem(String.valueOf(spinnerInterval.getValue()));
+                return;
+            }
+            ms = Math.max(500, Math.min(60000, ms));
+            if (ms == (Integer) spinnerInterval.getValue()) return;
+            spinnerInterval.setValue(ms);
+            // El sondeo toma el intervalo al arrancar: si está corriendo, se lo reinicia
+            if (cbPolling.isSelected()) {
+                pollingManager.toggle(false);
+                pollingManager.toggle(true);
+            }
+        });
+        reflejar.run();
+    }
+
+    /** Repinta el ambar que se desvanece; corre solo mientras hay filas resaltadas. */
+    private javax.swing.Timer timerResalte;
+
+    /** Monitor sin señales: la pista para soltar, en un recuadro punteado dentro de la tabla. */
+    private static void pintarPistaMonitor(Graphics2D g0, JTable t) {
+        Rectangle v = t.getVisibleRect();
+        Graphics2D g = (Graphics2D) g0.create();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        int m = com.formdev.flatlaf.util.UIScale.scale(16);
+        int h = Math.min(com.formdev.flatlaf.util.UIScale.scale(120), v.height - 2 * m);
+        if (h < 30) { g.dispose(); return; }
+        int y = v.y + (v.height - h) / 2;
+        g.setColor(Estilo.BORDE_CAMPO);
+        g.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1f, new float[]{5f, 3f}, 0f));
+        g.drawRoundRect(v.x + m, y, v.width - 2 * m - 1, h, 10, 10);
+        String texto = I18n.t("monitor.drophint2");
+        g.setFont(Estilo.ui(Font.PLAIN, 13));
+        FontMetrics fm = g.getFontMetrics();
+        g.setColor(Estilo.TEXTO_2);
+        g.drawString(texto, v.x + (v.width - fm.stringWidth(texto)) / 2, y + (h - fm.getHeight()) / 2 + fm.getAscent());
+        g.dispose();
+    }
     private TableRowSorter<DefaultTableModel> monitorSorter;
     private JComboBox<String> monitorFcFilter;
     private javax.swing.JTextField monitorNameFilter;
@@ -1463,7 +2952,9 @@ public class IEDNavigatorApp extends JFrame {
     // --- SECTION: MONITOR OPERATIONS (F12: delegado a MonitorManager.java) ---
     private MonitorManager monitorManager;
 
-    private void addNodeToMonitor(DefaultMutableTreeNode node)  { monitorManager.addNodeToMonitor(node); }
+    private void addNodeToMonitor(DefaultMutableTreeNode node)  {
+        monitorManager.addNodeToMonitor(buscador != null ? buscador.original(node) : node);
+    }
     private void removeSelectedFromMonitor()                    { monitorManager.removeSelectedFromMonitor(); }
     private void refreshMonitorTable()                          { monitorManager.refreshMonitorTable(); }
     private void applyMonitorFilter()                           { monitorManager.applyMonitorFilter(); }
@@ -1472,6 +2963,9 @@ public class IEDNavigatorApp extends JFrame {
 
     private MonitorManager.Context createMonitorContext() {
         return new MonitorManager.Context() {
+            @Override public void alResaltar() {
+                if (timerResalte != null && !timerResalte.isRunning()) timerResalte.start();
+            }
             public void log(String msg)                                           { IEDNavigatorApp.this.log(msg); }
             public java.util.Map<String, MonitorItem> getMonitorItems()           { return monitorItems; }
             public java.util.Set<String> getWatchlist()                           { return watchlist; }
@@ -1487,14 +2981,30 @@ public class IEDNavigatorApp extends JFrame {
             }
             public void updateWatchlistLabel()                                    { IEDNavigatorApp.this.updateWatchlistLabel(); }
             public com.beanit.iec61850bean.ServerModel getServerModel()           { return server != null ? server.getServerModel() : null; }
+            public void leerUnaVez(com.beanit.iec61850bean.FcModelNode n) {
+                if (currentMode != AppMode.CLIENT || client == null || !isConnected) return;
+                final IEC61850Client c = client;
+                backgroundExecutor.submit(() -> {
+                    try {
+                        c.readNodeValues(n);
+                        if (monitorPaneles != null) SwingUtilities.invokeLater(monitorPaneles::repaint);
+                    } catch (Exception e) {
+                        log(I18n.t("log.monitor.units.fail", MonitorManager.formatReference(n.getReference().toString()), String.valueOf(e.getMessage())));
+                    }
+                });
+            }
         };
     }
 
 
     private void setupListeners() {
         // Cambio de modo
-        rbServer.addActionListener(e -> switchToServerMode());
-        rbClient.addActionListener(e -> switchToClientMode());
+        rbServer.addActionListener(e -> {
+            if (confirmarCambioDeModo(true)) switchToServerMode(); else volverAlModoActual();
+        });
+        rbClient.addActionListener(e -> {
+            if (confirmarCambioDeModo(false)) switchToClientMode(); else volverAlModoActual();
+        });
 
         // Servidor
         btnSelectFile.addActionListener(e -> selectSclFile());
@@ -1505,6 +3015,7 @@ public class IEDNavigatorApp extends JFrame {
         // Cliente
         btnConnect.addActionListener(e -> toggleConnection());
         cbPolling.addActionListener(e -> togglePolling());
+        enlazarBarraSondeo();
 
         // Crear popup menu para watchlist
         createTreePopupMenu();
@@ -1513,12 +3024,13 @@ public class IEDNavigatorApp extends JFrame {
         modelTree.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    if (currentMode == AppMode.CLIENT && isConnected) {
-                        readSelectedNode();
-                    } else if (currentMode == AppMode.SERVER && isServerRunning) {
-                        // En modo servidor, doble click abre editor de valor
-                        setSelectedNodeCustomValue();
+                // Rediseño: doble clic sobre un atributo lo agrega al monitor. En un LD, LN o DO
+                // abre o cierra la rama (si no, un DO volcaba todos sus atributos). Leer y editar
+                // el valor siguen en el menu del clic derecho.
+                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+                    TreePath tp = modelTree.getPathForLocation(e.getX(), e.getY());
+                    if (tp != null && modelTree.getModel().isLeaf(tp.getLastPathComponent())) {
+                        addNodeToMonitor((DefaultMutableTreeNode) tp.getLastPathComponent());
                     }
                 }
             }
@@ -1623,6 +3135,17 @@ public class IEDNavigatorApp extends JFrame {
         treePopupMenu.add(miBlock);
         treePopupMenu.add(miUnblock);
 
+        // Sustitución (FC=SV) y escritura de atributos que la norma deja escribir
+        JMenuItem miSustituir = new JMenuItem(I18n.t("ctx.substitute"));
+        miSustituir.addActionListener(e -> {
+            String doRef = doSeleccionadoConSustitucion();
+            if (doRef != null) mostrarSustitucion(doRef);
+        });
+        treePopupMenu.add(miSustituir);
+        JMenuItem miEscribir = new JMenuItem(I18n.t("ctx.writevalue"));
+        miEscribir.addActionListener(e -> escribirValorSeleccionado());
+        treePopupMenu.add(miEscribir);
+
         // Mostrar/ocultar ítems según el nodo seleccionado
         treePopupMenu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
@@ -1634,6 +3157,8 @@ public class IEDNavigatorApp extends JFrame {
                 boolean hasBlk = getSelectedBlkEnaNode() != null;
                 miBlock.setVisible(hasBlk);
                 miUnblock.setVisible(hasBlk);
+                miSustituir.setVisible(doSeleccionadoConSustitucion() != null);
+                miEscribir.setVisible(atributoEscribibleSeleccionado() != null);
             }
             public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
             public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
@@ -1662,6 +3187,19 @@ public class IEDNavigatorApp extends JFrame {
         if (!(userObj instanceof NodeInfo)) return;
         NodeInfo info = (NodeInfo) userObj;
 
+        JMenuItem miMonitorear = new JMenuItem(I18n.t("ctx.addmonitor"));
+        miMonitorear.setFont(miMonitorear.getFont().deriveFont(Font.BOLD));
+        miMonitorear.addActionListener(e -> monitorearSeleccion());
+        serverPopupMenu.add(miMonitorear);
+        // Aparato de maniobra (XCBR, XSWI, o el CSWI que lo comanda): su ventana propia
+        com.iednavigator.mando.EstadoLocal.Objeto aparato = aparatoDe(info.node);
+        if (aparato != null) {
+            JMenuItem miVirtualizar = new JMenuItem(I18n.t("ctx.virtualizar", aparato.nombre));
+            miVirtualizar.setToolTipText(I18n.t("ctx.virtualizar.tip"));
+            miVirtualizar.addActionListener(e -> virtualizarAparato(aparato.ref));
+            serverPopupMenu.add(miVirtualizar);
+        }
+        serverPopupMenu.addSeparator();
         // Modo (Mod) del IED, del LD o del LN, con el Beh derivado como en un relé
         if (info.node instanceof LogicalDevice || info.node instanceof LogicalNode) {
             agregarMenuModo(info.node);
@@ -1902,11 +3440,59 @@ public class IEDNavigatorApp extends JFrame {
 
     // F22: tree navigation — delegado a ModelTreeBuilder.java
     private void navigateToFcdaInModel(String fcdaName) {
+        if (buscador != null && buscador.filtrando()) buscador.limpiar();
         ModelTreeBuilder.navigateToFcdaInModel(modelTree, fcdaName, this::log, this::logGoose);
     }
 
     /** Panel "Interruptor virtual" (uno solo abierto a la vez). Requiere un modelo en modo servidor. */
     private InterruptorVirtualDialog interruptorVirtual;
+    /** Ventanas de "Virtualizar aparato": una por aparato (clave: referencia de su Pos). */
+    private final Map<String, InterruptorVirtualDialog> ventanasAparato = new HashMap<>();
+
+    /**
+     * El aparato de maniobra al que pertenece un nodo del arbol: su LN (XCBR, XSWI), el CSWI
+     * que lo comanda, o cualquier cosa que cuelgue de ellos. null si el nodo no es de ninguno.
+     */
+    private com.iednavigator.mando.EstadoLocal.Objeto aparatoDe(ModelNode nodo) {
+        if (nodo == null || server == null || server.getServerModel() == null) return null;
+        if (!(nodo instanceof LogicalNode) && !(nodo instanceof FcModelNode)) return null;
+        String ref = nodo.getReference().toString();
+        String ln = ref.contains(".") ? ref.substring(0, ref.indexOf('.')) : ref;
+        for (com.iednavigator.mando.EstadoLocal.Objeto o : server.listarAparatos()) {
+            if (!o.esAparato) continue;
+            String lnAparato = o.ref.contains(".") ? o.ref.substring(0, o.ref.indexOf('.')) : o.ref;
+            if (ln.equals(lnAparato)) return o;
+            for (String c : o.comandadoPor.split("[,;\\s]+")) {
+                if (!c.isEmpty() && ln.equals(o.ld + "/" + c)) return o;
+            }
+        }
+        return null;
+    }
+
+    /** Clic derecho › Virtualizar aparato: una ventana propia e independiente para ese aparato. */
+    private void virtualizarAparato(String ref) {
+        if (currentMode != AppMode.SERVER || server == null || server.getServerModel() == null) {
+            JOptionPane.showMessageDialog(this, I18n.t("vint.requiere"), I18n.t("vint.titulo"),
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        InterruptorVirtualDialog v = ventanasAparato.get(ref);
+        if (v != null && v.isDisplayable()) {
+            v.setVisible(true);
+            v.toFront();
+            return;
+        }
+        v = new InterruptorVirtualDialog(this, server, goosePanel, ref);
+        ventanasAparato.put(ref, v);
+        v.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosed(WindowEvent e) { ventanasAparato.remove(ref); }
+        });
+        // En cascada, para que varias ventanas no queden exactamente encimadas
+        Point p = v.getLocation();
+        int k = ventanasAparato.size() - 1;
+        v.setLocation(p.x + 28 * k, p.y + 28 * k);
+        v.setVisible(true);
+    }
 
     private void abrirInterruptorVirtual() {
         if (currentMode != AppMode.SERVER || server == null || server.getServerModel() == null) {
@@ -2154,6 +3740,44 @@ public class IEDNavigatorApp extends JFrame {
     // F26: delegado a ConnectionManager.java (misma lógica)
     private void handleDisconnect() { connectionManager.handleDisconnect(); }
 
+    /**
+     * Cambiar de modo detiene la simulación o cierra la conexión, y eso no se puede deshacer:
+     * si hay algo activo se pide confirmación, con Cancelar como botón por defecto (Enter).
+     * Sin nada activo el cambio es directo.
+     */
+    private boolean confirmarCambioDeModo(boolean aServidor) {
+        boolean desdeServidor = currentMode == AppMode.SERVER;
+        if (aServidor == desdeServidor) return true;
+        String mensaje, accion;
+        if (desdeServidor) {
+            if (!isServerRunning) return true;
+            String ied = iedEnPantalla != null && !iedEnPantalla.isEmpty() ? iedEnPantalla : I18n.t("ctx.noied");
+            String dest = connectionManager.getCurrentHost() + ":" + connectionManager.getCurrentPort();
+            mensaje = I18n.t("mode.confirm.srv", ied, dest);
+            accion = I18n.t("mode.confirm.srv.btn");
+        } else {
+            boolean conectando = connectionManager.cancelable();
+            if (!isConnected && !conectando) return true;
+            String dest = isConnected
+                    ? connectionManager.getCurrentHost() + ":" + connectionManager.getCurrentPort()
+                    : tfHost.getText().trim() + ":" + tfClientPort.getText().trim();
+            mensaje = I18n.t(isConnected ? "mode.confirm.cli" : "mode.confirm.cli.connecting", dest);
+            accion = I18n.t("mode.confirm.cli.btn");
+        }
+        Object[] opciones = {I18n.t("mode.confirm.cancel"), accion};
+        int r = JOptionPane.showOptionDialog(this, mensaje, I18n.t("mode.confirm.title"),
+                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, opciones, opciones[0]);
+        return r == 1;
+    }
+
+    /** El usuario canceló el cambio: el selector vuelve al modo vigente sin tocar nada. */
+    private void volverAlModoActual() {
+        if (currentMode == AppMode.SERVER) rbServer.setSelected(true); else rbClient.setSelected(true);
+        log(I18n.t("log.mode.change.cancelled"));
+        refrescarContexto();
+        actualizarMenuModo();
+    }
+
     private void switchToServerMode()  { connectionManager.switchToServerMode(); }
     private void switchToClientMode()  { connectionManager.switchToClientMode(); }
     private void obtenerCidDelIed()    { connectionManager.obtenerCidDelIed(); }
@@ -2184,6 +3808,13 @@ public class IEDNavigatorApp extends JFrame {
         // Caso 1: el nodo ES el Oper (FC=CO, nombre="Oper")
         if (fcNode.getFc() == Fc.CO && "Oper".equals(fcNode.getName())) {
             return fcNode;
+        }
+
+        // Caso 1b: DO unificado (rediseño) cuya variante principal no es la de CO
+        if (info.variantes != null) {
+            for (ModelNode v : info.variantes) {
+                if (v instanceof FcModelNode && ((FcModelNode) v).getFc() == Fc.CO) { fcNode = (FcModelNode) v; break; }
+            }
         }
 
         // Caso 2: FcDataObject con FC=CO → buscar hijo llamado "Oper"
@@ -3274,7 +4905,7 @@ public class IEDNavigatorApp extends JFrame {
     private void showPortDiagnosisDialog(int port, String result) {
         JTextArea ta = new JTextArea(result);
         ta.setEditable(false);
-        ta.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        ta.setFont(Estilo.mono(Font.PLAIN, 12));
         ta.setBackground(new Color(248, 248, 248));
         ta.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
@@ -3447,6 +5078,18 @@ public class IEDNavigatorApp extends JFrame {
      *    " " (vacio cuando se desconecta)
      */
     private void updateIedDisplay(String infoText) {
+        iedEnPantalla = "";
+        if (infoText != null && infoText.contains("IED:")) {
+            int a = infoText.indexOf("IED:") + 4;
+            int b = infoText.indexOf("|", a);
+            int c = infoText.indexOf("cfg:", a);
+            if (b < 0) b = c; else if (c >= 0) b = Math.min(b, c);
+            String n = (b > 0 ? infoText.substring(a, b) : infoText.substring(a)).trim();
+            if (!n.equals("?")) iedEnPantalla = n;
+        }
+        subEnPantalla = subtituloDe(infoText);
+        actualizarTitulo();
+        if (barraContexto != null) barraContexto.refrescar();
         if (infoText == null || infoText.isBlank()) {
             lblIedDisplay.setText("  " + I18n.t("status.nodevice") + "  ");
             lblIedDisplay.setForeground(new Color(120, 120, 140));
@@ -3491,6 +5134,8 @@ public class IEDNavigatorApp extends JFrame {
     }
 
     private void updateConnectionInfo(String host, int port) {
+        hostEnPantalla = (host == null || host.isEmpty() || port == 0) ? "" : host + ":" + port;
+        actualizarTitulo();
         if (host == null || host.isEmpty() || port == 0) {
             lblConnectionInfo.setText(I18n.t("status.noconn"));
             lblConnectionInfo.setForeground(Color.GRAY);
@@ -3513,7 +5158,7 @@ public class IEDNavigatorApp extends JFrame {
         iedList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         iedList.setSelectedIndex(0);
         iedList.setVisibleRowCount(Math.min(ieds.size(), 8));
-        iedList.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        iedList.setFont(Estilo.mono(Font.PLAIN, 12));   // nombres de IED: identificadores
         JScrollPane scrollPane = new JScrollPane(iedList);
         scrollPane.setPreferredSize(new Dimension(350, 150));
         panel.add(scrollPane, BorderLayout.CENTER);
@@ -3556,6 +5201,7 @@ public class IEDNavigatorApp extends JFrame {
             public void setServerRunning(boolean v) { isServerRunning = v; SwingUtilities.invokeLater(IEDNavigatorApp.this::refrescarBotonModo); }
             public File getLoadedSclFile() { return loadedSclFile; }
             public void setLoadedSclFile(File f) { loadedSclFile = f; }
+            public void sclElegido(File f) { agregarReciente(f); }
             public String getLoadedIedName() { return loadedIedName; }
             public void setLoadedIedName(String n) { loadedIedName = n; }
             public String[] getLoadedIedNameplate() { return loadedIedNameplate; }
@@ -3565,10 +5211,12 @@ public class IEDNavigatorApp extends JFrame {
             public void switchUiToServerMode() {
                 currentMode = AppMode.SERVER;
                 cardLayout.show(cardPanel, "SERVER");
+                actualizarMenuModo();
             }
             public void switchUiToClientMode() {
                 currentMode = AppMode.CLIENT;
                 cardLayout.show(cardPanel, "CLIENT");
+                actualizarMenuModo();
             }
             public void onConnected(String host, int port, String localIp) {}
             public void onDisconnected() {}
@@ -3625,6 +5273,146 @@ public class IEDNavigatorApp extends JFrame {
 
     // F27: delegados a PollingManager.java
     private void readSelectedNode()                                                           { pollingManager.readSelectedNode(); }
+
+    // --- Sustitución (IEC 61850-7-3, FC=SV) y escritura desde el cliente ---
+
+    private NodeInfo infoSeleccionada() {
+        TreePath path = modelTree == null ? null : modelTree.getSelectionPath();
+        if (path == null) return null;
+        Object u = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
+        return u instanceof NodeInfo ? (NodeInfo) u : null;
+    }
+
+    /** El DO seleccionado (o el que contiene al atributo seleccionado) si admite sustitución. */
+    private String doSeleccionadoConSustitucion() {
+        if (client == null || !isConnected) return null;
+        NodeInfo info = infoSeleccionada();
+        ModelNode n = info == null ? null : info.node;
+        while (n != null && n.getParent() != null && !(n.getParent() instanceof LogicalNode)) n = n.getParent();
+        if (n == null || !(n.getParent() instanceof LogicalNode)) return null;
+        String doRef = n.getReference().toString();
+        return client.admiteSustitucion(doRef) ? doRef : null;
+    }
+
+    /** El atributo seleccionado si su FC se puede escribir (CF, DC, SP, SV, SE, BL). */
+    private BasicDataAttribute atributoEscribibleSeleccionado() {
+        if (client == null || !isConnected) return null;
+        NodeInfo info = infoSeleccionada();
+        if (info == null || !(info.node instanceof BasicDataAttribute)) return null;
+        BasicDataAttribute b = (BasicDataAttribute) info.node;
+        return IEC61850Client.fcEscribible(b.getFc()) ? b : null;
+    }
+
+    private void mostrarSustitucion(String doRef) {
+        backgroundExecutor.submit(() -> {
+            BasicDataAttribute[] par = client.parSustitucion(doRef);
+            boolean activa;
+            String actual;
+            try {
+                activa = client.sustitucionActiva(doRef);
+                if (par != null) client.readNodeValues((FcModelNode) par[1]);
+                actual = par == null ? "?" : ValorBda.texto(par[1]);
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> log(I18n.t("sus.err.write", ex.getMessage())));
+                return;
+            }
+            final boolean act = activa;
+            final String act2 = actual;
+            SwingUtilities.invokeLater(() -> dialogoSustitucion(doRef, par, act, act2));
+        });
+    }
+
+    private void dialogoSustitucion(String doRef, BasicDataAttribute[] par, boolean activa, String actual) {
+        if (par == null) {
+            log(I18n.t("sus.none", doRef));
+            return;
+        }
+        BasicDataAttribute sub = par[0];
+        JComponent valor;
+        if (sub instanceof BdaBoolean) {
+            JComboBox<String> c = new JComboBox<>(new String[] {"true", "false"});
+            c.setSelectedItem("true".equalsIgnoreCase(actual) ? "false" : "true");
+            valor = c;
+        } else if (sub instanceof BdaDoubleBitPos) {
+            JComboBox<String> c = new JComboBox<>(new String[] {"on", "off", "intermediate", "bad"});
+            c.setSelectedItem(actual != null && actual.toLowerCase().contains("on") ? "off" : "on");
+            valor = c;
+        } else {
+            valor = new JTextField(actual, 12);
+        }
+        JComboBox<String> calidad = new JComboBox<>(new String[] {"GOOD", "INVALID", "QUESTIONABLE"});
+        JTextField subId = new JTextField("IEDNavigator", 12);
+
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.anchor = GridBagConstraints.WEST;
+        g.insets = new Insets(4, 4, 4, 8);
+        Object[][] filas = {
+            {I18n.t("sus.data"), new JLabel(par[1].getReference() + " [" + par[1].getFc() + "]")},
+            {I18n.t("sus.current"), new JLabel(actual + (activa ? "   (" + I18n.t("sus.active") + ")" : ""))},
+            {I18n.t("sus.value"), valor},
+            {I18n.t("sus.quality"), calidad},
+            {I18n.t("sus.id"), subId},
+        };
+        for (int i = 0; i < filas.length; i++) {
+            g.gridy = i; g.gridx = 0;
+            p.add(new JLabel((String) filas[i][0]), g);
+            g.gridx = 1;
+            p.add((JComponent) filas[i][1], g);
+        }
+        String[] opciones = activa
+                ? new String[] {I18n.t("sus.btn.apply"), I18n.t("sus.btn.remove"), I18n.t("btn.close")}
+                : new String[] {I18n.t("sus.btn.apply"), I18n.t("btn.close")};
+        int r = JOptionPane.showOptionDialog(this, p, I18n.t("sus.title", doRef), JOptionPane.DEFAULT_OPTION,
+                JOptionPane.PLAIN_MESSAGE, null, opciones, opciones[0]);
+        boolean quitar = activa && r == 1;
+        if (r != 0 && !quitar) return;
+        String texto = valor instanceof JComboBox ? (String) ((JComboBox<?>) valor).getSelectedItem()
+                : ((JTextField) valor).getText();
+        BdaQuality.Validity validez = BdaQuality.Validity.valueOf((String) calidad.getSelectedItem());
+        String id = subId.getText();
+        backgroundExecutor.submit(() -> {
+            try {
+                if (quitar) client.quitarSustitucion(doRef);
+                else client.sustituir(doRef, texto, validez, id);
+                SwingUtilities.invokeLater(() -> {
+                    log(quitar ? I18n.t("sus.log.removed", doRef) : I18n.t("sus.log.ok", doRef, texto, validez.name()));
+                    readSelectedNode();
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    log(ex.getMessage());
+                    JOptionPane.showMessageDialog(this, ex.getMessage(), I18n.t("sus.title", doRef), JOptionPane.WARNING_MESSAGE);
+                });
+            }
+        });
+    }
+
+    private void escribirValorSeleccionado() {
+        BasicDataAttribute b = atributoEscribibleSeleccionado();
+        if (b == null) return;
+        String ref = b.getReference().toString();
+        Fc fc = b.getFc();
+        Object nuevo = JOptionPane.showInputDialog(this,
+                I18n.t("write.prompt", ref, fc.toString(), b.getBasicType().toString()),
+                I18n.t("write.title"), JOptionPane.PLAIN_MESSAGE, null, null, ValorBda.texto(b));
+        if (nuevo == null) return;
+        String texto = nuevo.toString();
+        backgroundExecutor.submit(() -> {
+            try {
+                client.escribirTexto(ref, fc, texto);
+                SwingUtilities.invokeLater(() -> {
+                    log(I18n.t("write.log.ok", ref, fc.toString(), texto));
+                    readSelectedNode();
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    log(ex.getMessage());
+                    JOptionPane.showMessageDialog(this, ex.getMessage(), I18n.t("write.title"), JOptionPane.WARNING_MESSAGE);
+                });
+            }
+        });
+    }
     private void updateTreeNodeRecursive(DefaultMutableTreeNode n)                           { ModelTreeBuilder.updateTreeNodeRecursive(n, treeModel); }
     private com.beanit.iec61850bean.FcModelNode getSelectedBlkEnaNode()                      { return pollingManager.getSelectedBlkEnaNode(); }
     private void toggleBlocking(boolean block)                                               { pollingManager.toggleBlocking(block); }
@@ -3661,6 +5449,7 @@ public class IEDNavigatorApp extends JFrame {
         ServerModel model = server.getServerModel();
         if (model == null) { log(I18n.t("log.app.servermodelnull")); return; }
         log(I18n.t("log.app.servermodellds", model.getChildren().size()));
+        if (rendererArbol != null) rendererArbol.olvidarCdc();
         buildTree(model);
     }
 
@@ -3668,6 +5457,7 @@ public class IEDNavigatorApp extends JFrame {
         ServerModel model = client.getServerModel();
         if (model == null) { log(I18n.t("log.app.clientmodelnull")); return; }
         log(I18n.t("log.app.clientmodellds", model.getChildren().size()));
+        if (rendererArbol != null) rendererArbol.olvidarCdc();
         buildTree(model);
     }
 
@@ -3767,11 +5557,7 @@ public class IEDNavigatorApp extends JFrame {
         // Primero a disco: el archivo es el registro autoritativo y debe quedar completo
         // aunque el EDT esté ocupado o la aplicación termine de forma abrupta.
         if (sessionLog != null) sessionLog.write(message);
-        SwingUtilities.invokeLater(() -> {
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
-            logArea.append("[" + sdf.format(new Date()) + "] " + message + "\n");
-            logArea.setCaretPosition(logArea.getDocument().getLength());
-        });
+        SwingUtilities.invokeLater(() -> registro.agregar(message));
     }
 
 
@@ -3786,6 +5572,7 @@ public class IEDNavigatorApp extends JFrame {
      * Para revertir cualquier ajuste basta con comentar la línea correspondiente.
      */
     private static void applyUiPolish() {
+        boolean oscuro = Estilo.temaOscuro();
         // ── 1. Estilo global ──────────────────────────────────────────────
         // Esquinas redondeadas
         UIManager.put("Button.arc", 10);
@@ -3796,19 +5583,21 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("Popup.dropShadowPainted", true);
 
         // Color de acento (azul eléctrico) — foco, selección, subrayados
-        Color accent = new Color(0x1976D2);
+        Color accent = Estilo.ACENTO;
         UIManager.put("Component.accentColor", accent);
-        UIManager.put("Component.focusColor", new Color(0x1976D2));
+        UIManager.put("Component.focusColor", accent);
         UIManager.put("Component.focusWidth", 1);
         UIManager.put("Component.innerFocusWidth", 1);
 
         // Pestañas: subrayado de color en la activa, separadores sutiles
-        UIManager.put("TabbedPane.tabSelectionHeight", 3);
-        UIManager.put("TabbedPane.selectedBackground", Color.WHITE);
+        UIManager.put("TabbedPane.selectedBackground", Estilo.SUPERFICIE);
+        UIManager.put("TabbedPane.background", Estilo.SUPERFICIE);
+        UIManager.put("TabbedPane.contentAreaColor", Estilo.BORDE);
         UIManager.put("TabbedPane.underlineColor", accent);
-        UIManager.put("TabbedPane.inactiveUnderlineColor", new Color(0x90CAF9));
-        UIManager.put("TabbedPane.hoverColor", new Color(0xE3F2FD));
-        UIManager.put("TabbedPane.showTabSeparators", true);
+        UIManager.put("TabbedPane.tabSelectionHeight", 2);
+        UIManager.put("TabbedPane.inactiveUnderlineColor", accent);
+        UIManager.put("TabbedPane.hoverColor", Estilo.ACENTO_SUAVE);
+        UIManager.put("TabbedPane.showTabSeparators", false);
         UIManager.put("TabbedPane.tabSeparatorsFullHeight", false);
 
         // Scrollbars finas con hover
@@ -3819,8 +5608,8 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("ScrollBar.hoverThumbWithTrack", true);
 
         // ── 2. Tablas y árbol ─────────────────────────────────────────────
-        UIManager.put("Table.alternateRowColor", new Color(0xF5F8FC));
-        UIManager.put("Table.rowHeight", 22);
+        if (!oscuro) UIManager.put("Table.alternateRowColor", new Color(0xF5F8FC));
+        UIManager.put("Table.rowHeight", PREFS_UI.getBoolean(PREF_COMPACTA, true) ? 24 : 28);
         UIManager.put("Table.showHorizontalLines", false);
         UIManager.put("Table.showVerticalLines", false);
         UIManager.put("Table.intercellSpacing", new Dimension(0, 0));
@@ -3829,17 +5618,17 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("TableHeader.height", 26);
         UIManager.put("TableHeader.showTrailingVerticalLine", true);
         UIManager.put("TableHeader.separatorColor", new Color(0xDDDDDD));
-        UIManager.put("TableHeader.font", new Font("Dialog", Font.BOLD, 12));
+        UIManager.put("TableHeader.font", Estilo.ui(Font.BOLD, 12));
 
-        UIManager.put("Tree.rowHeight", 22);
-        UIManager.put("Tree.selectionArc", 8);
+        UIManager.put("Tree.rowHeight", PREFS_UI.getBoolean(PREF_COMPACTA, true) ? 20 : 24);
         UIManager.put("Tree.wideSelection", true);
-        UIManager.put("Tree.paintLines", false);
+        UIManager.put("Tree.paintLines", true);
+        UIManager.put("Tree.hash", new Color(0xE3E6EB));
         UIManager.put("List.selectionArc", 8);
 
         // ── 3. Detalles de pulido ─────────────────────────────────────────
         // Fuente base con buen rendering en Windows
-        UIManager.put("defaultFont", new Font("Dialog", Font.PLAIN, 13));
+        UIManager.put("defaultFont", Estilo.ui(Font.PLAIN, 13));
         // TitledBorders más sutiles
         UIManager.put("TitledBorder.titleColor", new Color(0x546E7A));
         // Toolbars con algo de aire
@@ -3853,13 +5642,29 @@ public class IEDNavigatorApp extends JFrame {
 
         // ── 4. Maquillaje extra (segunda ronda) ───────────────────────────
         // Menú superior: ítem activo con subrayado azul en vez de bloque gris
-        UIManager.put("MenuBar.underlineSelectionColor", accent);
-        UIManager.put("MenuBar.underlineSelectionBackground", new Color(0xE3F2FD));
-        UIManager.put("MenuBar.underlineSelectionHeight", 3);
-        UIManager.put("MenuItem.selectionType", "underline");
-        UIManager.put("MenuItem.underlineSelectionColor", accent);
         UIManager.put("MenuItem.selectionArc", 6);
+        UIManager.put("MenuBar.itemMargins", new Insets(4, 10, 4, 10));
         UIManager.put("PopupMenu.borderCornerRadius", 8);
+        UIManager.put("MenuItem.acceleratorFont", Estilo.mono(Font.PLAIN, 11));
+        UIManager.put("MenuItem.minimumWidth", 280);
+        if (!oscuro) {
+            UIManager.put("MenuBar.background", Estilo.SUPERFICIE);
+            UIManager.put("MenuBar.hoverBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("MenuBar.selectionBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("MenuBar.selectionForeground", accent);
+            UIManager.put("MenuItem.selectionBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("MenuItem.selectionForeground", Estilo.TEXTO);
+            UIManager.put("Menu.selectionBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("Menu.selectionForeground", Estilo.TEXTO);
+            UIManager.put("MenuItem.acceleratorForeground", Estilo.TEXTO_2);
+            UIManager.put("MenuItem.acceleratorSelectionForeground", Estilo.TEXTO_2);
+            // Seleccion del arbol en celeste suave, con o sin foco (antes gris sin foco)
+            UIManager.put("Tree.selectionBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("Tree.selectionInactiveBackground", Estilo.ACENTO_SUAVE);
+            UIManager.put("Tree.selectionForeground", Estilo.TEXTO);
+            UIManager.put("Tree.selectionInactiveForeground", Estilo.TEXTO);
+            UIManager.put("Tree.selectionArc", 0);
+        }
 
         // Botones: hover celeste y borde que se "enciende" al pasar el mouse
         UIManager.put("Button.hoverBackground", new Color(0xE3F2FD));
@@ -3870,19 +5675,20 @@ public class IEDNavigatorApp extends JFrame {
 
         // Pestaña activa: texto en azul + negrita para reforzar el subrayado
         UIManager.put("TabbedPane.selectedForeground", accent);
-        UIManager.put("TabbedPane.font", new Font("Dialog", Font.PLAIN, 13));
-        UIManager.put("TabbedPane.tabHeight", 30);
+        UIManager.put("TabbedPane.font", Estilo.ui(Font.PLAIN, 13));
+        UIManager.put("TabbedPane.tabHeight", 40);
+        UIManager.put("TabbedPane.tabInsets", new Insets(4, 12, 4, 12));
+        UIManager.put("TabbedPane.tabSelectionHeight", 2);
 
         // Selección de tabla/árbol en azul suave con texto negro (no invierte color)
         UIManager.put("Table.selectionBackground", new Color(0xCFE5F7));
         UIManager.put("Table.selectionForeground", Color.BLACK);
-        UIManager.put("Tree.selectionBackground", new Color(0xCFE5F7));
-        UIManager.put("Tree.selectionForeground", Color.BLACK);
         UIManager.put("List.selectionBackground", new Color(0xCFE5F7));
         UIManager.put("List.selectionForeground", Color.BLACK);
 
         // Campos de texto: borde gris que pasa a azul con foco, placeholder gris
-        UIManager.put("TextField.placeholderForeground", new Color(0x9E9E9E));
+        // Placeholder legible: #6B7480 sobre blanco da 4,8:1 (el gris de antes, 2,7:1)
+        UIManager.put("TextField.placeholderForeground", new Color(0x6B7480));
         UIManager.put("ComboBox.buttonStyle", "mac"); // flecha sin caja separada
         UIManager.put("Spinner.buttonStyle", "mac");
 
@@ -3892,23 +5698,48 @@ public class IEDNavigatorApp extends JFrame {
         UIManager.put("SplitPaneDivider.gripColor", new Color(0xB0BEC5));
 
         // TitledBorder con fuente más chica y semibold (look de sección)
-        UIManager.put("TitledBorder.font", new Font("Dialog", Font.BOLD, 12));
+        UIManager.put("TitledBorder.font", Estilo.ui(Font.BOLD, 12));
+        // Rediseño: sin recuadros. Los paneles que usan TitledBorder (Reports, GOOSE, Datasets...)
+        // quedan con el titulo en negrita de 12 px sobre una linea tenue
+        UIManager.put("TitledBorder.border", BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0xEEF0F3)));
+        UIManager.put("TitledBorder.titleColor", Estilo.TEXTO);
 
         // ── 5. Barra de título moderna (decoraciones FlatLaf, estilo VS Code) ──
         // Menú embebido en la barra de título + fondo unificado con la ventana
-        UIManager.put("TitlePane.unifiedBackground", true);
-        UIManager.put("TitlePane.menuBarEmbedded", true);
+        UIManager.put("TitlePane.unifiedBackground", false);
+        UIManager.put("TitlePane.menuBarEmbedded", false);
         UIManager.put("TitlePane.titleMargins", new Insets(4, 8, 4, 8));
-        UIManager.put("TitlePane.font", new Font("Dialog", Font.BOLD, 13));
-        UIManager.put("TitlePane.foreground", new Color(0x37474F));
+        UIManager.put("TitlePane.font", Estilo.ui(Font.PLAIN, 12));
+        UIManager.put("TitlePane.background", Estilo.BARRA_TITULO);
+        UIManager.put("TitlePane.inactiveBackground", Estilo.BARRA_TITULO);
+        UIManager.put("TitlePane.foreground", Color.WHITE);
+        UIManager.put("TitlePane.inactiveForeground", Estilo.BARRA_TITULO_TEXTO_2);
+        UIManager.put("TitlePane.buttonHoverBackground", new Color(0x2C3E5E));
+        UIManager.put("TitlePane.buttonPressedBackground", new Color(0x3A4F75));
+        UIManager.put("TitlePane.embeddedForeground", Estilo.BARRA_TITULO_TEXTO_2);
         // Para revertir a la barra de título clásica de Windows: comentar las
         // dos líneas setDefaultLookAndFeelDecorated(true) en main().
+
+        if (oscuro) {
+            for (String k : new String[]{"ScrollBar.track", "Table.selectionInactiveBackground",
+                    "Table.selectionInactiveForeground", "TableHeader.separatorColor", "TitledBorder.titleColor",
+                    "Component.borderColor", "Separator.foreground", "ToolTip.background",
+                    "Button.hoverBackground", "Button.pressedBackground", "Button.borderColor",
+                    "TabbedPane.selectedBackground", "TabbedPane.hoverColor", "TabbedPane.inactiveUnderlineColor",
+                    "Table.selectionBackground", "Table.selectionForeground", "Tree.selectionBackground",
+                    "Tree.selectionForeground", "List.selectionBackground", "List.selectionForeground",
+                    "SplitPaneDivider.gripColor", "TextField.placeholderForeground", "TitledBorder.border",
+                    "TabbedPane.background", "TabbedPane.contentAreaColor"}) {
+                UIManager.put(k, null);
+            }
+        }
     }
 
     public static void main(String[] args) {
         // Look and Feel
         try {
-            UIManager.setLookAndFeel("com.formdev.flatlaf.FlatLightLaf");
+            UIManager.setLookAndFeel(Estilo.temaOscuro()
+                    ? "com.formdev.flatlaf.FlatDarkLaf" : "com.formdev.flatlaf.FlatLightLaf");
             applyUiPolish();
             // Decoraciones de ventana FlatLaf (barra de título moderna integrada)
             JFrame.setDefaultLookAndFeelDecorated(true);

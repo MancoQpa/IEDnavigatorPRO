@@ -83,6 +83,9 @@ class GoosePanel {
     private Map<String, PcapNetworkInterface> interfaceMap = new HashMap<>();
     private Map<Integer, GooseSubscriber.GooseMessage> gooseMessages = new LinkedHashMap<>();
     private JComboBox<String> cbGooseState;
+    /** Maniobra con recorrido: ON/OFF pasan por INTERMEDIATE con su propio stNum. */
+    private JCheckBox cbIntermedio;
+    private JSpinner spTransito;
 
     private NativeGooseSubscriber nativeGooseSubscriber;
 
@@ -92,10 +95,21 @@ class GoosePanel {
     /** Casilla de publicación simulada (S-bit + campo simulation del PDU). */
     private JCheckBox cbSimulado;
 
-    /** Filtro de retransmisión: solo muestra cambios de stNum (omite heartbeats/sqNum). */
+    /**
+     * Filtro de retransmisiones, como el boton Retrans. de IEDScout: se capturan siempre
+     * todos los mensajes y el filtro solo cambia lo que se ve. Con el filtro, de cada GoCB
+     * queda el primer mensaje recibido y cada cambio de estado (stNum nuevo); sin el, todo,
+     * con las retransmisiones marcadas. Antes las retransmisiones se descartaban al llegar y
+     * al destildar no habia nada que mostrar.
+     */
     private volatile boolean filterRetransmissions = false;
-    /** Último stNum visto por gocbRef/appId para filtrar retransmisiones. */
+    /** Último stNum visto por origen + appId + gocbRef: decide si un mensaje es retransmisión. */
     private final Map<String, Integer> lastStNumBySource = new ConcurrentHashMap<>();
+    /** Columna oculta del modelo de captura: true si el mensaje es una retransmisión. */
+    private static final int COL_RETRANS = 8;
+    /** Mensajes guardados; pasado el tope se descarta primero la retransmisión más vieja. */
+    private static final int MAX_MENSAJES = 5000;
+    private TableRowSorter<DefaultTableModel> gooseDataSorter;
 
     GoosePanel(Context ctx) {
         this.ctx = ctx;
@@ -163,6 +177,112 @@ class GoosePanel {
             }
         }
         return r;
+    }
+
+    /**
+     * Índices (en {@code ctx.getSclGoCBs()}) de los GoCB del modelo cuyo DataSet lleva alguno de
+     * los {@code LN.DO} dados del LD. Para la ventana del interruptor virtual.
+     */
+    List<Integer> indicesGocbQueLlevan(String ld, List<String> lnDos) {
+        List<Integer> r = new ArrayList<>();
+        List<SclGoCB> gcbs = ctx.getSclGoCBs();
+        if (gcbs == null || ctx.getSclDataSets() == null) return r;
+        String ied = ctx.getLoadedIedName();
+        String ldInst = ied != null && ld.startsWith(ied) ? ld.substring(ied.length()) : ld;
+        for (int i = 0; i < gcbs.size(); i++) {
+            SclGoCB g = gcbs.get(i);
+            buscar:
+            for (SclDataSet ds : ctx.getSclDataSets()) {
+                if (ds.name == null || !ds.name.equals(g.datSet)) continue;
+                if (ds.ldInst != null && !ds.ldInst.equals(g.ldInst)) continue;
+                for (String m : ds.members) {
+                    for (String lnDo : lnDos) {
+                        String b = ldInst + "/" + lnDo;
+                        if (m.equals(b) || m.startsWith(b + ".") || m.startsWith(b + " ")) {
+                            r.add(i);
+                            break buscar;
+                        }
+                    }
+                }
+            }
+        }
+        return r;
+    }
+
+    /** El GoCB de índice {@code i}, o null. */
+    SclGoCB gocb(int i) {
+        List<SclGoCB> gcbs = ctx.getSclGoCBs();
+        return gcbs != null && i >= 0 && i < gcbs.size() ? gcbs.get(i) : null;
+    }
+
+    /** gocbRef con que se publica el GoCB (el mismo que pone {@link #createPublisherForGoCB}). */
+    static String gocbRefDe(SclGoCB g) {
+        return g.ldInst + "/LLN0$GO$" + g.cbName;
+    }
+
+    boolean publicando(int i) { return activePublishers.containsKey(i); }
+
+    /** Publica o detiene un GoCB del modelo, igual que el menú contextual de la tabla de GoCB. */
+    void publicarGoCB(int i, boolean publicar) {
+        if (publicar) {
+            if (!activePublishers.containsKey(i)) publishSelectedGoCB(i);
+            return;
+        }
+        GoosePublisher pub = activePublishers.remove(i);
+        if (pub == null) return;
+        pub.stopPublishing();
+        pub.close();
+        if (i < gooseTableModel.getRowCount()) gooseTableModel.setValueAt(I18n.t("status.stopped"), i, 6);
+        logGoose(I18n.t("log.goose.gocbstopped", i));
+        if (activePublishers.isEmpty()) {
+            btnPublicarTodos.setText(I18n.t("goose.publishall"));
+            btnPublicarTodos.setBackground(new Color(0, 130, 60));
+            lblPublishStatus.setText(I18n.t("status.stopped"));
+            lblPublishStatus.setForeground(Color.GRAY);
+        }
+    }
+
+    /** true si lo que se publica sale marcado como simulado (bit S y campo simulation). */
+    boolean publicaSimulado() { return cbSimulado == null || cbSimulado.isSelected(); }
+
+    /** Lo mismo que tildar o destildar la casilla de la pestaña GOOSE. */
+    void ponerPublicaSimulado(boolean simulado) {
+        if (cbSimulado == null || cbSimulado.isSelected() == simulado) return;
+        cbSimulado.setSelected(simulado);
+        aplicarModoSimulado(simulado);
+    }
+
+    /** true si llegan tramas: captura de Capa 2, loopback interno o GOOSE sobre UDP. */
+    boolean capturando() {
+        return (gooseSubscriber != null && gooseSubscriber.isRunning())
+            || (nativeGooseSubscriber != null && nativeGooseSubscriber.isRunning())
+            || internalLoopbackEnabled
+            || (gooseUdpBridge != null && gooseUdpBridge.isReceiving());
+    }
+
+    /**
+     * Arranca la captura en la placa elegida si no está corriendo (lo mismo que el botón de la
+     * pestaña GOOSE). Si no puede, el aviso lo da la propia pestaña. Devuelve si quedó capturando.
+     */
+    boolean asegurarCaptura() {
+        if (!capturando()) toggleGooseCapture();
+        return capturando();
+    }
+
+    /** Placa elegida en la pestaña GOOSE (texto del combo), o null. */
+    String placaElegida() {
+        Object sel = gooseInterfaceCombo != null ? gooseInterfaceCombo.getSelectedItem() : null;
+        return sel != null ? sel.toString() : null;
+    }
+
+    /** Primera IPv4 de la placa elegida, o null (loopback, UDP o sin IP). */
+    String ipPlacaElegida() {
+        String p = placaElegida();
+        if (p == null) return null;
+        for (String ip : PlacaGoose.ipsDe(p)) {
+            if (ip.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) return ip;
+        }
+        return null;
     }
 
     void logGoose(String message) {
@@ -305,15 +425,7 @@ class GoosePanel {
         cbFilterRetrans.setOpaque(false);
         cbFilterRetrans.addActionListener(e -> {
             filterRetransmissions = cbFilterRetrans.isSelected();
-            lastStNumBySource.clear();
-            // Vaciar tambien la tabla. Si no, las filas anteriores al tildado --todas
-            // retransmisiones-- quedan en pantalla con la casilla marcada, y eso se
-            // lee como que el filtro no funciona. Paso el 2026-09-11: el filtro estaba
-            // filtrando bien y la conclusion fue la contraria, mirando el arrastre.
-            if (filterRetransmissions) {
-                gooseDataTableModel.setRowCount(0);
-                logGoose(I18n.t("log.goose.filtercleared"));
-            }
+            aplicarFiltroRetrans();
         });
         row2.add(cbFilterRetrans);
 
@@ -357,6 +469,17 @@ class GoosePanel {
         btnGooseStateChange.setEnabled(false);
         row2.add(btnGooseStateChange);
 
+        cbIntermedio = new JCheckBox(I18n.t("goose.transit"), true);
+        cbIntermedio.setToolTipText(I18n.t("goose.transit.tip"));
+        row2.add(cbIntermedio);
+        spTransito = new JSpinner(new SpinnerNumberModel(
+                (int) GoosePublisher.TRANSITO_POR_DEFECTO_MS, 1, 10000, 10));
+        spTransito.setPreferredSize(new Dimension(70, 24));
+        spTransito.setToolTipText(I18n.t("goose.transit.tip"));
+        row2.add(spTransito);
+        row2.add(new JLabel("ms"));
+        cbIntermedio.addActionListener(e -> spTransito.setEnabled(cbIntermedio.isSelected()));
+
         topPanel.add(row2, BorderLayout.SOUTH);
 
         gooseInterfaceCombo.addActionListener(e -> actualizarTextosSegunModo());
@@ -369,12 +492,17 @@ class GoosePanel {
         // descartaban: sin la MAC no se distingue lo propio de lo ajeno, y sin el bit
         // de simulacion una trama inyectada por un equipo de ensayo se ve igual que
         // la del IED al que suplanta.
-        String[] captureColumns = {"Tiempo", "Origen", "AppID", "st#", "sq#", "Sim", "gocbRef", "Datos"};
+        String[] captureColumns = {"Tiempo", "Origen", "AppID", "st#", "sq#", "Sim", "gocbRef", "Datos", "retrans"};
         gooseDataTableModel = new DefaultTableModel(captureColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
         };
         gooseDataTable = new JTable(gooseDataTableModel);
+        // La marca de retransmisión no se ve como columna: la usa el filtro y la columna gocbRef
+        gooseDataTable.removeColumn(gooseDataTable.getColumnModel().getColumn(COL_RETRANS));
+        gooseDataSorter = new TableRowSorter<>(gooseDataTableModel);
+        for (int c = 0; c < captureColumns.length; c++) gooseDataSorter.setSortable(c, false);
+        gooseDataTable.setRowSorter(gooseDataSorter);
         gooseDataTable.setRowHeight(20);
         gooseDataTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         gooseDataTable.getColumnModel().getColumn(0).setPreferredWidth(80);   // Tiempo
@@ -391,6 +519,14 @@ class GoosePanel {
             public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                // gocbRef de una retransmisión: "(retransmitida)", como el "(Retransmitted)" de IEDScout
+                if (table.convertColumnIndexToModel(column) == 6) {
+                    int m = table.convertRowIndexToModel(row);
+                    if (Boolean.TRUE.equals(gooseDataTableModel.getValueAt(m, COL_RETRANS))) {
+                        setText("<html>" + escaparHtml(String.valueOf(value)) + " <span style='color:#5B6470'>"
+                                + I18n.t("goose.retrans.mark") + "</span></html>");
+                    }
+                }
                 if (!isSelected) {
                     try {
                         Object stNumObj = table.getValueAt(row, 3);   // st#, corrido por Origen
@@ -531,9 +667,16 @@ class GoosePanel {
                             JMenuItem miGood = new JMenuItem("GOOD (0x0000)");
                             miGood.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0));
                             memberMenu.add(miGood);
-                            JMenuItem miBad = new JMenuItem("INVALID (0x0004)");
-                            miBad.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 4));
+                            // Numeracion de bits de IEC 61850-7-3 (bit n = 1 << n): 0x0004 era overflow
+                            JMenuItem miBad = new JMenuItem("INVALID (0x0002)");
+                            miBad.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0x0002));
                             memberMenu.add(miBad);
+                            JMenuItem miQuest = new JMenuItem("QUESTIONABLE (0x0003)");
+                            miQuest.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0x0003));
+                            memberMenu.add(miQuest);
+                            JMenuItem miTest = new JMenuItem("GOOD · TEST (0x0800)");
+                            miTest.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0x0800));
+                            memberMenu.add(miTest);
                         } else {
                             JMenuItem miCustom = new JMenuItem(I18n.t("ctx.customvalue"));
                             miCustom.addActionListener(ev -> {
@@ -620,7 +763,7 @@ class GoosePanel {
 
         gooseLogArea = new JTextArea();
         gooseLogArea.setEditable(false);
-        gooseLogArea.setFont(new Font("Monospaced", Font.PLAIN, 10));
+        gooseLogArea.setFont(Estilo.mono(Font.PLAIN, 11));
         JScrollPane logScroll = new JScrollPane(gooseLogArea);
         JPanel logPanel = new JPanel(new BorderLayout());
         logPanel.add(logScroll, BorderLayout.CENTER);
@@ -629,13 +772,17 @@ class GoosePanel {
         btnClear.addActionListener(e -> {
             gooseLogArea.setText("");
             gooseDataTableModel.setRowCount(0);
+            lastStNumBySource.clear();
             if (goosePublisher != null) {
                 goosePublisher.resetCounters();
             }
             logGoose(I18n.t("log.goose.logcleared"));
         });
         JLabel lblCount = new JLabel("Msgs: 0");
-        javax.swing.Timer countTimer = new javax.swing.Timer(500, e -> lblCount.setText(I18n.t("goose.msgs.count", gooseDataTableModel.getRowCount())));
+        javax.swing.Timer countTimer = new javax.swing.Timer(500, e -> lblCount.setText(filterRetransmissions
+                ? I18n.t("goose.msgs.count.filtered", String.valueOf(gooseDataTable.getRowCount()),
+                        String.valueOf(gooseDataTableModel.getRowCount()))
+                : I18n.t("goose.msgs.count", String.valueOf(gooseDataTableModel.getRowCount()))));
         countTimer.start();
         logBtnPanel.add(btnClear);
         logBtnPanel.add(lblCount);
@@ -1099,6 +1246,30 @@ class GoosePanel {
         return pub;
     }
 
+    /** Tiempo de recorrido elegido, o 0 si la maniobra no pasa por intermedio. */
+    private long transitoMs() {
+        if (cbIntermedio == null || !cbIntermedio.isSelected()) return 0;
+        return ((Number) spTransito.getValue()).longValue();
+    }
+
+    /** "ON"/"TRUE" 2, "OFF"/"FALSE" 1, "INTERMEDIATE" 0, "BAD" 3. */
+    static int dbposDe(String estado) {
+        switch (estado == null ? "" : estado.toUpperCase()) {
+            case "ON": case "TRUE": return 2;
+            case "INTERMEDIATE": return 0;
+            case "BAD": return 3;
+            default: return 1;
+        }
+    }
+
+    /** Después del recorrido, el modelo del servidor recibe también la posición final. */
+    private void sincronizarAlFinal(int gcbIndex, long transito) {
+        if (transito <= 0) return;
+        javax.swing.Timer t = new javax.swing.Timer((int) transito + 50, e -> syncPublisherToServerModel(gcbIndex, 0));
+        t.setRepeats(false);
+        t.start();
+    }
+
     private void changeGoCBState(int gcbIndex, String state) {
         GoosePublisher pub = activePublishers.get(gcbIndex);
         if (pub == null || !pub.isPublishing()) {
@@ -1110,36 +1281,30 @@ class GoosePanel {
         if (values.isEmpty()) return;
 
         GoosePublisher.DataValue firstVal = values.get(0);
+        long transito = 0;
         switch (firstVal.type) {
-            case BOOLEAN:
-                pub.setDataValue(0, "ON".equalsIgnoreCase(state) || "TRUE".equalsIgnoreCase(state));
-                break;
-            case DBPOS:
-                int dbpos;
-                switch (state.toUpperCase()) {
-                    case "ON": dbpos = 2; break;
-                    case "OFF": dbpos = 1; break;
-                    case "INTERMEDIATE": dbpos = 0; break;
-                    case "BAD": dbpos = 3; break;
-                    default: dbpos = 1;
-                }
-                pub.setDataValue(0, dbpos);
+            case BOOLEAN: case DBPOS:
+                // Dbpos: ON/OFF pasan por INTERMEDIATE con su propio stNum (publicarManiobra)
+                transito = firstVal.type == GoosePublisher.DataValue.Type.DBPOS ? transitoMs() : 0;
+                pub.publicarManiobra(0, dbposDe(state), transito);
                 break;
             case INTEGER: case UNSIGNED:
                 try { pub.setDataValue(0, Integer.parseInt(state)); }
                 catch (NumberFormatException e) { pub.setDataValue(0, "ON".equalsIgnoreCase(state) ? 1 : 0); }
+                pub.publishStateChange();
                 break;
             default:
                 pub.setDataValue(0, "ON".equalsIgnoreCase(state));
+                pub.publishStateChange();
         }
 
-        pub.publishStateChange();
         List<SclGoCB> sclGoCBs = ctx.getSclGoCBs();
         SclGoCB gcb = gcbIndex < sclGoCBs.size() ? sclGoCBs.get(gcbIndex) : null;
         String gcbName = gcb != null ? gcb.toString() : "#" + gcbIndex;
         logGoose(I18n.t("log.goose.gcbstatechange", gcbName, state.toUpperCase(), pub.getStNum()));
 
         syncPublisherToServerModel(gcbIndex, 0);
+        sincronizarAlFinal(gcbIndex, transito);
     }
 
     private void setPublisherDataValue(int gcbIndex, int dataIndex, Object value) {
@@ -1468,22 +1633,24 @@ class GoosePanel {
             return;
         }
 
-        updatePublisherState();
-
         String stateName = (String) cbGooseState.getSelectedItem();
+        int dbpos = dbposDe(stateName);
+        long transito = transitoMs();
 
+        // ON/OFF pasan por INTERMEDIATE con su propio stNum, como un interruptor real; antes
+        // se saltaba de un estado al otro, y los GoCB del modelo recibían true/false aunque su
+        // primer dato fuera un Dbpos.
         if (goosePublisher.isPublishing()) {
-            goosePublisher.publishStateChange();
+            goosePublisher.publicarManiobra(0, dbpos, transito);
             logGoose(I18n.t("log.goose.statechangepublished", stateName, goosePublisher.getStNum()));
         }
 
         for (Map.Entry<Integer, GoosePublisher> entry : activePublishers.entrySet()) {
             GoosePublisher pub = entry.getValue();
             if (pub.isPublishing()) {
-                int selectedIndex = cbGooseState.getSelectedIndex();
-                boolean boolValue = (selectedIndex == 1);
-                pub.setDataValue(0, boolValue);
-                pub.publishStateChange();
+                pub.publicarManiobra(0, dbpos, transito);
+                syncPublisherToServerModel(entry.getKey(), 0);
+                sincronizarAlFinal(entry.getKey(), transito);
             }
         }
 
@@ -1494,6 +1661,12 @@ class GoosePanel {
         if (udpBridgeEnabled) {
             if (gooseUdpBridge.send(goosePublisher)) {
                 logGoose("[UDP] " + I18n.t("log.goose.udpbroadcastsent"));
+            }
+            if (transito > 0) {
+                // Por UDP sale también la posición final, después del recorrido
+                javax.swing.Timer t = new javax.swing.Timer((int) transito + 30, e -> gooseUdpBridge.send(goosePublisher));
+                t.setRepeats(false);
+                t.start();
             }
         }
 
@@ -1532,18 +1705,40 @@ class GoosePanel {
     }
 
     /**
-     * Filtro de retransmisión: devuelve true si el mensaje debe mostrarse.
-     * Muestra la primera aparición de cada stNum y omite las siguientes con el mismo stNum.
+     * true si el mensaje es una retransmisión: el mismo GoCB (origen + appId + gocbRef) ya se
+     * vio con este stNum. El primer mensaje de cada GoCB y cada stNum nuevo no lo son. Se
+     * decide siempre, haya o no filtro: el filtro solo cambia lo que se ve.
      */
-    private boolean shouldShowGoose(String key, int stNum) {
-        if (!filterRetransmissions) return true;
-        Integer prev = lastStNumBySource.get(key);
-        if (prev != null && prev.intValue() == stNum) {
-            return false; // retransmisión (mismo stNum) → omitir
+    private boolean esRetransmision(String key, int stNum) {
+        Integer prev = lastStNumBySource.put(key, stNum);
+        return prev != null && prev.intValue() == stNum;
+    }
+
+    /** Con el filtro, la tabla muestra solo lo que no es retransmisión. */
+    private void aplicarFiltroRetrans() {
+        if (gooseDataSorter == null) return;
+        gooseDataSorter.setRowFilter(!filterRetransmissions ? null : new RowFilter<DefaultTableModel, Integer>() {
+            @Override public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> e) {
+                return !Boolean.TRUE.equals(e.getValue(COL_RETRANS));
+            }
+        });
+    }
+
+    /** Nueva fila arriba. Pasado el tope, sale la retransmisión más vieja (o, si no hay, el más viejo). */
+    private void agregarMensaje(Object[] fila) {
+        int n = gooseDataTableModel.getRowCount();
+        if (n >= MAX_MENSAJES) {
+            int quitar = n - 1;
+            for (int r = n - 1; r >= 0; r--) {
+                if (Boolean.TRUE.equals(gooseDataTableModel.getValueAt(r, COL_RETRANS))) { quitar = r; break; }
+            }
+            gooseDataTableModel.removeRow(quitar);
         }
-        // stNum nuevo o primera vez → mostrar y registrar
-        lastStNumBySource.put(key, stNum);
-        return true;
+        gooseDataTableModel.insertRow(0, fila);
+    }
+
+    private static String escaparHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /**
@@ -1564,6 +1759,14 @@ class GoosePanel {
                 return nombres[v] + " (" + v + ")";
             }
         }
+        if (valor instanceof java.util.List) {
+            StringBuilder sb = new StringBuilder("{");
+            for (Object x : (java.util.List<?>) valor) {
+                if (sb.length() > 1) sb.append(", ");
+                sb.append(textoDato(x instanceof java.util.List ? "Structure" : null, x));
+            }
+            return sb.append('}').toString();
+        }
         return String.valueOf(valor);
     }
 
@@ -1571,8 +1774,8 @@ class GoosePanel {
         for (java.util.function.Consumer<GooseSubscriber.GooseMessage> o : oyentesGoose) {
             try { o.accept(msg); } catch (Exception ignorada) { }
         }
-        String key = msg.appId + "|" + (msg.gocbRef != null ? msg.gocbRef : "");
-        if (!shouldShowGoose(key, msg.stNum)) return;
+        String key = msg.srcMac + "|" + msg.appId + "|" + (msg.gocbRef != null ? msg.gocbRef : "");
+        boolean retrans = esRetransmision(key, msg.stNum);
 
         SwingUtilities.invokeLater(() -> {
             StringBuilder dataStr = new StringBuilder();
@@ -1581,11 +1784,7 @@ class GoosePanel {
                 dataStr.append(textoDato(entry.type, entry.value));
             }
 
-            if (gooseDataTableModel.getRowCount() > 1000) {
-                gooseDataTableModel.removeRow(gooseDataTableModel.getRowCount() - 1);
-            }
-
-            gooseDataTableModel.insertRow(0, new Object[]{
+            agregarMensaje(new Object[]{
                 msg.timestamp,
                 msg.srcMac != null ? msg.srcMac : "",
                 String.format("%04X", msg.appId),
@@ -1593,7 +1792,8 @@ class GoosePanel {
                 msg.sqNum,
                 msg.test ? "sim" : "",
                 msg.gocbRef != null ? msg.gocbRef : (msg.goId != null ? msg.goId : ""),
-                dataStr.toString()
+                dataStr.toString(),
+                retrans
             });
 
             gooseMessages.put(msg.appId, msg);
@@ -1601,8 +1801,8 @@ class GoosePanel {
     }
 
     private void handleNativeGooseMessage(NativeGooseSubscriber.NativeGooseMessage msg) {
-        String key = msg.appId + "|" + (msg.goCbRef != null ? msg.goCbRef : "");
-        if (!shouldShowGoose(key, msg.stNum)) return;
+        String key = msg.srcMac + "|" + msg.appId + "|" + (msg.goCbRef != null ? msg.goCbRef : "");
+        boolean retrans = esRetransmision(key, msg.stNum);
 
         SwingUtilities.invokeLater(() -> {
             StringBuilder dataStr = new StringBuilder();
@@ -1611,11 +1811,7 @@ class GoosePanel {
                 dataStr.append(dv.value);
             }
 
-            if (gooseDataTableModel.getRowCount() > 1000) {
-                gooseDataTableModel.removeRow(gooseDataTableModel.getRowCount() - 1);
-            }
-
-            gooseDataTableModel.insertRow(0, new Object[]{
+            agregarMensaje(new Object[]{
                 msg.timestamp,
                 msg.srcMac != null ? msg.srcMac : "",
                 String.format("%04X", msg.appId),
@@ -1623,7 +1819,8 @@ class GoosePanel {
                 msg.sqNum,
                 msg.test ? "sim" : "",
                 msg.goCbRef != null ? msg.goCbRef : (msg.goId != null ? msg.goId : ""),
-                dataStr.toString()
+                dataStr.toString(),
+                retrans
             });
         });
     }

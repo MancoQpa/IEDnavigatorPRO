@@ -595,8 +595,16 @@ public class IEC61850Server implements ServerEventListener {
      */
     private String extraerValorInvalido(String mensaje) {
         if (mensaje == null) return null;
-        final String marca = "configured value: ";
+        String marca = "configured value: ";
         int i = mensaje.indexOf(marca);
+        if (i < 0) {
+            // Enumerado con un valor que no está en su EnumType ("-" como "sin valor", visto en
+            // pulseConfig.cmdQual de una unidad de control): la librería dice "unknown enum
+            // value: -" y abortaba el archivo entero. Los ordinales numéricos ("004") ya los
+            // resuelve patchMissingEnumOrdinals antes de llegar acá.
+            marca = "unknown enum value: ";
+            i = mensaje.indexOf(marca);
+        }
         if (i < 0) return null;
         String valor = mensaje.substring(i + marca.length()).trim();
         return valor.isEmpty() ? null : valor;
@@ -1162,6 +1170,7 @@ public class IEC61850Server implements ServerEventListener {
             // posiciones en intermedio, con calidad buena y con las banderas que habilitan la
             // maniobra—, ANTES de crear el ServerSap, para que el primer cliente ya lea un
             // modelo que se puede maniobrar.
+            com.iednavigator.mando.Sustitucion.limpiar();
             com.iednavigator.mando.EstadoLocal.inicializarModoYSalud(serverModel);
             com.iednavigator.mando.EstadoLocal.derivarComportamiento(serverModel);
             com.iednavigator.mando.EstadoLocal.olvidarSimulacion();
@@ -1263,6 +1272,14 @@ public class IEC61850Server implements ServerEventListener {
                             setBasicDataAttributeValue(copyBda, value);
                             List<BasicDataAttribute> changedData = new ArrayList<>();
                             changedData.add(copyBda);
+                            // Un dato sustituido no cambia lo publicado: se guarda como proceso
+                            changedData = com.iednavigator.mando.Sustitucion.filtrarProceso(changedData);
+                            if (changedData.isEmpty()) {
+                                String aviso = "[SERVER] " + cleanRef + " esta sustituido: el valor queda como valor de proceso";
+                                System.out.println(aviso);
+                                if (listener != null) listener.onLog(aviso);
+                                return true;
+                            }
                             serverSap.setValues(changedData);
                             System.out.println("[SERVER] Clients notified via reports for " + cleanRef);
                         } else {
@@ -1502,6 +1519,20 @@ public class IEC61850Server implements ServerEventListener {
             return null;
         }
 
+        List<ServiceError> deSgcb = validarSgcb(bdas);
+        if (deSgcb != null) return deSgcb;
+
+        // Sustitución (IEC 61850-7-3, FC=SV): con subEna el dato publica subVal/subMag y subQ
+        // marcada "substituted"; sin subEna vuelve el valor de proceso. Ver mando/Sustitucion.
+        List<BasicDataAttribute> sustitucion =
+                com.iednavigator.mando.Sustitucion.porEscritura(serverModel, bdas);
+        if (!sustitucion.isEmpty()) {
+            String aviso = "[SERVER] Sustitucion: " + sustitucion.size() + " atributo(s) publicados";
+            System.out.println(aviso);
+            if (listener != null) listener.onLog(aviso);
+            new Thread(() -> publicarSinFiltro(sustitucion), "publicar-sustitucion").start();
+        }
+
         for (BasicDataAttribute bda : bdas) {
             String ref = bda.getReference().toString();
             String value = ValorBda.texto(bda);
@@ -1513,6 +1544,70 @@ public class IEC61850Server implements ServerEventListener {
         }
 
         return null; // No errors
+    }
+
+    /**
+     * Escrituras al bloque de grupos de ajuste (LLN0$SP$SGCB, IEC 61850-7-2 / 8-1), como un IED:
+     * NumOfSG, LActTm y ResvTms son de solo lectura; ActSG va de 1 a NumOfSG y al cambiar
+     * actualiza LActTm; EditSG va de 0 a NumOfSG. Devuelve un error por atributo si hay que
+     * rechazar, o null si la escritura sigue su curso.
+     *
+     * El simulador guarda un solo juego de valores de ajuste: cambiar el grupo activo no cambia
+     * los valores (se avisa en el registro).
+     */
+    private List<ServiceError> validarSgcb(List<BasicDataAttribute> bdas) {
+        ServiceError error = null;
+        List<BasicDataAttribute> lact = new ArrayList<>();
+        for (BasicDataAttribute bda : bdas) {
+            String ref = bda.getReference().toString();
+            int k = ref.indexOf(".SGCB.");
+            if (k < 0 || bda.getFc() != Fc.SP) continue;
+            String campo = ref.substring(k + 6);
+            String sgcb = ref.substring(0, k + 5);
+            ModelNode numNodo = serverModel.findModelNode(sgcb + ".NumOfSG", Fc.SP);
+            int num = numNodo instanceof BdaInt8U ? ((BdaInt8U) numNodo).getValue() : 1;
+            int v = bda instanceof BdaInt8U ? ((BdaInt8U) bda).getValue() : -1;
+            switch (campo) {
+                case "NumOfSG": case "LActTm": case "ResvTms":
+                    error = new ServiceError(ServiceError.ACCESS_VIOLATION, sgcb + "." + campo + " es de solo lectura");
+                    break;
+                case "ActSG":
+                    if (v < 1 || v > num) {
+                        error = new ServiceError(ServiceError.PARAMETER_VALUE_INAPPROPRIATE,
+                                "ActSG " + v + " fuera de 1.." + num);
+                    } else {
+                        ModelNode t = serverModel.findModelNode(sgcb + ".LActTm", Fc.SP);
+                        if (t instanceof BdaTimestamp) {
+                            BdaTimestamp c = (BdaTimestamp) ((BdaTimestamp) t).copy();
+                            c.setInstant(java.time.Instant.now());
+                            lact.add(c);
+                        }
+                        String aviso = "[SERVER] Grupo de ajuste activo -> " + v
+                                + " (el simulador guarda un solo juego de valores de ajuste)";
+                        System.out.println(aviso);
+                        if (listener != null) listener.onLog(aviso);
+                    }
+                    break;
+                case "EditSG":
+                    if (v < 0 || v > num) {
+                        error = new ServiceError(ServiceError.PARAMETER_VALUE_INAPPROPRIATE,
+                                "EditSG " + v + " fuera de 0.." + num);
+                    }
+                    break;
+                default:
+            }
+        }
+        if (error != null) {
+            System.out.println("[SERVER] SGCB rechazado: " + error.getMessage());
+            List<ServiceError> errores = new ArrayList<>();
+            for (int i = 0; i < bdas.size(); i++) errores.add(error);
+            return errores;
+        }
+        if (!lact.isEmpty()) {
+            // setValues() no se puede llamar dentro de write(): se publica en otro hilo
+            new Thread(() -> publicarCambiosDeMando(lact), "publicar-sgcb").start();
+        }
+        return null;
     }
 
     /**
@@ -1803,7 +1898,34 @@ public class IEC61850Server implements ServerEventListener {
      * GOOSE que publican esos datos. Uno por uno: setValues() falla con un atributo que no está
      * en ningún DataSet, y eso no debe impedir publicar los demás.
      */
+    /** Publica con setValues() un booleano que ya fue escrito directo en el modelo. */
+    private boolean publicarBooleanoDirecto(ServerSap sap, BasicDataAttribute original) {
+        if (!(original instanceof BdaBoolean)) return false;
+        BdaBoolean b = (BdaBoolean) original;
+        boolean nuevo = b.getValue();
+        try {
+            synchronized (serverModel) {
+                b.setValue(!nuevo);
+                BdaBoolean copia = (BdaBoolean) b.copy();
+                copia.setValue(nuevo);
+                List<BasicDataAttribute> uno = new ArrayList<>();
+                uno.add(copia);
+                sap.setValues(uno);
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (b.getValue() != nuevo) b.setValue(nuevo);   // el modelo nunca queda con el valor viejo
+        }
+    }
+
     private void publicarCambiosDeMando(List<BasicDataAttribute> cambiados) {
+        // Lo que el proceso cambia en un dato sustituido no sale: queda como valor de proceso
+        publicarSinFiltro(com.iednavigator.mando.Sustitucion.filtrarProceso(cambiados));
+    }
+
+    private void publicarSinFiltro(List<BasicDataAttribute> cambiados) {
         ServerSap sap = serverSap;
         if (sap == null) return;
         for (BasicDataAttribute b : cambiados) {
@@ -1811,6 +1933,14 @@ public class IEC61850Server implements ServerEventListener {
             uno.add(b);
             try {
                 sap.setValues(uno);
+            } catch (NullPointerException sinCopia) {
+                // El motor de mando escribe algunos booleanos (Loc, LocKey, EnaOpn...) directo en el
+                // modelo y devuelve el atributo original; setValues() necesita una copia hecha con
+                // copy() y solo emite el reporte si la copia difiere del modelo. Se repone un
+                // instante el valor anterior y se publica el nuevo con una copia.
+                if (!publicarBooleanoDirecto(sap, b)) {
+                    System.out.println("[SERVER] setValues no pudo publicar " + b.getReference() + ": " + sinCopia);
+                }
             } catch (Exception e) {
                 System.out.println("[SERVER] setValues no pudo publicar " + b.getReference() + ": " + e);
             }

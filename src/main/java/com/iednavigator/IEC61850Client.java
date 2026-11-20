@@ -21,7 +21,7 @@ import javax.net.SocketFactory;
 public class IEC61850Client implements ClientEventListener {
 
     private ClientSap clientSap;
-    private ClientAssociation association;
+    private volatile ClientAssociation association;
     private ServerModel serverModel;
     private String host;
     private int port;
@@ -32,6 +32,50 @@ public class IEC61850Client implements ClientEventListener {
     // associationClosed() por cada una; sin este flag la GUI mostraba "Desconectado"
     // en medio de una conexión que iba a terminar bien.
     private volatile boolean connectInProgress = false;
+
+    // Cancelación de una conexión en curso (botón Cancelar). La asociación y la lectura del
+    // modelo de iec61850bean son bloqueantes: la única forma confiable de cortarlas es cerrar
+    // el socket desde otro hilo. Con la bandera puesta, connect() no reintenta, no arranca el
+    // keep-alive y termina con una IOException que empieza con CANCELADA.
+    private volatile boolean cancelada = false;
+    private volatile Future<ClientAssociation> asociacionEnCurso;
+    private volatile Runnable alAsociar;
+    static final String CANCELADA = "CANCELADA";
+
+    /** Se llama cuando la asociación MMS quedó establecida y empieza la lectura del modelo. */
+    public void setAlAsociar(Runnable r) { alAsociar = r; }
+
+    /** ¿La última conexión terminó por {@link #cancelarConexion()}? */
+    public boolean fueCancelada() { return cancelada; }
+
+    /**
+     * Corta una conexión en curso desde otro hilo: cancela la asociación pendiente y cierra el
+     * socket de la que ya existe, con lo que retrieveModel() termina con error enseguida.
+     * connect() ve la bandera y no intenta las rutas de respaldo.
+     */
+    public void cancelarConexion() {
+        if (!connectInProgress) return;
+        cancelada = true;
+        Future<ClientAssociation> f = asociacionEnCurso;
+        if (f != null) f.cancel(true);
+        ClientAssociation a = association;
+        if (a != null) {
+            try { a.disconnect(); } catch (Exception ignorada) { }
+        }
+        logDiag("[INFO] Conexion cancelada por el usuario");
+    }
+
+    private void siCancelada() throws IOException {
+        if (!cancelada) return;
+        ClientAssociation a = association;
+        association = null;
+        if (a != null) {
+            try { a.disconnect(); } catch (Exception ignorada) { }
+        }
+        serverModel = null;
+        connected = false;
+        throw new IOException(CANCELADA);
+    }
 
     // Cache de valores leidos
     private final Map<String, CachedValue> valueCache = new ConcurrentHashMap<>();
@@ -181,6 +225,7 @@ public class IEC61850Client implements ClientEventListener {
         // con iec61850bean al hacer conexión TCP previa al puerto MMS
 
         connectInProgress = true;
+        cancelada = false;
         try {
             System.out.println("[INFO] Creating ClientSap...");
             clientSap = new ClientSap();
@@ -196,11 +241,17 @@ public class IEC61850Client implements ClientEventListener {
 
             // Usar Future con timeout para la conexión
             Future<ClientAssociation> future = connectionExecutor.submit(() -> {
-                return clientSap.associate(address, port, null, IEC61850Client.this);
+                ClientAssociation a = clientSap.associate(address, port, null, IEC61850Client.this);
+                // Si se canceló mientras se asociaba, esta asociación ya no tiene dueño
+                if (cancelada) { try { a.disconnect(); } catch (Exception ignorada) { } }
+                return a;
             });
+            asociacionEnCurso = future;
 
             try {
                 association = future.get(connectionTimeoutMs, TimeUnit.MILLISECONDS);
+            } catch (CancellationException e) {
+                throw new IOException(CANCELADA);
             } catch (TimeoutException e) {
                 future.cancel(true);
                 throw new IOException("Connection timeout after " + connectionTimeoutMs + "ms");
@@ -215,6 +266,10 @@ public class IEC61850Client implements ClientEventListener {
                 throw new IOException("Connection interrupted");
             }
 
+            asociacionEnCurso = null;
+            siCancelada();
+            Runnable aviso = alAsociar;
+            if (aviso != null) { try { aviso.run(); } catch (Exception ignorada) { } }
             System.out.println("[INFO] Connected to MMS server! Retrieving model...");
             System.out.println("[INFO] This may take a moment - the model contains DataSets and Reports");
 
@@ -228,6 +283,7 @@ public class IEC61850Client implements ClientEventListener {
                 modelPath = "directo";
                 System.out.println("[INFO] Model retrieved successfully - " + countNodes(serverModel) + " nodes");
             } catch (ServiceError serviceEx) {
+                siCancelada();
                 logDiag("[WARN] ServiceError during model retrieval: code=" + serviceEx.getErrorCode()
                     + " message=" + serviceEx.getMessage());
                 String msg = serviceEx.getMessage() != null ? serviceEx.getMessage() : "";
@@ -264,9 +320,10 @@ public class IEC61850Client implements ClientEventListener {
                 }
             } catch (Exception modelEx) {
                 if (modelEx instanceof IOException && modelEx.getMessage() != null
-                        && modelEx.getMessage().startsWith("SCL_FALLBACK:")) {
+                        && (modelEx.getMessage().startsWith("SCL_FALLBACK:") || modelEx.getMessage().equals(CANCELADA))) {
                     throw (IOException) modelEx;
                 }
+                siCancelada();
                 logDiag("[ERROR] Model retrieval failed: " + modelEx.getClass().getName()
                     + " message=" + modelEx.getMessage());
                 modelEx.printStackTrace();
@@ -287,6 +344,7 @@ public class IEC61850Client implements ClientEventListener {
                 }
             }
 
+            siCancelada();
             connected = true;
             // Una sola línea por conexión, después de que cualquiera de las rutas haya dejado
             // el modelo puesto: así la salida es comparable entre equipos y entre rutas.
@@ -309,6 +367,7 @@ public class IEC61850Client implements ClientEventListener {
             throw new IOException("Connection error: " + e.getMessage(), e);
         } finally {
             connectInProgress = false;
+            asociacionEnCurso = null;
         }
     }
 
@@ -606,6 +665,7 @@ public class IEC61850Client implements ClientEventListener {
         heartbeatNode = null;
         valueCache.clear();
         ctlModelLeido.clear();
+        leidos.clear();
 
         // Shutdown executor if needed
         if (connectionExecutor != null && !connectionExecutor.isShutdown()) {
@@ -772,15 +832,32 @@ public class IEC61850Client implements ClientEventListener {
      * asociación seguía viva a los 200 s.
      *
      * Con el polling apagado la aplicación queda muda después de conectar, así que ese
-     * temporizador corta siempre. 60 s deja 30 de margen contra los 90 de fábrica.
+     * temporizador corta siempre.
+     *
+     * 2026-11-16: bajado de 60 s a 20 s. Un usuario con un relé de alimentador perdía la
+     * conexión a los dos minutos: la lectura de los 60 s salió bien y la siguiente encontró la
+     * conexión cerrada por el equipo (RST). Con un temporizador de 60 s, una lectura "cada 60 s
+     * de silencio" (más el intervalo de chequeo) llega justo cuando el equipo ya cortó. 20 s
+     * cubre temporizadores de 30 s en adelante; son tres lecturas de un atributo por minuto.
      */
-    static final long KEEPALIVE_MS = 60_000;
+    static final long KEEPALIVE_MS = 20_000;
 
     /** Cada cuánto se mira si hace falta la lectura. El silencio real llega a KEEPALIVE_MS + esto. */
     private static final long KEEPALIVE_CHEQUEO_MS = 5_000;
 
     /** Último pedido MMS enviado o respondido. Lo usa el mantenimiento para no pisar tráfico. */
     private volatile long ultimoTraficoMs = System.currentTimeMillis();
+
+    /**
+     * Última vez que el IED contestó (lectura, escritura o reporte). Para explicar un corte: el
+     * tráfico se marca también al fallar, y el log decía "tras 0 s sin pedidos" justo cuando el
+     * equipo llevaba un minuto sin oír nada útil.
+     */
+    private volatile long ultimaRespuestaMs = System.currentTimeMillis();
+
+    private void marcarRespuesta() {
+        ultimaRespuestaMs = System.currentTimeMillis();
+    }
 
     private ScheduledExecutorService mantenimiento;
     private volatile boolean mantenimientoAvisado = false;
@@ -906,9 +983,30 @@ public class IEC61850Client implements ClientEventListener {
         marcarTrafico();
         try {
             association.getDataValues(n);
+            marcarRespuesta();
+            marcarLeido(n);
         } finally {
             marcarTrafico();
         }
+    }
+
+    // Atributos cuyo valor vino del IED (lectura o reporte), como "ref$FC". La lectura es
+    // diferida: hasta que se lee, el modelo tiene el valor por defecto (0, false, 1970), y el
+    // árbol no debe mostrarlo como si fuera un dato.
+    private final java.util.Set<String> leidos = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private void marcarLeido(ModelNode n) {
+        if (n instanceof BasicDataAttribute) {
+            leidos.add(n.getReference() + "$" + ((BasicDataAttribute) n).getFc());
+        } else if (n != null && n.getChildren() != null) {
+            for (ModelNode h : n.getChildren()) marcarLeido(h);
+        }
+    }
+
+    /** ¿El valor de este atributo vino del IED? (false: es el valor por defecto del modelo). */
+    public boolean fueLeido(ModelNode n) {
+        return n instanceof BasicDataAttribute
+                && leidos.contains(n.getReference() + "$" + ((BasicDataAttribute) n).getFc());
     }
 
     /** setDataValues con el mismo criterio que {@link #leer}. */
@@ -916,6 +1014,7 @@ public class IEC61850Client implements ClientEventListener {
         marcarTrafico();
         try {
             association.setDataValues(n);
+            marcarRespuesta();
         } finally {
             marcarTrafico();
         }
@@ -924,6 +1023,7 @@ public class IEC61850Client implements ClientEventListener {
     private synchronized void iniciarMantenimiento() {
         detenerMantenimiento();
         marcarTrafico();
+        marcarRespuesta();
         mantenimientoAvisado = false;
         mantenimiento = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "mantenimiento-asociacion");
@@ -964,12 +1064,14 @@ public class IEC61850Client implements ClientEventListener {
      * Sin esto el usuario ve "Received an ABORT SPDU" y no tiene cómo saber que no es la red.
      */
     private String explicarCierre(IOException e) {
-        long silencioS = (System.currentTimeMillis() - ultimoTraficoMs) / 1000;
+        long silencioS = (System.currentTimeMillis() - ultimaRespuestaMs) / 1000;
         String msg = (e != null && e.getMessage() != null) ? e.getMessage() : "";
-        StringBuilder sb = new StringBuilder("[ENLACE] Asociacion cerrada tras ")
-            .append(silencioS).append(" s sin pedidos del cliente");
-        if (msg.contains("ABORT") && silencioS >= 20) {
-            sb.append(". El IED envio ABORT: probable temporizador de inactividad del equipo");
+        StringBuilder sb = new StringBuilder("[ENLACE] Asociacion cerrada; la ultima respuesta del IED fue hace ")
+            .append(silencioS).append(" s");
+        boolean cortoElEquipo = msg.contains("ABORT") || msg.contains("reset") || msg.contains("closed");
+        if (cortoElEquipo && silencioS >= 15) {
+            sb.append(". El IED cerro la conexion (").append(msg.contains("ABORT") ? "ABORT" : "RST")
+              .append("): probable temporizador de inactividad del equipo");
             if (tieneAplicTmsIngeteam()) {
                 sb.append(" (en Ingeteam: genIPRV1.AplicTms, \"Time Out para desconexion\")");
             }
@@ -1378,6 +1480,139 @@ public class IEC61850Client implements ClientEventListener {
     /**
      * Escribe un valor al servidor
      */
+    // ==================== SUSTITUCIÓN (IEC 61850-7-3, FC=SV) ====================
+
+    /** FC que la norma deja escribir a un cliente sobre atributos de dato (no ST/MX/CO). */
+    public static boolean fcEscribible(Fc fc) {
+        return fc == Fc.CF || fc == Fc.DC || fc == Fc.SP || fc == Fc.SV || fc == Fc.SE || fc == Fc.BL;
+    }
+
+    /** ¿El DO tiene sustitución (subEna en FC=SV)? */
+    public boolean admiteSustitucion(String doRef) {
+        return serverModel != null && serverModel.findModelNode(doRef + ".subEna", Fc.SV) instanceof BdaBoolean;
+    }
+
+    /**
+     * El atributo SV que lleva el valor sustituto y el dato que reemplaza: subVal -> stVal,
+     * subMag.f|i -> mag.f|i, subCVal.mag.f -> cVal.mag.f. {sub, dato} o null.
+     */
+    public BasicDataAttribute[] parSustitucion(String doRef) {
+        if (serverModel == null) return null;
+        String[][] pares = {{"subVal", "stVal", "ST"}, {"subMag.f", "mag.f", "MX"}, {"subMag.i", "mag.i", "MX"},
+                {"subCVal.mag.f", "cVal.mag.f", "MX"}, {"subCVal.mag.i", "cVal.mag.i", "MX"}};
+        for (String[] p : pares) {
+            ModelNode sub = serverModel.findModelNode(doRef + "." + p[0], Fc.SV);
+            ModelNode dato = serverModel.findModelNode(doRef + "." + p[1], Fc.fromString(p[2]));
+            if (sub instanceof BasicDataAttribute && dato instanceof BasicDataAttribute) {
+                return new BasicDataAttribute[] {(BasicDataAttribute) sub, (BasicDataAttribute) dato};
+            }
+        }
+        return null;
+    }
+
+    /** ¿La sustitución está activa en el IED? (lee subEna) */
+    public boolean sustitucionActiva(String doRef) throws IOException {
+        ModelNode ena = serverModel == null ? null : serverModel.findModelNode(doRef + ".subEna", Fc.SV);
+        if (!(ena instanceof BdaBoolean)) return false;
+        try {
+            leer((FcModelNode) ena);
+        } catch (ServiceError e) {
+            throw new IOException(e.getMessage(), e);
+        }
+        return ((BdaBoolean) ena).getValue();
+    }
+
+    /**
+     * Sustituye el valor de un DO: escribe el valor sustituto, subQ (con la validez pedida) y
+     * subID, y recién después subEna=true, en ese orden, como pide la norma para que el dato no
+     * pase por un valor intermedio.
+     */
+    public void sustituir(String doRef, String valor, BdaQuality.Validity validez, String subId) throws IOException {
+        BasicDataAttribute[] par = parSustitucion(doRef);
+        if (par == null) throw new IOException(doRef + ": no tiene valor de sustitucion conocido");
+        try {
+            ponerDesdeTexto(par[0], valor);
+            escribir((FcModelNode) par[0]);
+            ModelNode q = serverModel.findModelNode(doRef + ".subQ", Fc.SV);
+            if (q instanceof BdaQuality && validez != null) {
+                ((BdaQuality) q).setValidity(validez);
+                escribir((FcModelNode) q);
+            }
+            ModelNode id = serverModel.findModelNode(doRef + ".subID", Fc.SV);
+            if (id instanceof BdaVisibleString && subId != null) {
+                ((BdaVisibleString) id).setValue(subId);
+                escribir((FcModelNode) id);
+            }
+            BdaBoolean ena = (BdaBoolean) serverModel.findModelNode(doRef + ".subEna", Fc.SV);
+            ena.setValue(true);
+            escribir(ena);
+        } catch (ServiceError e) {
+            throw new IOException(I18n.t("sus.err.write", e.getMessage()), e);
+        }
+    }
+
+    /** subEna=false: el IED vuelve a publicar el valor de proceso. */
+    public void quitarSustitucion(String doRef) throws IOException {
+        ModelNode ena = serverModel == null ? null : serverModel.findModelNode(doRef + ".subEna", Fc.SV);
+        if (!(ena instanceof BdaBoolean)) throw new IOException(doRef + ": sin subEna");
+        try {
+            ((BdaBoolean) ena).setValue(false);
+            escribir((FcModelNode) ena);
+        } catch (ServiceError e) {
+            throw new IOException(I18n.t("sus.err.write", e.getMessage()), e);
+        }
+    }
+
+    /**
+     * Escribe un atributo a partir de texto, validando el valor: si no se puede convertir al
+     * tipo del atributo, falla en vez de escribir el valor que tenía.
+     */
+    public void escribirTexto(String reference, Fc fc, String texto) throws IOException {
+        if (!isConnected() || serverModel == null) throw new IOException("Not connected");
+        ModelNode node = serverModel.findModelNode(reference, fc);
+        if (!(node instanceof BasicDataAttribute)) throw new IOException(reference + " [" + fc + "] no es un atributo");
+        try {
+            ponerDesdeTexto((BasicDataAttribute) node, texto);
+            escribir((FcModelNode) node);
+        } catch (ServiceError e) {
+            throw new IOException(I18n.t("sus.err.write", e.getMessage()), e);
+        }
+    }
+
+    /** Valor de un atributo desde texto, o IOException si no corresponde a su tipo. */
+    static void ponerDesdeTexto(BasicDataAttribute bda, String v) throws IOException {
+        String t = v == null ? "" : v.trim();
+        try {
+            if (bda instanceof BdaBoolean) {
+                if (!t.matches("(?i)true|false|1|0")) throw new NumberFormatException(t);
+                ((BdaBoolean) bda).setValue(t.equalsIgnoreCase("true") || t.equals("1"));
+            } else if (bda instanceof BdaInt8) ((BdaInt8) bda).setValue(Byte.parseByte(t));
+            else if (bda instanceof BdaInt16) ((BdaInt16) bda).setValue(Short.parseShort(t));
+            else if (bda instanceof BdaInt32) ((BdaInt32) bda).setValue(Integer.parseInt(t));
+            else if (bda instanceof BdaInt64) ((BdaInt64) bda).setValue(Long.parseLong(t));
+            else if (bda instanceof BdaInt8U) ((BdaInt8U) bda).setValue(Short.parseShort(t));
+            else if (bda instanceof BdaInt16U) ((BdaInt16U) bda).setValue(Integer.parseInt(t));
+            else if (bda instanceof BdaInt32U) ((BdaInt32U) bda).setValue(Long.parseLong(t));
+            else if (bda instanceof BdaFloat32) ((BdaFloat32) bda).setFloat(Float.parseFloat(t.replace(',', '.')));
+            else if (bda instanceof BdaFloat64) ((BdaFloat64) bda).setDouble(Double.parseDouble(t.replace(',', '.')));
+            else if (bda instanceof BdaVisibleString) ((BdaVisibleString) bda).setValue(t);
+            else if (bda instanceof BdaDoubleBitPos) {
+                String l = t.toLowerCase();
+                BdaDoubleBitPos.DoubleBitPos p =
+                        l.matches("off|01|1") ? BdaDoubleBitPos.DoubleBitPos.OFF
+                        : l.matches("on|10|2") ? BdaDoubleBitPos.DoubleBitPos.ON
+                        : l.matches("intermediate|00|0") ? BdaDoubleBitPos.DoubleBitPos.INTERMEDIATE_STATE
+                        : l.matches("bad|11|3") ? BdaDoubleBitPos.DoubleBitPos.BAD_STATE : null;
+                if (p == null) throw new NumberFormatException(t);
+                ((BdaDoubleBitPos) bda).setDoubleBitPos(p);
+            } else {
+                throw new IOException(I18n.t("sus.err.type", bda.getClass().getSimpleName()));
+            }
+        } catch (NumberFormatException e) {
+            throw new IOException(I18n.t("sus.err.value", t, bda.getReference().getName()));
+        }
+    }
+
     public void writeValue(String reference, Fc fc, String value) throws IOException {
         if (!isConnected() || serverModel == null) {
             throw new IOException("Not connected");
@@ -1789,6 +2024,14 @@ public class IEC61850Client implements ClientEventListener {
         return new LecturaDataSets(recuperados, omitidos, motivos);
     }
 
+    /** Bytes en hexadecimal ("0006AFA157F00002"), como muestran las EntryID los clientes. */
+    public static String hex(byte[] b) {
+        if (b == null) return "";
+        StringBuilder sb = new StringBuilder(b.length * 2);
+        for (byte x : b) sb.append(String.format("%02X", x & 0xFF));
+        return sb.toString();
+    }
+
     /** Mensaje util de una excepcion lanzada por reflexion. */
     private static String causa(Exception e) {
         Throwable t = (e instanceof java.lang.reflect.InvocationTargetException)
@@ -1811,6 +2054,51 @@ public class IEC61850Client implements ClientEventListener {
      * Solo escribe rptEna y trgOps para evitar ServiceError en servidores que no
      * permiten modificar datSet, optFlds o bufTm mientras el RCB se habilita.
      */
+    /**
+     * Última EntryID recibida de cada BRCB, por IED y RptID ("host:puerto|RptID"). Estática para
+     * que sobreviva a la reconexión (cada conexión crea su cliente). Al volver a habilitar el BRCB
+     * se escribe antes de RptEna: el IED manda desde la entrada siguiente lo que guardó mientras
+     * no había asociación (IEC 61850-7-2, resincronización de un BRCB).
+     */
+    private static final Map<String, byte[]> ultimaEntryId = new ConcurrentHashMap<>();
+
+    private String claveEntry(String rptId) {
+        return host + ":" + port + "|" + rptId;
+    }
+
+    /** La última EntryID recibida de ese RptID en este IED, o null. Para pruebas y para la GUI. */
+    public byte[] ultimaEntryIdDe(String rptId) {
+        byte[] b = rptId == null ? null : ultimaEntryId.get(claveEntry(rptId));
+        return b == null ? null : b.clone();
+    }
+
+    /** Lee los atributos de un RCB (DatSet, TrgOps, IntgPd, RptEna...) en el modelo local. */
+    public void leerRcb(Rcb rcb) throws ServiceError, IOException {
+        if (!isConnected() || association == null) throw new IOException("Not connected");
+        mms().getRcbValues(rcb);
+    }
+
+    /** Resultado de la resincronización al habilitar un BRCB. */
+    public enum Retoma { NINGUNA, RETOMADO, RECHAZADO }
+
+    /**
+     * Habilita un RCB. Si es un BRCB del que ya se recibieron reportes en este IED, primero le
+     * escribe la última EntryID recibida para retomar desde ahí; si el IED la rechaza (no la
+     * tiene más en su buffer), se habilita igual y el IED decide desde dónde manda.
+     */
+    public Retoma enableReportingRetomando(Rcb rcb, ReportListener listener) throws IOException {
+        enableReporting(rcb, listener);
+        return ultimaRetoma;
+    }
+
+    private volatile Retoma ultimaRetoma = Retoma.NINGUNA;
+    private volatile byte[] ultimaRetomaId;
+
+    /** La EntryID que se escribió en la última habilitación con retoma (null si no hubo). */
+    public byte[] entryIdRetomada() {
+        return ultimaRetomaId == null ? null : ultimaRetomaId.clone();
+    }
+
     public void enableReporting(Rcb rcb, ReportListener listener) throws IOException {
         if (!isConnected() || association == null) {
             throw new IOException("Not connected");
@@ -1828,6 +2116,19 @@ public class IEC61850Client implements ClientEventListener {
                 enableRcb(urcb);
             } else if (rcb instanceof Brcb) {
                 Brcb brcb = (Brcb) rcb;
+                ultimaRetoma = Retoma.NINGUNA;
+                ultimaRetomaId = null;
+                String rptId = brcb.getRptId() != null ? brcb.getRptId().getStringValue() : null;
+                byte[] ultima = rptId == null ? null : ultimaEntryId.get(claveEntry(rptId));
+                boolean habilitado = brcb.getRptEna() != null && brcb.getRptEna().getValue();
+                if (ultima != null && !habilitado && brcb.getEntryId() != null) {
+                    brcb.getEntryId().setValue(ultima.clone());
+                    List<ServiceError> errores = mms().setRcbValues(brcb,
+                            false, false, false, false, false, false, false, true);
+                    ultimaRetoma = errores.isEmpty() || errores.get(0) == null
+                            ? Retoma.RETOMADO : Retoma.RECHAZADO;
+                    ultimaRetomaId = ultima.clone();
+                }
                 enableRcb(brcb);
             }
 
@@ -1885,6 +2186,11 @@ public class IEC61850Client implements ClientEventListener {
 
     @Override
     public void newReport(Report report) {
+        marcarRespuesta();
+        if (report.getEntryId() != null && report.getRptId() != null) {
+            byte[] id = report.getEntryId().getValue();
+            if (id != null && id.length > 0) ultimaEntryId.put(claveEntry(report.getRptId()), id.clone());
+        }
         // Notificar al listener externo (panel de Reports)
         if (externalReportListener != null) {
             externalReportListener.onReportReceived(report);
@@ -1892,6 +2198,7 @@ public class IEC61850Client implements ClientEventListener {
 
         // Notificar cambios de valores
         List<FcModelNode> values = report.getValues();
+        if (values != null) for (FcModelNode v : values) marcarLeido(v);
         if (values != null && valueChangeListener != null) {
             for (FcModelNode node : values) {
                 if (node instanceof BasicDataAttribute) {

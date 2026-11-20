@@ -250,6 +250,7 @@ public final class EstadoLocal {
         List<BasicDataAttribute> cambiados = new ArrayList<>();
         if (model == null || ref == null) return cambiados;
 
+        contarManiobra(model, ref, cerrar, cambiados);
         ModelNode st = model.findModelNode(ref + ".stVal", Fc.ST);
         if (st instanceof BdaDoubleBitPos) {
             BdaDoubleBitPos p = (BdaDoubleBitPos) copiaDe(st);
@@ -851,7 +852,9 @@ public final class EstadoLocal {
     //
     // Tiempos de maniobra: con tiempoAperturaMs / tiempoCierreMs mayores que 0, cada maniobra
     // pasa por intermedio (00) y llega a la posición final al cabo de ese tiempo, con la
-    // terminación positiva recién ahí. En 0 (por defecto) cambia en el acto, como antes.
+    // terminación positiva recién ahí. En 0 cambia en el acto. Por defecto 100 ms desde
+    // 2026-11-16, como el simulador de interruptor de referencia: cada maniobra publica el
+    // intermedio con su propio stNum por GOOSE y por reportes.
 
     /** Estado del gas aislante de un interruptor. */
     public enum Sf6 { NORMAL, ALARMA, BLOQUEO }
@@ -863,8 +866,9 @@ public final class EstadoLocal {
     /** CBOpCap de cada interruptor antes de la primera falla, para restituirlo. */
     private static final Map<String, Long> CBOPCAP_ORIGINAL = new java.util.concurrent.ConcurrentHashMap<>();
 
-    public static volatile long tiempoAperturaMs = 0;
-    public static volatile long tiempoCierreMs = 0;
+    public static final long TIEMPO_MANIOBRA_POR_DEFECTO_MS = 100;
+    public static volatile long tiempoAperturaMs = TIEMPO_MANIOBRA_POR_DEFECTO_MS;
+    public static volatile long tiempoCierreMs = TIEMPO_MANIOBRA_POR_DEFECTO_MS;
     /** Cuánto espera un mando con falla de mecanismo antes de terminar en negativo. */
     public static volatile long tiempoFallaMs = 2000;
 
@@ -1039,6 +1043,30 @@ public final class EstadoLocal {
         return false;
     }
 
+    /**
+     * ¿El aparato (y los polos vinculados, si los hay) ya está en la posición pedida? Una orden
+     * así no mueve nada: ni recorrido ni intermedio ni OpCnt.
+     */
+    public static boolean yaEnPosicion(ServerModel model, String raiz, boolean cerrar) {
+        if (model == null) return false;
+        List<String> refs = new ArrayList<>();
+        refs.add(raiz);
+        refs.addAll(posicionesVinculadas(model, raiz));
+        boolean alguna = false;
+        for (String r : refs) {
+            ModelNode st = model.findModelNode(r + ".stVal", Fc.ST);
+            if (st instanceof BdaDoubleBitPos) {
+                BdaDoubleBitPos.DoubleBitPos p = ((BdaDoubleBitPos) st).getDoubleBitPos();
+                if (p != (cerrar ? BdaDoubleBitPos.DoubleBitPos.ON : BdaDoubleBitPos.DoubleBitPos.OFF)) return false;
+                alguna = true;
+            } else if (st instanceof BdaBoolean) {
+                if (((BdaBoolean) st).getValue() != cerrar) return false;
+                alguna = true;
+            }
+        }
+        return alguna;
+    }
+
     /** Pone la posicion en intermedio (00), con calidad buena y hora nueva. */
     public static void aplicarIntermedio(ServerModel model, String doRef, List<BasicDataAttribute> cambiados) {
         ModelNode st = model.findModelNode(doRef + ".stVal", Fc.ST);
@@ -1052,6 +1080,7 @@ public final class EstadoLocal {
 
     static void aplicarPosicion(ServerModel model, String doRef, boolean cerrar,
                                 List<BasicDataAttribute> cambiados) {
+        contarManiobra(model, doRef, cerrar, cambiados);
         ModelNode st = model.findModelNode(doRef + ".stVal", Fc.ST);
         if (st instanceof BdaDoubleBitPos) {
             BdaDoubleBitPos p = (BdaDoubleBitPos) copiaDe(st);
@@ -1068,6 +1097,46 @@ public final class EstadoLocal {
         }
         calidadBuena(model, doRef, cambiados, true);
         estampar(model, doRef, cambiados, true);
+    }
+
+    /**
+     * Cuenta la maniobra en el OpCnt del aparato (XCBR o XSWI), como un IED real: solo si la
+     * posicion cambia de verdad (un cierre sobre algo cerrado no cuenta) y solo en el LN del
+     * aparato, no en los CSWI que lo comandan. Hasta 2026-11-15 el contador quedaba en 0
+     * (lo vio OMICRON IEDScout leyendo un reporte con los OpCnt de un CID real).
+     */
+    static void contarManiobra(ServerModel model, String doRef, boolean cerrar,
+                               List<BasicDataAttribute> cambiados) {
+        int barra = doRef.indexOf('/');
+        int punto = doRef.indexOf('.', barra + 1);
+        if (barra < 0 || punto < 0) return;
+        String clase = ControlPolicy.classOf(doRef.substring(barra + 1, punto));
+        if (!"XCBR".equals(clase) && !"XSWI".equals(clase)) return;
+        ModelNode st = model.findModelNode(doRef + ".stVal", Fc.ST);
+        boolean yaEsta;
+        if (st instanceof BdaDoubleBitPos) {
+            BdaDoubleBitPos.DoubleBitPos actual = ((BdaDoubleBitPos) st).getDoubleBitPos();
+            yaEsta = actual == (cerrar ? BdaDoubleBitPos.DoubleBitPos.ON : BdaDoubleBitPos.DoubleBitPos.OFF);
+        } else if (st instanceof BdaBoolean) {
+            yaEsta = ((BdaBoolean) st).getValue() == cerrar;
+        } else {
+            return;
+        }
+        if (yaEsta) return;
+        String lnRef = doRef.substring(0, punto);
+        ModelNode cnt = model.findModelNode(lnRef + ".OpCnt.stVal", Fc.ST);
+        if (cnt instanceof BdaInt32) {
+            BdaInt32 c = (BdaInt32) copiaDe(cnt);
+            c.setValue(c.getValue() + 1);
+            cambiados.add(c);
+        } else if (cnt instanceof BdaInt32U) {
+            BdaInt32U c = (BdaInt32U) copiaDe(cnt);
+            c.setValue(c.getValue() + 1);
+            cambiados.add(c);
+        } else {
+            return;
+        }
+        estampar(model, lnRef + ".OpCnt", cambiados, true);
     }
 
     // ------------------------------------------------------------ normalizar

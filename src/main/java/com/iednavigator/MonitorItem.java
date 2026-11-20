@@ -19,6 +19,10 @@ class MonitorItem {
     String type;
     FcModelNode node;
     long lastChangeTime;
+    /** Hora local del ultimo cambio visto (o de cuando se agrego): columna "Ultimo cambio". */
+    long ultimoCambio;
+    /** Desde cuando se resalta la fila por un cambio de valor (0 = nunca cambio). */
+    long resaltarDesde;
 
     MonitorItem(String reference, String name, String fc, String type, FcModelNode node) {
         this.reference = reference;
@@ -29,5 +33,6 @@ class MonitorItem {
         this.value = "";
         this.oldValue = "";
         this.lastChangeTime = 0;
+        this.ultimoCambio = System.currentTimeMillis();
     }
 }

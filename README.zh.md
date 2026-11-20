@@ -21,9 +21,10 @@
 - 按功能约束（ST、MX、CF、CO、SP 等）读写数值。
 - 可配置的周期性轮询（polling）。
 - 带 CSV 导出功能的活动监视器。
-- 报告订阅（URCB / BRCB）。
+- 报告订阅（URCB / BRCB）。重新连接时，BRCB 从最后收到的 `EntryID` 继续，设备丢失条目（`BufOvfl`）时会给出提示。
 - 定值组（SGCB）及保护定值面板（SP）。
 - 针对拒绝标准 `retrieveModel` 的 IED，通过反射方式构建模型。
+- 在树的右键菜单中**替代值…**（FC `SV`）和**写入值…**（配置类属性）。
 - **连接时读取全部值**选项（出厂关闭）：连接时即取回所有数据对象的值，无需展开树形结构或启用轮询。
 
 #### 操作控制
@@ -40,12 +41,16 @@
 - 响应标准外部 MMS 客户端的读取请求。
 - 通过界面交互式编辑数值。
 - 数据模型与 GOOSE 发布者之间的双向同步。
+- 与 IED 行为一致的**控制引擎**：直接控制和 SBO（普通安全与增强安全）、控制权限（就地 / 间隔 / 站控 / 远方）、按 IEC 61850-7-4 继承的 `Mod` 与 `Beh`，以及 IED **测试模式**。拒绝时返回带 `AddCause` 的 `LastApplError`；增强安全的控制以 `CommandTermination` 结束。
+- **虚拟断路器**（*工具*菜单）：就地操作每台开关设备，可设置分闸和合闸时间（经过中间位置），并可设置用于练习的故障（机构拒动、弹簧未储能、SF6 告警与闭锁、品质无效、强制位置）。分合闸线圈可由 GOOSE 驱动。
+- 缓存与非缓存报告（URCB / BRCB：总召、完整性周期与重新同步）、定值组控制块（SGCB）、操作计数器（`OpCnt`）以及数值替代（FC `SV`）。已用商用 MMS 客户端验证。
+- *文件 › 新窗口* 打开另一个实例：可以在一个窗口中仿真，在另一个窗口中用客户端浏览。
 
 #### GOOSE（IEC 61850-8-1）
 - 二层（Layer 2）发布/订阅（以太网类型 0x88B8），带 802.1Q VLAN 标签。
 - 符合标准的重传机制（单调递增的序列号 `sqNum`）。
 - **GOOSE-over-UDP** 桥接（端口 62746），适用于路由网络 / Wi-Fi。
-- 通过 `libiec61850`（JNA）实现原生 GOOSE / 采样值（Sampled Values），已包含在 `lib/` 目录中。
+- 捕获与发布由本项目自有代码基于 pcap4j / Npcap 实现。桌面应用**不提供采样值（Sampled Values）**。
 - 发布**出厂即标记为仿真**（报头 S 位与 PDU 的 `simulation` 字段）：符合标准的订阅方仅在自身处于仿真模式（`LPHD.Sim`）时才会接受。可在面板中取消勾选，并在日志中留下提示。
 - **重传过滤**：仅显示状态变化（新的 `stNum`），略过心跳报文。
 - 报文表格会显示每一帧的**源 MAC** 以及是否携带**仿真标志**。
@@ -83,7 +88,7 @@
 ### 系统要求
 - **64 位 Windows 10 或 11。**
 - **Java**：若使用 *Releases* 中的安装包则无需单独安装（内置由 `jlink` 生成的运行时）。若需从源码编译：需要 **JDK 11 或更高版本**。
-- **Npcap**（仅用于二层 GOOSE / 采样值的捕获和发布）：需从 <https://npcap.com/#download> 单独安装（勾选 *WinPcap API-compatible Mode*，并**不要勾选** *Restrict Npcap driver's access to Administrators only*，这样无需以管理员身份运行本应用即可使用 GOOSE/SV）。若未安装 Npcap，MMS 客户端和服务端仍可正常工作；只有二层 GOOSE/SV 功能需要它。
+- **Npcap**（仅用于二层 GOOSE 的捕获和发布）：需从 <https://npcap.com/#download> 单独安装（勾选 *WinPcap API-compatible Mode*，并**不要勾选** *Restrict Npcap driver's access to Administrators only*，这样无需以管理员身份运行本应用即可使用 GOOSE）。若未安装 Npcap，MMS 客户端和服务端仍可正常工作；只有二层 GOOSE 功能需要它。
 - **管理员权限**：正常使用无需管理员权限。只有*释放端口*工具需要，用于结束占用 102 端口的程序（某些 IED 厂商的应用会在后台运行并占用该端口）。
 
 ### 安装与运行
@@ -92,7 +97,7 @@
 1. 从 [Releases](https://github.com/MancoQpa/IEDnavigatorPRO/releases) 下载安装包（自包含，内置 Java 运行时）。
 2. 解压整个文件夹（例如解压到 `C:\IEDNavigatorPRO`）。
 3. 双击 `INSTALAR.bat`（无需管理员权限）。将打开一个窗口，提供**安装**与**卸载**选项；若检测到缺少 Npcap，会提供一个按钮自动下载并安装。
-4. Npcap 仅在使用二层 GOOSE/SV 时才需要，也可从 <https://npcap.com/#download> 单独安装。
+4. Npcap 仅在使用二层 GOOSE 时才需要，也可从 <https://npcap.com/#download> 单独安装。
 5. 通过桌面图标或 `IEDNavigatorPRO.exe` 启动。
 
 **方式 B —— Maven（从源码构建）**
@@ -134,7 +139,7 @@ src/main/java/com/iednavigator/
   SclCompare.java             # SCL 文件比较
   GooseMapAnalyzer.java       # GOOSE 订阅关系图
   Iec61850Dictionary.java     # IEC 61850 词典
-  native_lib/                 # JNA 绑定 iec61850.dll（原生 GOOSE/SV）
+  native_lib/                 # JNA 绑定 iec61850.dll（桌面应用未使用）
   [+ 面板及辅助类]
 lib/                          # Java 依赖库 + iec61850.dll
 test/test_ied.cid             # 测试用 CID 文件
@@ -162,7 +167,7 @@ test/test_ied.cid             # 测试用 CID 文件
 
 ### 许可证
 
-本项目基于 **GNU 通用公共许可证 v3（GPL v3）** 分发 —— 详见 [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE)。该许可要求源于原生库 `libiec61850`（`iec61850.dll`，**GPL v3**），该库用于实现原生 GOOSE/SV 功能；其余依赖均为宽松许可证（Apache 2.0、MIT、LGPL/BSD）。您可以使用、修改和再分发本软件，前提是保持相同的许可证、包含源代码并保留版权声明。
+本项目基于 **GNU 通用公共许可证 v3（GPL v3）** 分发 —— 详见 [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE)。该许可要求源于原生库 `libiec61850`（`iec61850.dll`，**GPL v3**），该库随软件包一同提供；其余依赖均为宽松许可证（Apache 2.0、MIT、LGPL/BSD）。您可以使用、修改和再分发本软件，前提是保持相同的许可证、包含源代码并保留版权声明。
 
 Npcap **不** 随本项目一同分发（其许可证不允许此操作）；本项目仅提供指向官方下载网站的链接，这不构成再分发行为。
 

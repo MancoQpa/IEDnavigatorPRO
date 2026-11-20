@@ -1,4 +1,4 @@
-# CLAUDE.md - IEC 61850 Java Explorer (IEDNavigator)
+# CLAUDE.md - IEDNavigator PRO
 
 ## Project Overview
 
@@ -28,7 +28,7 @@ available in the desktop app.
 
 ```
 src/main/java/com/iednavigator/
-  IEDNavigatorApp.java       # Main window, entry point, wiring (~3700 lines)
+  IEDNavigatorApp.java       # Main window, entry point, wiring (~5600 lines)
   IEC61850Client.java        # MMS client: model discovery, reads, control (SBO/direct/cancel),
                              #   preflight, keep-alive, DataSet recovery
   IEC61850Server.java        # IED simulation from SCL files
@@ -43,7 +43,7 @@ src/main/java/com/iednavigator/
   I18n.java                  # Bundles in src/main/resources/i18n (es, en, pt, zh)
   SessionLog.java            # Per-session log file (see "Logs")
   Iec61850Dictionary.java    # Descriptions of LN classes, DOs, ServiceErrors, AddCauses
-  ARQUITECTURA.md            # Architecture notes (written 2026-06; partly outdated)
+  ARQUITECTURA.md            # Architecture notes of 2026-06, kept as history (this file is current)
   native_lib/                # JNA bindings to iec61850.dll: loaded, unused by the desktop app
   bridge/                    # Headless REST bridge (BridgeMain, api/)
 src/main/java/com/iedexplorer/  # OLD package, not compiled by compile.ps1. Do not edit.
@@ -55,7 +55,7 @@ installer/                   # resources/ is versioned; output/ is gitignored
 ## Build & Run
 
 ```bash
-# Maven build (primary)
+# Maven build (alternative; the project builds with compile.ps1, below)
 mvn clean package -DskipTests
 
 # Run
@@ -78,7 +78,8 @@ Main class: `com.iednavigator.IEDNavigatorApp`
 
 - **Package**: `com.iednavigator`, with sub-packages `native_lib` and `bridge`.
 - **IEDNavigatorApp.java** was monolithic (~6600 lines) and has been split into panels and
-  managers that receive a small `Context` interface from it; it is now ~3700 lines.
+  managers that receive a small `Context` interface from it. It went down to ~3700 lines and is
+  back to ~5600 after the 2026-11 redesign (menus, context bar, view options).
 - **Listener/callback patterns**: Client and Server use listener interfaces to notify the GUI of events (connections, value changes, errors).
 - **CachedValue**: Inner class in IEC61850Client for tracking attribute values with timestamps.
 - **Who does what** (verified 2026-10-11 in the code, not deduced from names):
@@ -108,12 +109,31 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     as one: `posicionesVinculadas` adds the XCBRs without their own CSWI when the LD has only
     one commanded XCBR (`test/TestInterruptorPolos`, `test_interruptor_polos.cid`).
     `test/TestInterruptorVirtual`, `TestFallasInterruptor`, `TestBobinasGoose`.
+    Since 2026-11-19 the window follows the course reference tool: a fixed 360 px main
+    window (identity, MMS / GOOSE Pub / GOOSE Sub LEDs, symbol, LOCAL|REMOTO, ABRIR/CERRAR,
+    52a/52b, last event) and separate windows from its menu (instructor panel, event log,
+    connection data, GOOSE subscription, GOOSE publishing). Widgets in `VintComponentes`
+    (painted by hand: FlatLaf overrides the colors of a selected toggle). Local buttons work only
+    in LOCAL and, like that tool, the panel and GOOSE reject "already in position", "moving" and a
+    position forced by the instructor (MMS still goes through the control engine). GOOSE
+    subscription is `SuscripcionGoose`: typed by hand (APPID hex, goCbRef, data index, optional
+    source MAC), states from the frame's TAL, rising edge, first boolean of a structure; saved in
+    Preferences `iednavigator/vint`; trip acts in LOCAL, close does not. `BobinasGoose` is kept
+    for its test only. `test/TestSuscripcionGoose`, `TestVentanaInterruptor`,
+    `TestGooseInterruptor` (real `GoosePanel` in internal loopback, fake `Context` by `Proxy`).
   - Mode and behaviour (since 2026-11-12): `Beh` is derived from the LD mode (`LLN0.Mod`) and
     the LN's own `Mod` as in IEC 61850-7-4 annex A (`EstadoLocal.comportamiento`), at start
     (`derivarComportamiento`), when a client operates a `Mod`, when `Mod.stVal` is edited in
     the tree, and from the server panel button "Modo test del IED" / the tree's right-click
     "Modo" submenus. A command on `Mod` itself skips the Beh/Test rules (otherwise an LN in
     test or off could not be brought back). `test/TestModoTest`. Same code in the simulator.
+  - Substitution (2026-11-16, IEC 61850-7-3 FC=SV): `mando/Sustitucion` (same file in the
+    simulator). With subEna the server publishes subVal/subMag/subCVal and subQ marked
+    "substituted"; process changes meanwhile are kept, not published, and come back with
+    subEna=false (`IEC61850Server.write`, `publicarCambiosDeMando`, `setDataValue`). The client
+    tree menu has "Sustituir valor…" (DOs with subEna) and "Escribir valor…" (attributes with FC
+    CF, DC, SP, SV, SE, BL; `IEC61850Client.escribirTexto` rejects text that does not fit the
+    type instead of writing the old value). `test/TestSustitucion`, `TestSustitucionCliente`.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
     pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
   - Sampled Values: not in the desktop app (the SV tab is commented out in
@@ -121,6 +141,74 @@ Main class: `com.iednavigator.IEDNavigatorApp`
   - libiec61850: loaded at startup, used only by that bridge route. Removing it is planned
     after 2026-10-27; JNA stays, because pcap4j needs it.
 - **Dependencies bundled in `lib/`**: JARs are committed to the repo alongside Maven; build scripts reference both.
+
+## Main window layout (redesign of 2026-11)
+
+UI only; no IEC 61850 logic changed. Colors and fonts live in `Estilo` (system fonts: Segoe UI and
+Consolas, created with FlatLaf `FontUtils.getCompositeFont` so CJK text has a fallback; accent
+#1F5FBF; dark title bar). Consolas only for references, values, the log and shortcuts. Cards have a
+1 px border and 8 px radius; `TitledBorder` is restyled globally (bold 12 px title over a faint top
+line, no box). Ver › Densidad compacta changes everything in `aplicarDensidad()`: tree rows 20/24,
+tables 24/28 (monitor and any table still on the default height), outer margin and gaps 8/12. Text
+and background pairs are kept at 4.5:1 or more (checked in a test); Consolas sits high when
+centered, so the monitor value/time cells and the host:port field add top margin. The window is:
+
+- Menu bar: Archivo (load, recent, export monitor/log, exit); Simulación in Server / Conexión in
+  Client (title and items follow the mode: start/stop or connect F5; port, check, release; polling,
+  interval, read all, timeout; mode radios); Ver (log Ctrl+L, tree, properties Ctrl+M,
+  expand/collapse, group DO by FC, descriptions, compact density, theme: saved in Preferences
+  `view.*`); Herramientas (get/save CID, HTML report, Compare SCL and GOOSE map in their own
+  non-modal `JDialog`, created once and hidden on close; Language submenu; Preferences); Ayuda.
+- `PanelPropiedades` (2026-11-15), under the tree in a vertical split, collapsible and with its
+  height remembered (`view.props.*`): the selected node in the standard's terms (CDC with its
+  origin, type, FC, value, quality, time). It replaced the Data Model explorer (a second tree of
+  the same model whose Export XML wrote nothing); its CDC and descriptions come from
+  `ArbolCeldaRenderer`, so the tree and the panel agree. Mnemonics come from the
+  bundles (`menu.x.mn`). Simulación › Modo test del IED and Herramientas › Interruptor virtual…
+  call `alternarModoTest()` / `abrirInterruptorVirtual()` (main was merged in on 2026-11-14).
+- `BarraContexto`: one 48 px row. Left (grows): IED, "model · vendor · cfg", a fixed 220 px slot
+  (Server: SCL file button; Client: editable `host:port` that writes `tfHost`/`tfClientPort`) and, in
+  Server only, the Test mode toggle (sets LLN0.Mod of every LD; enabled while the server runs). Right (fixed widths, computed from the
+  longest text of the four bundles so switching mode or language moves nothing): Server | Client,
+  status pill (server running shows `IP:port`), main button (F5; accent fill to start/connect,
+  outline to stop/disconnect). Port, timeout and polling are in the Simulación/Conexión menu; the
+  old Server/Client panel fields still exist, unlaid out, because the rest of the code reads them.
+  It reads the window state from a 400 ms Swing Timer (`refrescarContexto`). The library does not
+  report connected clients. No bottom status bar (it is built but not shown: `lblStatus` carries
+  the error the pill shows).
+- Left card: the model tree. `ModelTreeBuilder` merges a DO's FC variants into one node
+  (`NodeInfo.variantes`; control looks for the CO one; Ver › Agrupar DO por FC off restores one DO
+  per FC). `ArbolCeldaRenderer` draws each row as symbol · name · FC · value · description. Symbols
+  and colors come from `SimbolosArbol`, which the legend also uses (keep them in one place): icon per
+  node type and per LN class group, breaker icon for a Pos and its stVal by state, value colored by
+  state (substation convention: red closed/energized, green open/de-energized, orange warning;
+  accent otherwise), violet name for FC=BL, blue
+  for monitored, one color per FC tag. FC and `= value` only on DAs; `q` only when not good,
+  `t` only as time of day with ms; description (SCL or dictionary, loaded in the background)
+  always on LD/LN, on DOs only on hover or selection, never when it repeats the name or LN class,
+  truncated first. `ArbolUI` (a `FlatTreeUI`) paints vertical indent guides only, full-width hover,
+  a 2 px accent bar on the selection and an amber fade when a value changes (`NodeInfo.ponerValor`
+  stamps `resaltarDesde`; every tree value update must go through it). Row height 20/24 px by
+  density. `BuscadorArbol` filters (debounced 250 ms; index, matching and the lightweight copy model
+  are built on its own background thread, the EDT only swaps the model; the real tree is untouched;
+  `original(node)` maps back): 157k nodes search in ~100 ms with the EDT busy at most ~50 ms.
+  Double-click, Enter and the context menu add to the monitor (no in-row button); read/edit stay in
+  the context menu.
+- Right: five tabs (Monitor, Reports, GOOSE, Ajustes = Setting Groups above + SP below, Datasets)
+  with a `BotonRegistro` at the right end of the tab row (FlatLaf `JTabbedPane.trailingComponent`;
+  badge = warnings/errors since the log was last opened, amber or red). `PanelRegistro` is hidden by
+  default (Ver › Registro, Ctrl+L, the button, its ✕); open, it is docked below the tabs at ~190 px.
+  The window keeps that height itself (`ajustarAltoRegistro` on resize; `recordarAltoRegistro` when
+  the user releases the divider): the split's resizeWeight alone left it at its minimum. Levels are
+  guessed from the text, filters, ×N grouping on screen only. `SessionLog` is unchanged.
+- Monitor bar: in Client mode it also shows the watchlist count and its Clear (what polling reads).
+- Empty tree: title, text, the `server.usage` steps (Server) and Load SCL / Connect.
+- Monitor: a ~40 px bar with no title (count pill, Client watchlist | filter, FC, Remove enabled
+  only with a selection, Clear… with confirmation); header 26 px, rows 24/28 px by density, faint
+  horizontal separator, no vertical lines. `MonitorCeldaRenderer`; column 1 holds the `MonitorItem`
+  (path, FC, change times); quality comes from the DO's `q`; changed rows fade from amber in 1.5 s
+  (`timerResalte` runs only while a row is fading; `MonitorManager` starts it via `alResaltar`).
+  The whole table is the drop zone; the drop hint is painted inside the empty table only.
 
 ## Key IEC 61850 Concepts in Code
 
@@ -205,8 +293,10 @@ foreign source MAC (pass its IP and its permanent MAC while Windows uses a rando
 
 ### Connection keep-alive
 
-Some IEDs abort the MMS association after a period with no requests (measured: 90 s).
-`IEC61850Client` sends a minimal read after 60 s of silence. Every request to the IED
+Some IEDs abort the MMS association after a period with no requests (measured: 90 s on an
+Ingeteam; a feeder relay reported on 2026-11-16 cut with RST about a minute after the 60 s
+read). `IEC61850Client` sends a minimal read after 20 s of silence (`KEEPALIVE_MS`;
+`test/TestInactividadEquipo` puts a proxy that cuts after 45 s idle in between). Every request to the IED
 must go through `mms()`, `leer()` or `escribir()` in that class: they record the time of
 the last traffic, and the keep-alive only fires in silence. Concurrent requests from
 different threads are safe since the shadow `ClientAssociation` serializes them.
@@ -260,6 +350,40 @@ because `classes` comes first in the classpath). Each file says why and what cha
   `test/TestServidorMando` maneuvers a ctlModel-4 CSWI with the app's own client.
   Known: changing the command authority (`ponerAutoridad`) changes `Loc` in the model but the
   library cannot report it (`setValues` needs a mirror copy); the same happens in the simulator.
+- `BdaReasonForInclusion.java` (since 2026-11-15): original v1.9.0 source rebuilt from the jar,
+  one change. A report's ReasonCode is **sent** with 6 bits (`84 02 02 04` for GI) instead of
+  7; the 7th bit (application-trigger) is sent only when set. With 7 bits OMICRON IEDScout
+  dropped the association 1 ms after the first report (GI or integrity); its own simulator
+  sends 6. The class size stays 7 so the client still **accepts** 6 and 7 bits
+  (`setValueFromMmsDataObj` rejects a longer bit-string). `test/TestMotivoReporte`.
+
+- Own classes in the same package (not shadows), 2026-11-15: `NodoFcDeLn` (reading a whole
+  FC of an LN, `LLN0$ST`, which IEDScout does on discovery; hooked in `ServerModel`,
+  `test/TestLecturaFcDeLn`) and `ReferenciasEnReporte` (inserts the data references when a
+  report's OptFlds asks for data-reference; the library's Urcb announced them without sending
+  them; hooked in `ServerAssociation.sendAnMmsPdu`, `test/TestReferenciasReporte`).
+  `SclParser` also reads `dataRef`/`configRef` and creates the SGCB from `<SettingControl>`
+  (`test/TestSgcbSimulador`).
+- `ReportadorBrcb` (2026-11-15, own class): buffered reports. The library's `Brcb` holds data
+  only: RptEna=true was accepted and nothing was ever sent. `ServerAssociation.getWriteResult`
+  sends every FC=BR write to it (`fc == Fc.BR` branch) and `cleanUpConnection` tells it the
+  association closed (RptEna goes false, buffering goes on). It extends `Urcb` only to sit in the
+  library's `chgRcbs`/`dupdRcbs` lists. Buffer of 1000 entries (BufOvfl when an unsent entry is
+  dropped), 8-byte EntryID, resync from the last sent entry or the EntryID the client writes,
+  PurgeBuf, GI, IntgPd, BufTm. Engines live in `ServerModel.reportadoresBrcb`. The same commit
+  fixed the URCB OptFlds write, which checked the current value instead of the written one and
+  rejected every write once the SCL set dataRef/configRef. `test/TestBrcb`; checked with IEDScout
+  (GI, dchg and resync after reconnect). SqNum stays INT8U as the library models it (8-1 says
+  INT16U for a BRCB).
+  Client side (2026-11-15): `IEC61850Client` remembers the last EntryID received per BRCB
+  (static map keyed `host:port|RptID`, so it survives a reconnect) and writes it before RptEna
+  (`enableReportingRetomando` returns `Retoma` NINGUNA/RETOMADO/RECHAZADO; a rejected EntryID
+  still enables). The Reports tab adds Entry time and EntryID columns, logs the resync and
+  warns on BufOvfl. `test/TestBrcbCliente`. The RCB table reads each RCB's values in the
+  background when loaded (`IEC61850Client.leerRcb`; before, DatSet/TrgOps showed defaults until
+  enabled). A report's values are captured in the receiving thread (`ReportsPanel.Captura`):
+  they are the client model's nodes and the next report overwrites them. A member that is a
+  whole DO shows its main value (stVal, general, mag...). `test/TestValorMiembro`.
 
 When upgrading iec61850bean, check whether each defect is still there before dropping
 the shadow class.

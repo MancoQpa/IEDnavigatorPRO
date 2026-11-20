@@ -54,6 +54,16 @@ public class SclReferenceUtils {
      * Convierte el valor de un BasicDataAttribute al tipo esperado por el GOOSE publisher.
      */
     public static Object convertBdaToPublisherValue(BasicDataAttribute bda, GoosePublisher.DataValue.Type targetType) {
+        // Calidad: los bits del q, con la numeracion de la norma (bit n = 1 << n). Antes se
+        // intentaba leer el texto como numero y siempre salia 0 (good).
+        if (bda instanceof BdaQuality && targetType == GoosePublisher.DataValue.Type.BITSTRING) {
+            byte[] b = ((BdaQuality) bda).getValue();
+            int q = 0;
+            for (int i = 0; i < 13 && i / 8 < b.length; i++) {
+                if ((b[i / 8] & (0x80 >> (i % 8))) != 0) q |= 1 << i;
+            }
+            return q;
+        }
         String val = ValorBda.texto(bda);
         if (val == null) return null;
 

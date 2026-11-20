@@ -21,9 +21,10 @@ Desenvolvida por **Emilio Medina** (Paraguai). Software livre sob **GPL v3**.
 - Leitura e escrita de valores por Restrição Funcional (ST, MX, CF, CO, SP, entre outras).
 - Sondagem (polling) periódica configurável.
 - Monitor de atividade com exportação para CSV.
-- Assinatura de relatórios (URCB / BRCB).
+- Assinatura de relatórios (URCB / BRCB). Um BRCB retoma a partir do último `EntryID` recebido ao reconectar, e avisa-se quando o equipamento perdeu entradas (`BufOvfl`).
 - Setting Groups (SGCB) e painel de Ajustes de proteção (SP).
 - Construção do modelo por reflexão para IEDs que rejeitam o `retrieveModel` padrão.
+- **Substituir valor…** (FC `SV`) e **Escrever valor…** de atributos de configuração pelo menu de contexto da árvore.
 - Opção **Ler todos os valores ao conectar** (desligada de fábrica): traz o valor de todos os objetos de dados na conexão, sem expandir a árvore nem ativar a varredura.
 
 #### Controle de manobra
@@ -40,12 +41,16 @@ Desenvolvida por **Emilio Medina** (Paraguai). Software livre sob **GPL v3**.
 - Responde a leituras MMS de clientes externos padrão do mercado.
 - Edição interativa de valores pela interface.
 - Sincronização bidirecional entre o modelo de dados e os publicadores GOOSE.
+- **Motor de comando** como o de um IED: direto e SBO com segurança normal e reforçada, autoridade de comando (local / vão / estação / remoto), `Mod` e `Beh` herdados conforme a IEC 61850-7-4 e **modo teste** do IED. Uma rejeição leva `LastApplError` com seu `AddCause`; um comando com segurança reforçada termina com `CommandTermination`.
+- **Disjuntor virtual** (*Ferramentas*): manobra local de cada equipamento, tempos de abertura e fechamento com posição intermediária, e falhas para praticar (mecanismo que não atua, mola descarregada, alarme e bloqueio de SF6, qualidade inválida, posição forçada). As bobinas podem ser comandadas por GOOSE.
+- Relatórios com e sem buffer (URCB / BRCB: interrogação geral, integridade e ressincronização), bloco de grupos de ajuste (SGCB), contador de manobras (`OpCnt`) e substituição de valores (FC `SV`). Verificado com um cliente MMS comercial.
+- *Arquivo › Nova janela* abre outra instância: pode-se simular em uma e explorar com o Cliente na outra.
 
 #### GOOSE (IEC 61850-8-1)
 - Publicação e assinatura em Camada 2 (EtherType 0x88B8), com tag VLAN 802.1Q.
 - Esquema de retransmissão conforme a norma (número de sequência `sqNum` monotônico).
 - Ponte **GOOSE-sobre-UDP** (porta 62746) para redes roteadas / Wi-Fi.
-- GOOSE / Sampled Values nativo via `libiec61850` (JNA), incluído em `lib/`.
+- Captura e publicação com código próprio sobre pcap4j / Npcap. **Sampled Values não está disponível** na aplicação de desktop.
 - Publicação **marcada como simulada de fábrica** (bit S do cabeçalho e campo `simulation` do PDU): um assinante conforme só a aceita se ele próprio estiver em modo simulação (`LPHD.Sim`). Pode ser desmarcada no painel, com aviso no registro.
 - **Filtro de retransmissões**: mostra apenas as mudanças de estado (`stNum` novo) e omite os batimentos.
 - A tabela de mensagens indica a **MAC de origem** de cada trama e se ela leva a **bandeira de simulação**.
@@ -86,7 +91,7 @@ não para afirmações de desempenho. O 6MD85 foi explorado em bancada, alimenta
 ### Requisitos
 - **Windows 10 ou 11 de 64 bits.**
 - **Java**: não é necessário instalar se for usado o instalador da seção *Releases* (inclui seu próprio runtime, gerado com `jlink`). Para compilar a partir do código: **JDK 11 ou superior**.
-- **Npcap** (somente para captura/publicação GOOSE em Camada 2 e Sampled Values): instalado separadamente em <https://npcap.com/#download> (marcar *WinPcap API-compatible Mode* e deixar **desmarcada** a opção *Restrict Npcap driver's access to Administrators only*, para que o GOOSE/SV funcione sem executar a aplicação como administrador). Sem o Npcap, o cliente MMS e o servidor funcionam normalmente; apenas o GOOSE/SV em Camada 2 exige essa instalação.
+- **Npcap** (somente para captura/publicação GOOSE em Camada 2): instalado separadamente em <https://npcap.com/#download> (marcar *WinPcap API-compatible Mode* e deixar **desmarcada** a opção *Restrict Npcap driver's access to Administrators only*, para que o GOOSE funcione sem executar a aplicação como administrador). Sem o Npcap, o cliente MMS e o servidor funcionam normalmente; apenas o GOOSE em Camada 2 exige essa instalação.
 - **Administrador**: não é necessário para o uso normal. Somente a ferramenta *Liberar Porta* o exige, para encerrar um programa que ocupe a porta 102 (alguns aplicativos de fabricantes de IED rodam em segundo plano e se apropriam dessa porta).
 
 ### Instalação e execução
@@ -95,7 +100,7 @@ não para afirmações de desempenho. O 6MD85 foi explorado em bancada, alimenta
 1. Baixar o instalador em [Releases](https://github.com/MancoQpa/IEDnavigatorPRO/releases) (pacote autocontido, inclui o runtime Java).
 2. Extrair a pasta inteira (por exemplo, para `C:\IEDNavigatorPRO`).
 3. Clique duas vezes em `INSTALAR.bat` (não requer administrador). Abre-se uma janela com as opções **Instalar** e **Desinstalar**; se detectar que falta o Npcap, oferece um botão que o baixa e instala.
-4. O Npcap só é necessário para GOOSE/SV na Camada 2. Também pode ser instalado separadamente em <https://npcap.com/#download>.
+4. O Npcap só é necessário para GOOSE na Camada 2. Também pode ser instalado separadamente em <https://npcap.com/#download>.
 5. Iniciar pelo ícone da Área de Trabalho ou pelo `IEDNavigatorPRO.exe`.
 
 **Opção B — Maven (a partir do código)**
@@ -137,7 +142,7 @@ src/main/java/com/iednavigator/
   SclCompare.java             # Comparação de arquivos SCL
   GooseMapAnalyzer.java       # Mapa de assinaturas GOOSE
   Iec61850Dictionary.java     # Dicionário IEC 61850
-  native_lib/                 # Bindings JNA para iec61850.dll (GOOSE/SV nativo)
+  native_lib/                 # Bindings JNA para iec61850.dll (sem uso na aplicação de desktop)
   [+ painéis e classes auxiliares]
 lib/                          # Dependências Java + iec61850.dll
 test/test_ied.cid             # CID de teste
@@ -165,7 +170,7 @@ O aplicativo não coleta nem envia dados: não tem telemetria, contas de usuári
 
 ### Licença
 
-Distribuído sob a **GNU General Public License v3 (GPL v3)** — ver [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE). Essa condição decorre da biblioteca nativa `libiec61850` (`iec61850.dll`, **GPL v3**), incluída para as funções GOOSE/SV nativas; as demais dependências são permissivas (Apache 2.0, MIT, LGPL/BSD). Você pode usar, modificar e redistribuir o software desde que mantenha a mesma licença, inclua o código-fonte e preserve os avisos de copyright.
+Distribuído sob a **GNU General Public License v3 (GPL v3)** — ver [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE). Essa condição decorre da biblioteca nativa `libiec61850` (`iec61850.dll`, **GPL v3**), incluída no pacote; as demais dependências são permissivas (Apache 2.0, MIT, LGPL/BSD). Você pode usar, modificar e redistribuir o software desde que mantenha a mesma licença, inclua o código-fonte e preserve os avisos de copyright.
 
 O Npcap **não** é redistribuído com este projeto (sua licença não permite); é fornecido um link para o site oficial de download, o que não constitui redistribuição.
 

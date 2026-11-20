@@ -34,6 +34,8 @@ class ReportsPanel {
     private DefaultTableModel reportDataTableModel;
     private Map<String, Rcb> rcbMap = new HashMap<>();
     private Map<String, String> previousReportValues = new HashMap<>();
+    /** Sube con cada carga de la tabla: una lectura en curso de una carga vieja no la pisa. */
+    private volatile int generacion = 0;
 
     ReportsPanel(Component parent,
                  Consumer<String> log,
@@ -157,7 +159,10 @@ class ReportsPanel {
         JPanel dataPanel = new JPanel(new BorderLayout());
         dataPanel.setBorder(BorderFactory.createTitledBorder(I18n.t("reports.datatitle")));
 
-        String[] dataColumns = {"Timestamp", "RCB", "SeqNum", "Referencia", "Valor Anterior", "Valor Nuevo", "Razon"};
+        // Las dos ultimas son de los BRCB: la hora en que el IED guardo la entrada (en un reporte
+        // retomado tras una desconexion difiere de la de recepcion) y su EntryID.
+        String[] dataColumns = {"Timestamp", "RCB", "SeqNum", "Referencia", "Valor Anterior", "Valor Nuevo", "Razon",
+                I18n.t("reports.col.entrytime"), I18n.t("reports.col.entryid")};
         reportDataTableModel = new DefaultTableModel(dataColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -179,6 +184,8 @@ class ReportsPanel {
         reportDataTable.getColumnModel().getColumn(4).setPreferredWidth(100);
         reportDataTable.getColumnModel().getColumn(5).setPreferredWidth(100);
         reportDataTable.getColumnModel().getColumn(6).setPreferredWidth(80);
+        reportDataTable.getColumnModel().getColumn(7).setPreferredWidth(90);
+        reportDataTable.getColumnModel().getColumn(8).setPreferredWidth(130);
 
         reportDataTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
@@ -249,8 +256,7 @@ class ReportsPanel {
                 final int rowIdx = i;
                 try {
                     if (enable) {
-                        cl.enableReporting(rcb, report ->
-                            SwingUtilities.invokeLater(() -> handleReportReceived(report)));
+                        habilitar(cl, rcb, rcbName);
                     } else {
                         cl.disableReporting(rcb);
                     }
@@ -273,6 +279,7 @@ class ReportsPanel {
     private void refreshReportControlBlocks() {
         reportsTableModel.setRowCount(0);
         rcbMap.clear();
+        final int gen = ++generacion;
 
         ServerModel model = modelSupplier.get();
         if (model == null) {
@@ -313,9 +320,58 @@ class ReportsPanel {
             }
             log.accept(I18n.t("log.rep.rcbfound", String.valueOf(rcbMap.size())));
             if (rcbMap.isEmpty()) log.accept(rcbAbsenceMessage(lds, ldsConLln0));
+            else leerValoresRcb(gen);
         } catch (Exception e) {
             log.accept(I18n.t("log.rep.error", String.valueOf(e.getMessage())));
         }
+    }
+
+    /**
+     * En modo cliente el modelo trae los RCB sin sus valores (Dataset vacío, TrgOps por
+     * defecto) hasta que alguien los lee. Se leen en segundo plano, uno por pedido, y cada fila
+     * se completa al llegar su respuesta. Con cientos de RCB en un IED real tarda unos
+     * segundos; la tabla se puede usar mientras tanto.
+     */
+    private void leerValoresRcb(int gen) {
+        IEC61850Client cl = clientSupplier.get();
+        if (cl == null || !cl.isConnected()) return;
+        List<String> nombres = new ArrayList<>();
+        for (int i = 0; i < reportsTableModel.getRowCount(); i++) {
+            nombres.add((String) reportsTableModel.getValueAt(i, 0));
+        }
+        final Map<String, Rcb> rcbs = new HashMap<>(rcbMap);
+        backgroundExecutor.submit(() -> {
+            int fallas = 0;
+            for (int i = 0; i < nombres.size() && gen == generacion; i++) {
+                Rcb rcb = rcbs.get(nombres.get(i));
+                if (rcb == null) continue;
+                try {
+                    cl.leerRcb(rcb);
+                } catch (Exception e) {
+                    fallas++;
+                    continue;
+                }
+                final int fila = i;
+                final Object[] valores = filaDe(rcb);
+                SwingUtilities.invokeLater(() -> {
+                    if (gen != generacion || fila >= reportsTableModel.getRowCount()) return;
+                    for (int c = 2; c <= 5; c++) reportsTableModel.setValueAt(valores[c], fila, c);
+                });
+            }
+            if (fallas > 0) {
+                final int f = fallas;
+                SwingUtilities.invokeLater(() -> log.accept(I18n.t("log.rep.rcb.noleidos", String.valueOf(f))));
+            }
+        });
+    }
+
+    /** Las columnas de un RCB tal como están en el modelo. */
+    private Object[] filaDe(Rcb rcb) {
+        String dataset = rcb.getDatSet() != null ? rcb.getDatSet().getStringValue() : "";
+        boolean enabled = rcb.getRptEna() != null && rcb.getRptEna().getValue();
+        String intgPd = rcb.getIntgPd() != null ? String.valueOf(rcb.getIntgPd().getValue()) : "";
+        return new Object[]{null, rcb instanceof Brcb ? "BRCB" : "URCB", dataset,
+                buildTrgOpsString(rcb.getTrgOps()), intgPd, enabled ? "Habilitado" : "Deshabilitado"};
     }
 
     /**
@@ -401,8 +457,7 @@ class ReportsPanel {
         backgroundExecutor.submit(() -> {
             try {
                 if (enable) {
-                    cl.enableReporting(rcb, report ->
-                        SwingUtilities.invokeLater(() -> handleReportReceived(report)));
+                    habilitar(cl, rcb, rcbName);
                     SwingUtilities.invokeLater(() -> {
                         reportsTableModel.setValueAt("Habilitado", tableRow, 5);
                         log.accept("Report habilitado: " + rcbName);
@@ -422,52 +477,115 @@ class ReportsPanel {
         });
     }
 
-    private void handleReportReceived(Report report) {
-        try {
-            String timestamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
-            String rcbRef = report.getRptId();
-            String seqNum = report.getSqNum() != null ? String.valueOf(report.getSqNum()) : "";
+    /**
+     * Habilita un RCB. En un BRCB del que ya llegaron reportes, el cliente le escribe antes la
+     * ultima EntryID recibida para que el IED mande lo que guardo mientras no habia asociacion;
+     * se avisa en el registro si retomo o si el IED ya no la tenia.
+     */
+    private void habilitar(IEC61850Client cl, Rcb rcb, String rcbName) throws java.io.IOException {
+        IEC61850Client.Retoma r = cl.enableReportingRetomando(rcb, report ->
+            {
+                Captura c = new Captura(report);
+                SwingUtilities.invokeLater(() -> handleReportReceived(c));
+            });
+        byte[] id = cl.entryIdRetomada();
+        if (id == null || r == IEC61850Client.Retoma.NINGUNA) return;
+        String hex = IEC61850Client.hex(id);
+        String msg = r == IEC61850Client.Retoma.RETOMADO
+                ? I18n.t("log.rep.resync", rcbName, hex)
+                : I18n.t("log.rep.resync.rechazada", rcbName, hex);
+        SwingUtilities.invokeLater(() -> log.accept(msg));
+    }
 
+    /**
+     * Lo que se muestra de un reporte, tomado en el hilo que lo recibe. Los valores de un Report
+     * son los nodos del modelo del cliente, que el reporte siguiente vuelve a escribir: si se
+     * leían recién en el hilo de la interfaz, dos reportes seguidos (el intermedio y el final de
+     * una maniobra) salían los dos con el valor del segundo.
+     */
+    static final class Captura {
+        final String hora, rcb, seqNum, horaEntrada, entryId;
+        final boolean bufOvfl;
+        final List<String[]> filas = new ArrayList<>();   // {ref, valor, motivo}
+
+        Captura(Report report) {
+            hora = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
+            rcb = report.getRptId();
+            seqNum = report.getSqNum() != null ? String.valueOf(report.getSqNum()) : "";
+            String he = "";
+            if (report.getTimeOfEntry() != null) {
+                long ms = report.getTimeOfEntry().getTimestampValue();
+                if (ms > 0) he = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(ms));
+            }
+            horaEntrada = he;
+            entryId = report.getEntryId() != null ? IEC61850Client.hex(report.getEntryId().getValue()) : "";
+            bufOvfl = Boolean.TRUE.equals(report.getBufOvfl());
             List<FcModelNode> values = report.getValues();
             List<BdaReasonForInclusion> reasons = report.getReasonCodes();
-
-            if (values != null) {
-                for (int i = 0; i < values.size(); i++) {
-                    FcModelNode node = values.get(i);
-                    String ref = node.getReference().toString();
-                    String newValue = extractNodeValue(node);
-
-                    String prevValue = previousReportValues.getOrDefault(ref, "");
-
-                    String reason = "";
-                    if (reasons != null && i < reasons.size()) {
-                        BdaReasonForInclusion r = reasons.get(i);
-                        if (r.isDataChange())           reason = "dchg";
-                        else if (r.isQualityChange())   reason = "qchg";
-                        else if (r.isDataUpdate())      reason = "dupd";
-                        else if (r.isIntegrity())       reason = "intg";
-                        else if (r.isGeneralInterrogation()) reason = "gi";
-                    }
-
-                    reportDataTableModel.insertRow(0, new Object[]{
-                        timestamp, rcbRef, seqNum, ref, prevValue, newValue, reason
-                    });
-                    previousReportValues.put(ref, newValue);
-                    onNodeUpdate.accept(ref);
+            if (values == null) return;
+            for (int i = 0; i < values.size(); i++) {
+                FcModelNode node = values.get(i);
+                String reason = "";
+                if (reasons != null && i < reasons.size()) {
+                    BdaReasonForInclusion r = reasons.get(i);
+                    if (r.isDataChange())           reason = "dchg";
+                    else if (r.isQualityChange())   reason = "qchg";
+                    else if (r.isDataUpdate())      reason = "dupd";
+                    else if (r.isIntegrity())       reason = "intg";
+                    else if (r.isGeneralInterrogation()) reason = "gi";
                 }
+                filas.add(new String[]{node.getReference().toString(), extractNodeValue(node), reason});
             }
-            log.accept("Report recibido: " + rcbRef + " (SeqNum: " + seqNum
-                + ", " + (values != null ? values.size() : 0) + " valores)");
+        }
+    }
+
+    private void handleReportReceived(Captura c) {
+        try {
+            if (c.bufOvfl) log.accept(I18n.t("log.rep.bufovfl", c.rcb));
+            for (String[] f : c.filas) {
+                String ref = f[0], newValue = f[1];
+                String prevValue = previousReportValues.getOrDefault(ref, "");
+                reportDataTableModel.insertRow(0, new Object[]{
+                    c.hora, c.rcb, c.seqNum, ref, prevValue, newValue, f[2], c.horaEntrada, c.entryId
+                });
+                previousReportValues.put(ref, newValue);
+                onNodeUpdate.accept(ref);
+            }
+            log.accept("Report recibido: " + c.rcb + " (SeqNum: " + c.seqNum
+                + ", " + c.filas.size() + " valores)");
         } catch (Exception e) {
             log.accept("Error procesando report: " + e.getMessage());
         }
     }
 
+    /** Atributos que dan el valor de un DO, en orden de preferencia (IEC 61850-7-3). */
+    private static final String[] VALOR_PRINCIPAL =
+            {"stVal", "general", "mag", "cVal", "instMag", "setVal", "setMag", "ctlVal", "f", "i"};
+
+    /**
+     * Texto del valor de un miembro de reporte. Si el miembro es un DO entero (FCD), muestra su
+     * valor principal (stVal, general, mag...) y no la lista de todos sus atributos, que en un
+     * Pos empezaba por origin= y dejaba el stVal fuera de la celda.
+     */
+    static String valorDeMiembro(ModelNode node) {
+        if (node instanceof BasicDataAttribute) return ValorBda.texto((BasicDataAttribute) node);
+        for (String n : VALOR_PRINCIPAL) {
+            ModelNode h = node.getChild(n);
+            if (h != null && h != node) {
+                String v = valorDeMiembro(h);
+                if (v != null && !v.isEmpty()) return v;
+            }
+        }
+        return null;
+    }
+
     /** Recursively extract a readable value string from any ModelNode. */
-    private String extractNodeValue(ModelNode node) {
+    static String extractNodeValue(ModelNode node) {
         if (node instanceof BasicDataAttribute) {
             return ValorBda.texto((BasicDataAttribute) node);
         }
+        String principal = valorDeMiembro(node);
+        if (principal != null) return principal;
         StringBuilder sb = new StringBuilder();
         for (ModelNode child : node) {
             if (sb.length() > 0) sb.append(", ");
