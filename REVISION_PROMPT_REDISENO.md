@@ -48,6 +48,11 @@ Fecha: 2026-11-15 · Rama `rediseno-ui` · Etapa 5. Compara el prompt del redise
 | Textos fijos en diálogos | 45 diálogos de 7 clases todavía tienen texto en español escrito en el código (GOOSE 17, ConnectionManager 6, ajustes 12, Datasets 5, otros 5). El prompt exige `I18n.t()` para el texto nuevo; estos son anteriores. Conviene una tanda propia. |
 | Zoom de Windows 125 % y 150 % | Sin probar. |
 | Tema oscuro | Parcial. |
-| Cancelar la elección de IED de un SCD | Deja el título con ese archivo aunque no se cargó (visto al probar la etapa 3; ya pasaba antes). |
-| Recientes con el mismo nombre | Dos archivos con el mismo nombre en carpetas distintas se ven iguales en el menú (el tooltip trae la ruta). |
 | Pruebas de interfaz en el repositorio | Siguen afuera (propuesta 6 de `PROPUESTA_MEJORAS.md`). |
+
+## Resuelto después de escrito este repaso
+
+| Punto | Cómo quedó |
+|---|---|
+| Cancelar la elección de IED de un SCD | Ya no deja el título con el archivo no cargado (`c1889bb`, verificado en pantalla el 2026-11-15). |
+| Recientes con el mismo nombre | El menú distingue dos archivos con el mismo nombre en carpetas distintas (`c1889bb`, verificado en pantalla el 2026-11-15). |

@@ -1,4 +1,27 @@
 # Arquitectura de componentes — IEDNavigator
+
+> **Documento histórico (junio de 2026). La referencia vigente es `CLAUDE.md`** (en la raíz del
+> repositorio, actualizado al 2026-11-16). Nota del 2026-11-19.
+>
+> Lo que este documento **no** refleja:
+> - **Números de línea:** los de `IEDNavigatorApp.java` ya no coinciden. El archivo bajó de
+>   ~6.600 a ~3.700 líneas y volvió a ~5.600 con el rediseño de noviembre.
+> - **Componentes posteriores que no figuran:**
+>   - valores y tipos: `ValorBda`, `CatalogoIec61850`, `ConformidadIec61850`;
+>   - SCL y registro: `SclExporter`, `GooseModelSync`, `SessionLog`;
+>   - motor de mando: el paquete `mando/` (`ControlEngine`, `ControlPolicy`, `EstadoLocal`,
+>     `Terminacion`, `Sustitucion`);
+>   - simulación del proceso: `InterruptorVirtualDialog` y `BobinasGoose`;
+>   - reports con buffer: `ReportadorBrcb`;
+>   - interfaz nueva: `BarraContexto`, `PanelPropiedades`, `PanelRegistro`, `ArbolCeldaRenderer`,
+>     `SimbolosArbol`, `BuscadorArbol`, `Estilo`;
+>   - el paquete `bridge/`;
+>   - las clases sombreadas de iec61850bean.
+> - **Elementos que ya no existen:** `DataModelPanel` (reemplazado por `PanelPropiedades`) y los
+>   paneles fijos de Servidor y Cliente (reemplazados por `BarraContexto`).
+>
+> El patrón `Context` y los flujos generales (conexión, polling, GOOSE, carga de SCL) siguen
+> valiendo como introducción.
 ## `com.iednavigator` — interfaces entre clases
 
 ---
