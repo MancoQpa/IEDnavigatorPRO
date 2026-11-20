@@ -83,6 +83,11 @@ final class TiposIec61850 {
         if (sdos.contains("phsA") || sdos.contains("phsB") || sdos.contains("phsC")) return "WYE";
         if (sdos.contains("phsAB") || sdos.contains("phsBC") || sdos.contains("phsCA")) return "DEL";
         if (sdos.contains("neut") || sdos.contains("net") || sdos.contains("res")) return "WYE";
+        // Por MMS no se distingue un SDO de un DA: en modo Cliente sin SCL las fases llegan como
+        // estructuras (ION 7400: PhV, A, PPV quedaban sin CDC). Un ACT también trae phsA, pero
+        // booleano, así que no se confunde.
+        if ("Struct".equals(das.get("phsA")) || "Struct".equals(das.get("phsB")) || "Struct".equals(das.get("phsC"))) return "WYE";
+        if ("Struct".equals(das.get("phsAB")) || "Struct".equals(das.get("phsBC")) || "Struct".equals(das.get("phsCA"))) return "DEL";
 
         String stVal = das.get("stVal");
         boolean stDbpos = "Dbpos".equals(stVal);

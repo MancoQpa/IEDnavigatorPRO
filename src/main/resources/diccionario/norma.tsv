@@ -340,3 +340,84 @@ DO	MinW	Potencia activa mínima	Minimum real power	Potencia activa mínima regis
 DO	AvVAr	Potencia reactiva promedio	Average reactive power	Potencia reactiva promedio en el intervalo de evaluación.	IEC 61850-7-4, LN MSTA
 DO	MaxVAr	Potencia reactiva máxima	Maximum reactive power	Potencia reactiva máxima registrada.	IEC 61850-7-4, LN MSTA
 DO	MinVAr	Potencia reactiva mínima	Minimum reactive power	Potencia reactiva mínima registrada.	IEC 61850-7-4, LN MSTA
+# --- Agregados 2026-11-20: CDC, DO y DA que faltaban (vistos en los SCL del banco y en el ION 7400) ----
+CDC	HST	Histograma	Histogram	Estado en forma de histograma: contadores por clase (hstVal) sobre rangos configurados (hstRangeC), por ejemplo la distribución de magnitudes o duraciones de eventos.	IEC 61850-7-3 Ed.2 §7.3.10
+CDC	HMV	Valor armónico	Harmonic value	Armónicos de una magnitud monofásica: arreglo har con un valor por orden, más numHar (cantidad de armónicos), numCyc (ciclos de la ventana), evalTm (tiempo de evaluación), frequency y hvRef (referencia: fundamental, eficaz o absoluta).	IEC 61850-7-3 Ed.2, clases de medida
+CDC	HWYE	Armónicos trifásicos en estrella	Harmonic value for WYE	Armónicos de una magnitud trifásica en estrella: un arreglo por fase (phsAHar, phsBHar, phsCHar) y opcionalmente neutro, neto y residual (neutHar, netHar, resHar), un elemento por orden armónico. Comparte numHar, numCyc, evalTm y hvRef con HMV. Lo usa MHAI: HA, HPhV, HW.	IEC 61850-7-3 Ed.2, clases de medida
+CDC	HDEL	Armónicos trifásicos entre fases	Harmonic value for DEL	Armónicos de una magnitud entre fases: arreglos phsABHar, phsBCHar y phsCAHar, un elemento por orden armónico. Lo usa MHAI.HPPV.	IEC 61850-7-3 Ed.2, clases de medida
+CDC	ISC	Posición escalonada controlable entera	Integer controlled step position information	Posición de un elemento por escalones con mando: valWTr (posición y si está en transición) y ctlVal entero con el escalón pedido, por ejemplo la toma de un transformador.	IEC 61850-7-3 Ed.2, clases controlables
+CDC	TSG	Ajuste de tiempo	Time setting group	Ajuste que contiene una hora (setTm) o un momento de calendario (setCal), por ejemplo el comienzo de un período de demanda o de una tarifa.	IEC 61850-7-3 Ed.2, ajustes de estado
+CDC	CUG	Ajuste de moneda	Currency setting group	Ajuste con el código de moneda (cur, ISO 4217) en que se expresan valores de energía en dinero.	IEC 61850-7-3 Ed.2, ajustes de estado
+CDC	CURVE	Ajuste de curva característica	Setting curve	Elige una curva característica (setCharact, por ejemplo de tiempo inverso) y sus parámetros (setParA a setParF).	IEC 61850-7-3 Ed.2, ajustes analógicos
+CDC	CSD	Descripción de forma de curva	Curve shape description	Describe una curva por puntos para mostrarla, sin ser un ajuste: unidades y descripción de los ejes (xUnits, yUnits, xD, yD) y los puntos (crvPts, numPts).	IEC 61850-7-3 Ed.2.1 §7.8.4
+CDC	VSD	Descripción de texto	Visible string description	Texto descriptivo de solo lectura (val), por ejemplo un nombre o una nota de configuración.	IEC 61850-7-3 Ed.2.1 §7.8.5
+CDC	MTS	Seguimiento de bloques de valores muestreados multicast	Multicast sampled value control block tracking	Registro del último servicio ejecutado sobre un bloque de control de valores muestreados multicast (MSVCB). Lo usa el LN LTRK.	IEC 61850-7-3 Ed.2, seguimiento de servicios
+CDC	NTS	Seguimiento de bloques de valores muestreados unicast	Unicast sampled value control block tracking	Registro del último servicio ejecutado sobre un bloque de control de valores muestreados unicast (USVCB). Lo usa el LN LTRK.	IEC 61850-7-3 Ed.2, seguimiento de servicios
+DO	HA	Armónicos de corriente	Harmonics of current	Armónicos de las corrientes de fase (HWYE): un arreglo por fase con el valor de cada orden armónico.	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HPhV	Armónicos de tensión de fase	Harmonics of phase-to-ground voltage	Armónicos de las tensiones fase-tierra (HWYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HPPV	Armónicos de tensión entre fases	Harmonics of phase-to-phase voltage	Armónicos de las tensiones entre fases (HDEL).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HW	Armónicos de potencia activa	Harmonics of active power	Potencia activa por orden armónico y por fase (HWYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HVAr	Armónicos de potencia reactiva	Harmonics of reactive power	Potencia reactiva por orden armónico y por fase (HWYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HVA	Armónicos de potencia aparente	Harmonics of apparent power	Potencia aparente por orden armónico y por fase (HWYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HRmsA	Corriente eficaz con armónicos	RMS current	Valor eficaz de la corriente de cada fase incluyendo los armónicos (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HRmsPhV	Tensión de fase eficaz con armónicos	RMS phase-to-ground voltage	Valor eficaz de la tensión fase-tierra incluyendo los armónicos (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HRmsPPV	Tensión entre fases eficaz con armónicos	RMS phase-to-phase voltage	Valor eficaz de la tensión entre fases incluyendo los armónicos (DEL).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HKf	Factor K	K factor	Factor K por fase (WYE): cuánto calientan los armónicos de corriente a un transformador respecto de la corriente fundamental.	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HTdf	Factor de desclasificación del transformador	Transformer derating factor	Factor de reducción de la potencia de un transformador por los armónicos de corriente, por fase (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HCfA	Factor de cresta de corriente	Current crest factor	Relación entre el valor pico y el eficaz de la corriente de cada fase (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HCfPhV	Factor de cresta de tensión de fase	Phase-to-ground voltage crest factor	Relación entre el valor pico y el eficaz de la tensión fase-tierra (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	HCfPPV	Factor de cresta de tensión entre fases	Phase-to-phase voltage crest factor	Relación entre el valor pico y el eficaz de la tensión entre fases (DEL).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	ThdPPV	THD de tensión entre fases	THD of phase-to-phase voltage	Distorsión armónica total de las tensiones entre fases (DEL).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	ThdOddA	THD impar de corriente	Odd THD of current	Distorsión armónica total de la corriente considerando solo los órdenes impares (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	ThdEvnA	THD par de corriente	Even THD of current	Distorsión armónica total de la corriente considerando solo los órdenes pares (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	ThdOddPhV	THD impar de tensión de fase	Odd THD of phase-to-ground voltage	Distorsión armónica total de la tensión fase-tierra, solo órdenes impares (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	ThdEvnPhV	THD par de tensión de fase	Even THD of phase-to-ground voltage	Distorsión armónica total de la tensión fase-tierra, solo órdenes pares (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	ThdOddPPV	THD impar de tensión entre fases	Odd THD of phase-to-phase voltage	Distorsión armónica total de la tensión entre fases, solo órdenes impares (DEL).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	ThdEvnPPV	THD par de tensión entre fases	Even THD of phase-to-phase voltage	Distorsión armónica total de la tensión entre fases, solo órdenes pares (DEL).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	TddA	Distorsión total de demanda	Total demand distortion	Distorsión armónica de la corriente referida a la corriente de demanda máxima, por fase (WYE).	IEC 61850-7-4 Ed.2, LN MHAI
+DO	PhPst	Severidad de parpadeo de corta duración	Short-term flicker severity	Pst por fase (WYE): severidad del parpadeo de tensión en ventanas de 10 minutos.	IEC 61850-7-4 Ed.2, LN MFLK
+DO	PhPlt	Severidad de parpadeo de larga duración	Long-term flicker severity	Plt por fase (WYE): severidad del parpadeo de tensión en ventanas de 2 horas.	IEC 61850-7-4 Ed.2, LN MFLK
+DO	AvVolts	Tensión promedio	Average voltage	Promedio de la tensión en el período de cálculo (MV).	IEC 61850-7-4, LN MSTA
+DO	MaxVolts	Tensión máxima	Maximum voltage	Valor máximo de la tensión en el período de cálculo (MV).	IEC 61850-7-4, LN MSTA
+DO	MinVolts	Tensión mínima	Minimum voltage	Valor mínimo de la tensión en el período de cálculo (MV).	IEC 61850-7-4, LN MSTA
+DO	AvVA	Potencia aparente promedio	Average apparent power	Promedio de la potencia aparente en el período de cálculo (MV).	IEC 61850-7-4, LN MSTA
+DO	MaxVA	Potencia aparente máxima	Maximum apparent power	Valor máximo de la potencia aparente en el período de cálculo (MV).	IEC 61850-7-4, LN MSTA
+DO	MinVA	Potencia aparente mínima	Minimum apparent power	Valor mínimo de la potencia aparente en el período de cálculo (MV).	IEC 61850-7-4, LN MSTA
+DO	AnIn	Entrada analógica	Analogue input	Entrada analógica genérica (MV). Se numera: AnIn1, AnIn2...	IEC 61850-7-4, LN GGIO
+DO	AnOut	Salida analógica controlable	Controllable analogue output	Salida analógica genérica con mando (APC). Se numera: AnOut1, AnOut2...	IEC 61850-7-4, LN GGIO
+DO	IntIn	Entrada entera	Integer status input	Entrada genérica de valor entero (INS). Se numera: IntIn1, IntIn2...	IEC 61850-7-4, LN GGIO
+DO	DPCSO	Salida doble controlable	Double point controllable status output	Salida genérica de doble punto con mando (DPC). Se numera: DPCSO1, DPCSO2...	IEC 61850-7-4, LN GGIO
+DO	ISCSO	Salida entera controlable	Integer status controllable status output	Salida genérica de valor entero con mando (INC). Se numera: ISCSO1, ISCSO2...	IEC 61850-7-4, LN GGIO
+DO	ClcMth	Método de cálculo	Calculation method	Cómo se calcula la medida (ENG), por ejemplo valor eficaz verdadero, eficaz de la fundamental o pico de la fundamental.	IEC 61850-7-4 Ed.2, LN de medida
+DO	ClcMod	Modo de cálculo	Calculation mode	Modo del cálculo estadístico (ENG): total, por período o ventana deslizante.	IEC 61850-7-4 Ed.2, LN de estadística
+DO	ClcIntvTyp	Tipo de intervalo de cálculo	Calculation interval type	Unidad del intervalo de cálculo (ENG): milisegundos, ciclos, día, semana, mes, año o disparo externo.	IEC 61850-7-4 Ed.2, LN de estadística
+DO	ClcIntvPer	Período del intervalo de cálculo	Calculation interval period	Cantidad de unidades del intervalo de cálculo (ING).	IEC 61850-7-4 Ed.2, LN de estadística
+DO	ClcStr	Inicio del cálculo	Calculation start	Orden de arrancar el cálculo estadístico (SPC).	IEC 61850-7-4 Ed.2, LN de estadística
+DO	ClcSrc	Fuente del cálculo	Calculation source	Referencia al objeto que da origen al cálculo estadístico (ORG).	IEC 61850-7-4 Ed.2, LN de estadística
+DO	ClcExp	Cálculo vencido	Calculation period expired	Indica que terminó el período de cálculo y el resultado está disponible (SPS).	IEC 61850-7-4 Ed.2, LN de estadística
+DA	valWTr	Posición con transición	Value with transient indication	Posición de un elemento por escalones (posVal) y si está en transición entre escalones (transInd). Lo usan BSC e ISC.	IEC 61850-7-3 Ed.2
+DA	har	Armónicos	Harmonics	Arreglo con un valor por orden armónico (HMV).	IEC 61850-7-3 Ed.2, HMV
+DA	frequency	Frecuencia de la fundamental	Frequency	Frecuencia de la fundamental tomada como referencia para los armónicos (HMV, HWYE, HDEL).	IEC 61850-7-3 Ed.2
+DA	rmsCyc	Ciclos del valor eficaz	Number of cycles for RMS	Cantidad de ciclos sobre los que se calcula el valor eficaz (HMV, HWYE, HDEL).	IEC 61850-7-3 Ed.2
+DA	hstVal	Valores del histograma	Histogram values	Contadores de cada clase del histograma (HST).	IEC 61850-7-3 Ed.2, HST
+DA	hstRangeC	Rangos del histograma	Histogram range configuration	Configuración de los rangos de las clases del histograma (HST).	IEC 61850-7-3 Ed.2, HST
+DA	numPts	Cantidad de puntos	Number of points	Puntos usados de la curva o del histograma (CSG, CSD, HST).	IEC 61850-7-3 Ed.2
+DA	maxPts	Máximo de puntos	Maximum number of points	Cantidad máxima de puntos que admite la curva (CSG, CSD).	IEC 61850-7-3 Ed.2
+DA	crvPts	Puntos de la curva	Curve points	Arreglo de puntos (x, y) que describen la curva (CSG, CSD).	IEC 61850-7-3 Ed.2
+DA	xUnits	Unidades del eje X	X axis units	Unidad SI y multiplicador del eje X de la curva.	IEC 61850-7-3 Ed.2
+DA	yUnits	Unidades del eje Y	Y axis units	Unidad SI y multiplicador del eje Y de la curva.	IEC 61850-7-3 Ed.2
+DA	zUnits	Unidades del eje Z	Z axis units	Unidad SI y multiplicador del eje Z, en curvas de tres ejes.	IEC 61850-7-3 Ed.2
+DA	xD	Descripción del eje X	X axis description	Texto que describe el eje X de la curva.	IEC 61850-7-3 Ed.2
+DA	yD	Descripción del eje Y	Y axis description	Texto que describe el eje Y de la curva.	IEC 61850-7-3 Ed.2
+DA	zD	Descripción del eje Z	Z axis description	Texto que describe el eje Z, en curvas de tres ejes.	IEC 61850-7-3 Ed.2
+DA	setCharact	Curva característica	Setting of curve characteristic	Qué curva se usa (por ejemplo de tiempo inverso de IEC o ANSI), en un ajuste CURVE.	IEC 61850-7-3 Ed.2, CURVE
+DA	setParA	Parámetro A de la curva	Curve parameter A	Primer parámetro de la curva elegida en setCharact.	IEC 61850-7-3 Ed.2, CURVE
+DA	setParB	Parámetro B de la curva	Curve parameter B	Segundo parámetro de la curva elegida en setCharact.	IEC 61850-7-3 Ed.2, CURVE
+DA	setParC	Parámetro C de la curva	Curve parameter C	Tercer parámetro de la curva elegida en setCharact.	IEC 61850-7-3 Ed.2, CURVE
+DA	setParD	Parámetro D de la curva	Curve parameter D	Cuarto parámetro de la curva elegida en setCharact.	IEC 61850-7-3 Ed.2, CURVE
+DA	setParE	Parámetro E de la curva	Curve parameter E	Quinto parámetro de la curva elegida en setCharact.	IEC 61850-7-3 Ed.2, CURVE
+DA	setParF	Parámetro F de la curva	Curve parameter F	Sexto parámetro de la curva elegida en setCharact.	IEC 61850-7-3 Ed.2, CURVE
+DA	setTm	Hora de ajuste	Setting time	Hora que fija un ajuste de tiempo (TSG).	IEC 61850-7-3 Ed.2, TSG
+DA	setCal	Calendario de ajuste	Setting calendar	Momento de calendario que fija un ajuste de tiempo (TSG): período, día de la semana, mes, día, hora y minuto.	IEC 61850-7-3 Ed.2, TSG
+DA	cur	Moneda	Currency	Código de moneda según ISO 4217 (CUG).	IEC 61850-7-3 Ed.2, CUG
+DA	val	Valor de texto	Value	Texto de un CDC de descripción (VSD).	IEC 61850-7-3 Ed.2.1, VSD
