@@ -2759,8 +2759,22 @@ public class IEDNavigatorApp extends JFrame {
         selVista.add(tbTabla);
         selVista.add(tbPaneles);
         izq.add(selVista, 0);
+        // Tensiones y potencias en k (kV, kW, kVAr, kVA) en la vista de paneles
+        JCheckBox cbKilo = new JCheckBox(I18n.t("mon.panels.kilo"));
+        cbKilo.setToolTipText(I18n.t("mon.panels.kilo.tip"));
+        cbKilo.setFont(Estilo.ui(Font.PLAIN, 12));
+        cbKilo.setOpaque(false);
+        cbKilo.setFocusable(false);
+        cbKilo.setSelected(PREFS_UI.getBoolean("view.monitor.kilo", false));
+        monitorPaneles.ponerEnK(cbKilo.isSelected());
+        cbKilo.addActionListener(e -> {
+            monitorPaneles.ponerEnK(cbKilo.isSelected());
+            PREFS_UI.putBoolean("view.monitor.kilo", cbKilo.isSelected());
+        });
+        izq.add(cbKilo, 1);
         Runnable mostrarVista = () -> {
             boolean paneles = tbPaneles.isSelected();
+            cbKilo.setVisible(paneles);
             vistas.show(cuerpo, paneles ? "paneles" : "tabla");
             PREFS_UI.putBoolean("view.monitor.paneles", paneles);
             if (paneles) monitorPaneles.actualizar();
@@ -2975,6 +2989,18 @@ public class IEDNavigatorApp extends JFrame {
             }
             public void updateWatchlistLabel()                                    { IEDNavigatorApp.this.updateWatchlistLabel(); }
             public com.beanit.iec61850bean.ServerModel getServerModel()           { return server != null ? server.getServerModel() : null; }
+            public void leerUnaVez(com.beanit.iec61850bean.FcModelNode n) {
+                if (currentMode != AppMode.CLIENT || client == null || !isConnected) return;
+                final IEC61850Client c = client;
+                backgroundExecutor.submit(() -> {
+                    try {
+                        c.readNodeValues(n);
+                        if (monitorPaneles != null) SwingUtilities.invokeLater(monitorPaneles::repaint);
+                    } catch (Exception e) {
+                        log(I18n.t("log.monitor.units.fail", MonitorManager.formatReference(n.getReference().toString()), String.valueOf(e.getMessage())));
+                    }
+                });
+            }
         };
     }
 

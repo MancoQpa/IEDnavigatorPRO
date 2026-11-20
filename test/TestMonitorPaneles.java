@@ -54,6 +54,18 @@ public class TestMonitorPaneles {
         FcDataObject p = MonitorManager.principal(posDo);
         chk("principal de un DO controlable: la variante ST", p != null && p.getFc() == Fc.ST);
 
+        // Unidades y la casilla kV · kW · kVAr · kVA
+        MonitorPaneles mp = new MonitorPaneles(java.util.Collections::emptyList, (n, r) -> r);
+        MonitorPaneles.Unidad volt = new MonitorPaneles.Unidad(0, "V"), kw = new MonitorPaneles.Unidad(3, "W");
+        chk("tensión como la publica el equipo", Arrays.equals(mp.mostrar(13343.8, volt), new String[]{"13343.8", "V"}));
+        chk("potencia publicada en kW", Arrays.equals(mp.mostrar(5650.2, kw), new String[]{"5650.2", "kW"}));
+        mp.ponerEnK(true);
+        chk("en k: 13343,8 V → 13,34 kV", Arrays.equals(mp.mostrar(13343.8, volt), new String[]{"13.34", "kV"}));
+        chk("en k: un W ya en kW no se divide dos veces", Arrays.equals(mp.mostrar(5650.2, kw), new String[]{"5650.2", "kW"}));
+        chk("en k: la corriente sigue en A", Arrays.equals(mp.mostrar(450.37, new MonitorPaneles.Unidad(0, "A")), new String[]{"450.37", "A"}));
+        chk("unidad por nombre: PPV en V, VAr en VAr", MonitorPaneles.unidadPorNombre("PPV").equals("V")
+                && MonitorPaneles.unidadPorNombre("VAr").equals("VAr"));
+
         chk("formato entero", MonitorPaneles.formato(16).equals("16"));
         chk("formato con decimales", MonitorPaneles.formato(50.0234).equals("50.02"));
         chk("título sin el LD", MonitorPaneles.titulo("BAYCTRLCTRL/Q0XCBR1.Pos").equals("Q0XCBR1.Pos"));

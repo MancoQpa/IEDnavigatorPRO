@@ -29,6 +29,8 @@ class MonitorManager {
         ServerModel getServerModel();
         /** Una fila quedo resaltada: la ventana arranca el Timer que la desvanece. */
         default void alResaltar() { }
+        /** Lee una vez un nodo del equipo (modo Cliente); en Servidor no hace nada. */
+        default void leerUnaVez(FcModelNode n) { }
     }
 
     private final Context ctx;
@@ -92,6 +94,7 @@ class MonitorManager {
         ctx.getMonitorItems().put(fullRef, item);
         ctx.getWatchlist().add(fullRef);
         leerAuxiliares(fcNode);
+        leerUnidades(fcNode);
         ctx.updateWatchlistLabel();
         refreshMonitorTable();
         ctx.log(I18n.t("log.monitor.added", displayName, fc));
@@ -111,6 +114,23 @@ class MonitorManager {
         if (ctx.getWatchlist().add(pf.getReference() + "$MX")) {
             ctx.log(I18n.t("log.monitor.auxpf", formatReference(pf.getReference().toString())));
         }
+    }
+
+    /**
+     * La unidad y el multiplicador de una medida (units, FC CF) no los trae el sondeo, que lee
+     * la parte MX: se los lee una vez al agregar la señal, para que la vista de paneles muestre
+     * la magnitud física (V, A, kW...) y pueda pasar a k sin equivocar el multiplicador.
+     */
+    private void leerUnidades(FcModelNode n) {
+        if (!(n instanceof FcDataObject) || n.getFc() != Fc.MX) return;
+        ModelNode ln = n.getParent();
+        while (ln != null && !(ln instanceof LogicalNode)) ln = ln.getParent();
+        if (ln == null) return;
+        // Para una fase suelta (A.phsA) se lee el DO que la contiene
+        ModelNode d = n;
+        while (d.getParent() != ln) d = d.getParent();
+        ModelNode cf = ((LogicalNode) ln).getChild(d.getName(), Fc.CF);
+        if (cf instanceof FcModelNode) ctx.leerUnaVez((FcModelNode) cf);
     }
 
     /**

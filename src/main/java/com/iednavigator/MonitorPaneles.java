@@ -241,30 +241,114 @@ final class MonitorPaneles extends JPanel implements Scrollable {
         return Tipo.TEXTO;
     }
 
-    /** Unidad SI del DO con su multiplicador ("kV", "A", "Hz"), o "" si no la declara. */
-    static String unidad(ModelNode n) {
+    /** Unidad de una medida: exponente del multiplicador (3 = k) y unidad base ("V", "W"…). */
+    static final class Unidad {
+        final int exp;
+        final String base;
+        Unidad(int exp, String base) { this.exp = exp; this.base = base; }
+    }
+
+    /**
+     * Unidad de la medida n, leída del equipo (units.SIUnit y units.multiplier, FC CF). En
+     * modo Cliente esos atributos se leen una vez al agregar la señal; mientras no llegan, la
+     * unidad sale del nombre de la señal (PhV → V, A → A, W → W...) sin multiplicador.
+     */
+    Unidad unidadDe(ModelNode n, String nombreDo) {
         ModelNode u = buscar(n, "units", "SIUnit");
         if (u == null) {
             ModelNode p = n == null ? null : n.getParent();
             if (p != null && !(n instanceof FcDataObject)) u = buscar(p, "units", "SIUnit");
         }
-        Double cod = numero(u);
-        if (cod == null) return "";
-        String nombre = CatalogoIec61850.nombreEnumerado(u.getReference().toString(), Fc.CF, cod.longValue());
-        if (nombre == null) return "";
-        int p = nombre.lastIndexOf(" (");
-        String unidad = p > 0 ? nombre.substring(0, p) : nombre;
-        if (unidad.equals("none") || unidad.equals("1")) unidad = "";
-        ModelNode m = u.getParent() == null ? null : u.getParent().getChild("multiplier");
-        Double mult = numero(m);
-        if (mult != null && mult != 0) {
-            String pref = CatalogoIec61850.nombreEnumerado(m.getReference().toString(), Fc.CF, mult.longValue());
-            if (pref != null) {
-                int q = pref.lastIndexOf(" (");
-                unidad = (q > 0 ? pref.substring(0, q) : pref) + unidad;
+        if (u == null) {
+            // Una fase (W.phsA en MX): sus units están en la misma fase de la variante CF del DO
+            ModelNode cf = enCf(n);
+            if (cf != null) u = buscar(cf, "units", "SIUnit");
+        }
+        String base = null;
+        Double cod = u != null && leido.test(u) ? numero(u) : null;
+        if (cod != null) {
+            String nombre = CatalogoIec61850.nombreEnumerado(u.getReference().toString(), Fc.CF, cod.longValue());
+            if (nombre != null) {
+                int q = nombre.lastIndexOf(" (");
+                base = q > 0 ? nombre.substring(0, q) : nombre;
+                if (base.startsWith("(")) base = "";          // (sin unidad)
+                if (base.equals("Watts")) base = "W";
             }
         }
-        return unidad;
+        if (base == null) base = unidadPorNombre(nombreDo);
+        int exp = 0;
+        ModelNode m = u == null || u.getParent() == null ? null : u.getParent().getChild("multiplier");
+        Double mult = m != null && leido.test(m) ? numero(m) : null;
+        if (mult != null) exp = mult.intValue();
+        return new Unidad(exp, base);
+    }
+
+    /** El mismo nodo (DO o SDO) en la variante CF de su DO, o null. */
+    static ModelNode enCf(ModelNode n) {
+        java.util.Deque<String> camino = new java.util.ArrayDeque<>();
+        ModelNode d = n;
+        while (d != null && d.getParent() != null && !(d.getParent() instanceof LogicalNode)) {
+            camino.push(d.getName());
+            d = d.getParent();
+        }
+        if (d == null || !(d.getParent() instanceof LogicalNode)) return null;
+        ModelNode x = ((LogicalNode) d.getParent()).getChild(d.getName(), Fc.CF);
+        while (x != null && !camino.isEmpty()) x = x.getChild(camino.pop());
+        return x;
+    }
+
+    /** Unidad de una medida conocida por el nombre de su DO (IEC 61850-7-4). */
+    static String unidadPorNombre(String d) {
+        if (d == null) return "";
+        switch (d) {
+            case "PhV": case "PPV": case "PNV": case "SeqV": case "Vol": case "TotV": return "V";
+            case "A": case "SeqA": case "Amp": return "A";
+            case "W": case "TotW": return "W";
+            case "VAr": case "TotVAr": return "VAr";
+            case "VA": case "TotVA": return "VA";
+            case "Hz": return "Hz";
+            default: return "";
+        }
+    }
+
+    static String prefijo(int exp) {
+        switch (exp) {
+            case -6: return "µ";
+            case -3: return "m";
+            case 3: return "k";
+            case 6: return "M";
+            case 9: return "G";
+            default: return "";
+        }
+    }
+
+    /** Mostrar tensiones y potencias en k (kV, kW, kVAr, kVA): la casilla del monitor. */
+    private boolean enK;
+
+    void ponerEnK(boolean k) {
+        enK = k;
+        repaint();
+    }
+
+    /**
+     * Valor y unidad para mostrar: como los publica el equipo (con su multiplicador), o en k
+     * para V, W, VAr y VA si la casilla está marcada. Usa el multiplicador leído: un W que el
+     * equipo ya publica en kW (ION 7400) no se divide dos veces.
+     */
+    String[] mostrar(double v, Unidad u) {
+        boolean kilo = enK && (u.base.equals("V") || u.base.equals("W") || u.base.equals("VAr") || u.base.equals("VA"));
+        if (kilo) return new String[]{formato(v * Math.pow(10, u.exp) / 1000.0), "k" + u.base};
+        return new String[]{formato(v), prefijo(u.exp) + u.base};
+    }
+
+    /** Nombre del DO de la medida; para una fase suelta (A.phsA), el del DO que la contiene. */
+    static String nombreDo(ModelNode n) {
+        if (n == null) return "";
+        String d = n.getName();
+        if ((d.startsWith("phs") || d.equals("neut") || d.equals("net") || d.equals("res")) && n.getParent() != null) {
+            return n.getParent().getName();
+        }
+        return d;
     }
 
     /** Calidad para el rótulo de la tarjeta: {texto, "e" si es error} o null si es buena. */
@@ -524,8 +608,9 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             Double v = it.node instanceof BasicDataAttribute ? numero(it.node) : analogicoDe(it.node);
             int y = base(h);
             if (v == null) { sinLectura(g, y); return; }
-            String s = formato(v);
-            String u = unidad(it.node);
+            String[] su = mostrar(v, unidadDe(it.node, nombreDo(it.node)));
+            String s = su[0];
+            String u = su[1];
             g.setFont(Estilo.ui(Font.PLAIN, 28));
             g.setColor(texto());
             g.drawString(recortar(g, s, w - 28 - (u.isEmpty() ? 0 : 30)), 14, y);
@@ -564,7 +649,8 @@ final class MonitorPaneles extends JPanel implements Scrollable {
             String[] nombres = estrella ? new String[]{"A", "B", "C"} : new String[]{"AB", "BC", "CA"};
             Color[] colores = {FASE_A, FASE_B, FASE_C};
             ModelNode fase0 = buscar(it.node, fases[0]);
-            String u = unidad(fase0 != null ? fase0 : it.node);
+            Unidad un = unidadDe(fase0 != null ? fase0 : it.node, nombreDo(it.node));
+            String u = mostrar(0, un)[1];
             int y = base(h);
             int col = (w - 28) / 3;
             boolean alguno = false;
@@ -577,7 +663,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
                 g.drawString(nombres[i], x, y - 26);
                 g.setFont(Estilo.ui(Font.PLAIN, 20));
                 g.setColor(v == null ? apagado() : texto());
-                String s = v == null ? "—" : formato(v);
+                String s = v == null ? "—" : mostrar(v, un)[0];
                 g.drawString(recortar(g, s, col - 34), x, y);
                 if (v != null) {
                     alguno = true;
@@ -636,7 +722,8 @@ final class MonitorPaneles extends JPanel implements Scrollable {
                 if (ang[i] != null) hayAngulo = true;
             }
             ModelNode fase0 = buscar(it.node, fases[0]);
-            String u = unidad(fase0 != null ? fase0 : it.node);
+            Unidad un = unidadDe(fase0 != null ? fase0 : it.node, nombreDo(it.node));
+            String u = mostrar(0, un)[1];
 
             // Sin ángulos del equipo: se calculan si es una tensión o una corriente
             boolean calculado = false;
@@ -706,7 +793,7 @@ final class MonitorPaneles extends JPanel implements Scrollable {
                 g.drawString(nombres[i], x, yy);
                 g.setFont(Estilo.ui(Font.PLAIN, 16));
                 g.setColor(texto());
-                String s = mag[i] == null ? "—" : formato(mag[i]);
+                String s = mag[i] == null ? "—" : mostrar(mag[i], un)[0];
                 int xs = x + 30;
                 int anchoMag = ancho - 30 - 70;
                 g.drawString(recortar(g, s, anchoMag), xs, yy);
