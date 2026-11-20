@@ -114,6 +114,10 @@ public class TestRealimentacionMando {
         check("el modelo del banco carga", true, null);
         if (!srv.start(port)) { check("el servidor arranca", false, "puerto " + port); resumen(); return; }
         check("el servidor arranca", true, "puerto " + port);
+        // Desde el 2026-11-16 la maniobra tarda 100 ms y pasa por intermedio; este banco mira la
+        // realimentación, no los tiempos, así que el aparato se mueve en el acto.
+        srv.ponerTiempoAperturaMs(0);
+        srv.ponerTiempoCierreMs(0);
 
         IEC61850Client cli = new IEC61850Client();
         cli.connect("127.0.0.1", port);

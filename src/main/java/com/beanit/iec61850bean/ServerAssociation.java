@@ -1375,6 +1375,8 @@ final class ServerAssociation {
    */
   static int addCauseDe(ServiceError e) {
     String m = e != null && e.getMessage() != null ? e.getMessage() : "";
+    // PARCHE IEDSimulator (2026-11-19): orden a la posicion actual, AddCause 5 position-reached
+    if (m.contains("posicion ya alcanzada")) return 5;
     if (m.contains("LocKey=true") || m.contains("Loc=true") || m.contains("LocSta=true")) return 2;
     if (m.contains("Beh=") || m.contains("Test=true")) return 8;
     if (m.contains("enclavamiento")) return 10;

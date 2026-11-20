@@ -4,6 +4,7 @@ package com.iednavigator.mando;
 import com.beanit.iec61850bean.BasicDataAttribute;
 import com.beanit.iec61850bean.BdaBoolean;
 import com.beanit.iec61850bean.BdaCheck;
+import com.beanit.iec61850bean.BdaDoubleBitPos;
 import com.beanit.iec61850bean.BdaInt16;
 import com.beanit.iec61850bean.BdaInt32;
 import com.beanit.iec61850bean.BdaInt8;
@@ -235,6 +236,21 @@ public final class ControlPolicy {
                 return new ServiceError(ServiceError.ACCESS_VIOLATION,
                         lnName + ": resorte descargado, el cierre no esta disponible (bloqueo de proceso)");
             }
+        }
+
+        // --- 4c. Posicion ya alcanzada (AddCause 5, position-reached) ---
+        //
+        // Cerrar algo cerrado o abrir algo abierto se rechaza, en el Select y en el Oper, como lo
+        // hacen IEDScout y la herramienta de referencia del curso. Antes se aceptaba y
+        // el aparato quedaba quieto: ensenaba un comportamiento distinto del de un IED (propuesta
+        // 23, 2026-11-19). Solo para posiciones dobles (DPC): una salida simple o el Mod pueden
+        // recibir el mismo valor sin que sea un error.
+        if (controlRoot != null && ctlVal instanceof BdaBoolean
+                && model.findModelNode(controlRoot + ".stVal", Fc.ST) instanceof BdaDoubleBitPos
+                && EstadoLocal.yaEnPosicion(model, controlRoot, cerrando)) {
+            return new ServiceError(ServiceError.ACCESS_VIOLATION,
+                    lnName + ": el aparato ya esta " + (cerrando ? "cerrado" : "abierto")
+                            + " (posicion ya alcanzada)");
         }
 
         // --- 5. Enclavamiento, solo si el cliente lo pidio ---
