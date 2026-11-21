@@ -520,7 +520,7 @@ public class GooseSubscriber {
                     break;
                 case 0x91: // utc-time
                     type = "UtcTime";
-                    value = parseInteger(data, offset, Math.min(fieldLen, 4));
+                    value = fieldLen >= 8 ? textoUtc(data, offset) : parseInteger(data, offset, Math.min(fieldLen, 4));
                     break;
                 default:
                     type = String.format("Tag_%02X", tag);
@@ -530,6 +530,18 @@ public class GooseSubscriber {
             entries.add(new DataEntry(index++, type, value));
             offset += fieldLen;
         }
+    }
+
+    /**
+     * Hora utc-time de IEC 61850-8-1 (8 bytes: segundos, fraccion de 24 bits, calidad) como texto
+     * en hora local con milisegundos, por ejemplo "2026-11-21 00:43:47.720".
+     */
+    static String textoUtc(byte[] b, int off) {
+        long seg = ((b[off] & 0xFFL) << 24) | ((b[off + 1] & 0xFFL) << 16) | ((b[off + 2] & 0xFFL) << 8) | (b[off + 3] & 0xFFL);
+        long frac = ((b[off + 4] & 0xFFL) << 16) | ((b[off + 5] & 0xFFL) << 8) | (b[off + 6] & 0xFFL);
+        long ms = seg * 1000 + ((frac * 1000 + (1L << 23)) >> 24);   // redondeado, no truncado
+        return java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+                .format(java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()));
     }
 
     private String bytesToHex(byte[] data, int offset, int length) {
