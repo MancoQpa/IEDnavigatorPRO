@@ -11,7 +11,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 /**
- * La ventana del interruptor virtual con el aspecto de la herramienta de referencia, sobre
+ * La ventana compacta del interruptor virtual, sobre
  * test/test_bay_control.cid servido (no se muestra en pantalla: pack() ya da el tamaño real).
  *
  *  1. la ventana principal es angosta y el panel del instructor entra en la pantalla;
