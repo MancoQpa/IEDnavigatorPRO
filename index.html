@@ -397,15 +397,15 @@
     <div class="shot-main" id="shotCarousel">
       <div class="shot-titlebar">
         <span class="dot2" style="background:#FF8A3D"></span><span class="dot2" style="background:#4FD1C5"></span><span class="dot2"></span>
-        <span class="name" id="shotName">IEDNavigatorPRO — <span lang="es">árbol del modelo (Server → LD → LN → DO → DA)</span><span lang="en">model tree (Server → LD → LN → DO → DA)</span></span>
+        <span class="name" id="shotName">Monitor — <span lang="es">paneles</span><span lang="en">panels</span></span>
       </div>
       <div class="shot-viewport">
         <button class="shot-arrow prev" type="button" aria-label="Anterior" data-shot-prev>&#8249;</button>
-        <img id="shotImg" src="screenshot-datamodel.jpg" alt="Árbol del modelo de datos IEC 61850 en IEDNavigator PRO" loading="lazy">
+        <img id="shotImg" src="shot-paneles.jpg" alt="Vista de paneles del monitor: tensiones y corrientes como diagrama fasorial" loading="lazy">
         <button class="shot-arrow next" type="button" aria-label="Siguiente" data-shot-next>&#8250;</button>
       </div>
       <div class="shot-caption">
-        <span id="shotCaption"><span lang="es">Árbol del modelo (Server → LD → LN → DO → DA)</span><span lang="en">Model tree (Server → LD → LN → DO → DA)</span></span>
+        <span id="shotCaption"><span lang="es">Vista de paneles: diagramas fasoriales de tensiones y corrientes, y potencias</span><span lang="en">Panels view: phasor diagrams of voltages and currents, plus powers</span></span>
         <span class="shot-dots" id="shotDots"></span>
       </div>
     </div>
@@ -414,11 +414,19 @@
   <script>
     (function(){
       const shots = [
-        { src:"screenshot-datamodel.jpg", name:"IEDNavigatorPRO — <span lang=\"es\">árbol del modelo (Server → LD → LN → DO → DA)</span><span lang=\"en\">model tree (Server → LD → LN → DO → DA)</span>", alt:"Árbol del modelo de datos IEC 61850 en IEDNavigator PRO", caption:"<span lang=\"es\">Árbol del modelo (Server → LD → LN → DO → DA)</span><span lang=\"en\">Model tree (Server → LD → LN → DO → DA)</span>" },
-        { src:"screenshot-sbo-control.jpg", name:"SBO — <span lang=\"es\">maniobra</span><span lang=\"en\">switching</span>", alt:"Diálogo de control SBO en dos pasos", caption:"<span lang=\"es\">Cierre de interruptor con SBO en dos pasos</span><span lang=\"en\">Breaker close with two-step SBO</span>" },
-        { src:"screenshot-mmxu-values.jpg", name:"MMXU — <span lang=\"es\">valores</span><span lang=\"en\">values</span>", alt:"Valores de medición MMXU vía cliente MMS", caption:"<span lang=\"es\">Lectura de valores de medición en tiempo real</span><span lang=\"en\">Real-time measurement value reads</span>" },
-        { src:"screenshot-reports.jpg", name:"RCB — <span lang=\"es\">reportes</span><span lang=\"en\">reports</span>", alt:"Suscripción a reportes URCB/BRCB", caption:"<span lang=\"es\">Suscripción a reportes (URCB / BRCB)</span><span lang=\"en\">Report subscription (URCB / BRCB)</span>" },
-        { src:"screenshot-legend.jpg", name:"HELP — <span lang=\"es\">leyenda de ayuda</span><span lang=\"en\">help legend</span>", alt:"Leyenda de íconos y colores del árbol de datos", caption:"<span lang=\"es\">Leyenda de íconos y colores para leer el árbol</span><span lang=\"en\">Icon and color legend for reading the tree</span>" }
+        { src:"shot-paneles.jpg", name:"Monitor — <span lang=\"es\">paneles</span><span lang=\"en\">panels</span>", alt:"Vista de paneles del monitor: tensiones y corrientes como diagrama fasorial", caption:"<span lang=\"es\">Vista de paneles: diagramas fasoriales de tensiones y corrientes, y potencias</span><span lang=\"en\">Panels view: phasor diagrams of voltages and currents, plus powers</span>" },
+        { src:"shot-fasores.jpg", name:"Monitor — <span lang=\"es\">fasores calculados</span><span lang=\"en\">calculated phasors</span>", alt:"Diagrama fasorial calculado a partir de magnitudes y factor de potencia", caption:"<span lang=\"es\">Fasores calculados cuando el equipo publica solo magnitudes (Va = 0°, secuencia ABC)</span><span lang=\"en\">Calculated phasors when the device publishes magnitudes only (Va = 0°, ABC sequence)</span>" },
+        { src:"shot-medidor-comparacion.jpg", name:"MMS — <span lang=\"es\">lecturas en vivo</span><span lang=\"en\">live reads</span>", alt:"Lecturas por MMS junto al software del fabricante del medidor", caption:"<span lang=\"es\">Lecturas por MMS contra el software del fabricante del medidor, en banco de pruebas</span><span lang=\"en\">MMS reads checked against the meter vendor software, on a test bench</span>" },
+        { src:"shot-monitor-tabla.jpg", name:"Monitor — <span lang=\"es\">tabla</span><span lang=\"en\">table</span>", alt:"Monitor en tabla y menú contextual del árbol", caption:"<span lang=\"es\">Monitor en tabla y menú del árbol: watchlist, lectura y ayuda</span><span lang=\"en\">Monitor table and tree menu: watchlist, read and help</span>" },
+        { src:"shot-diccionario.jpg", name:"HELP — <span lang=\"es\">diccionario y leyenda</span><span lang=\"en\">dictionary and legend</span>", alt:"Diccionario IEC 61850 y leyenda de símbolos", caption:"<span lang=\"es\">¿Qué es esto? — diccionario IEC 61850 y leyenda de símbolos y colores</span><span lang=\"en\">What is this? — IEC 61850 dictionary and symbol/color legend</span>" },
+        { src:"shot-reportes.jpg", name:"RCB — <span lang=\"es\">reportes</span><span lang=\"en\">reports</span>", alt:"Reportes URCB habilitados con valores en tiempo real", caption:"<span lang=\"es\">Reportes (URCB / BRCB) habilitados, con valor anterior, nuevo y motivo</span><span lang=\"en\">Reports (URCB / BRCB) enabled, with previous and new value and reason</span>" },
+        { src:"shot-reporte-html.jpg", name:"HTML — <span lang=\"es\">reporte del modelo</span><span lang=\"en\">model report</span>", alt:"Reporte HTML del modelo de un IED", caption:"<span lang=\"es\">Reporte HTML del modelo del IED: inventario de LD, LN, DataSets y RCB</span><span lang=\"en\">HTML report of the IED model: inventory of LDs, LNs, DataSets and RCBs</span>" },
+        { src:"shot-mapa-goose.jpg", name:"GOOSE — <span lang=\"es\">mapa</span><span lang=\"en\">map</span>", alt:"Mapa GOOSE de un SCD", caption:"<span lang=\"es\">Mapa GOOSE de un SCD: publicadores, suscripciones y las no resueltas</span><span lang=\"en\">GOOSE map of an SCD: publishers, subscriptions and unresolved ones</span>" },
+        { src:"shot-interruptor-virtual.jpg", name:"IED — <span lang=\"es\">interruptor virtual</span><span lang=\"en\">virtual breaker</span>", alt:"Interruptor virtual con panel del instructor y suscripción GOOSE", caption:"<span lang=\"es\">Interruptor virtual: mando local, panel del instructor, registro y suscripción GOOSE</span><span lang=\"en\">Virtual breaker: local control, instructor panel, event log and GOOSE subscription</span>" },
+        { src:"shot-goose-publicacion.jpg", name:"GOOSE — <span lang=\"es\">publicación</span><span lang=\"en\">publishing</span>", alt:"Publicación GOOSE del interruptor virtual", caption:"<span lang=\"es\">Cambios de estado del interruptor virtual publicados por GOOSE</span><span lang=\"en\">Virtual breaker state changes published over GOOSE</span>" },
+        { src:"shot-sbow.jpg", name:"SBOw — <span lang=\"es\">maniobra</span><span lang=\"en\">switching</span>", alt:"Diálogo de mando SBO con seguridad reforzada", caption:"<span lang=\"es\">Maniobra SBOw con seguridad reforzada: seleccionar, ejecutar o cancelar</span><span lang=\"en\">SBOw switching with enhanced security: select, operate or cancel</span>" },
+        { src:"shot-sbow-confirmado.jpg", name:"SBOw — <span lang=\"es\">confirmación</span><span lang=\"en\">confirmation</span>", alt:"Comando aceptado con terminación positiva y posición confirmada", caption:"<span lang=\"es\">Comando aceptado: terminación positiva y posición confirmada por lectura</span><span lang=\"en\">Command accepted: positive termination and position confirmed by read</span>" },
+        { src:"shot-paneles-interruptor.jpg", name:"Monitor — <span lang=\"es\">modo servidor</span><span lang=\"en\">server mode</span>", alt:"Paneles en modo servidor de un controlador de interruptor", caption:"<span lang=\"es\">Paneles en modo Servidor: estado de un controlador de interruptor</span><span lang=\"en\">Panels in Server mode: state of a breaker controller</span>" }
       ];
       let current = 0;
       const img = document.getElementById('shotImg');
