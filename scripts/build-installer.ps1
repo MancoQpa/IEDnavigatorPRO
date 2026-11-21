@@ -3,7 +3,7 @@
 # Pasos:
 #   1. mvn package -Pbridge          -> bridge.jar (fat jar headless)
 #   2. jlink                          -> runtime Java minimo (~60 MB)
-#   3. staging en src-tauri/resources -> bridge/bridge.jar, bridge/native/iec61850.dll, runtime/
+#   3. staging en src-tauri/resources -> bridge/bridge.jar, runtime/ (iec61850.dll se quitó en la v4.14)
 #   4. smoke test                     -> runtime\bin\java -jar bridge.jar (espera BRIDGE_READY)
 #   5. npm run tauri build            -> instalador NSIS en src-tauri/target/release/bundle/nsis
 #
@@ -73,8 +73,7 @@ $bridgeDir = Join-Path $resources 'bridge'
 $nativeDir = Join-Path $bridgeDir 'native'
 New-Item -ItemType Directory -Force -Path $nativeDir | Out-Null
 Copy-Item $bridgeJar (Join-Path $bridgeDir 'bridge.jar') -Force
-Copy-Item (Join-Path $repo 'lib\iec61850.dll') $nativeDir -Force
-Write-Host 'OK bridge.jar + iec61850.dll'
+Write-Host 'OK bridge.jar'
 
 # ── 4. Smoke test del runtime ──
 Write-Host '== Smoke test runtime + bridge ==' -ForegroundColor Cyan

@@ -54,7 +54,7 @@
             <version>1.8.2</version>
         </dependency>
 
-        <!-- Native access to iec61850.dll (fixed at 5.14.0) -->
+        <!-- JNA (fixed at 5.14.0): pcap4j uses it to talk to Npcap. Without it there is no GOOSE. -->
         <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>

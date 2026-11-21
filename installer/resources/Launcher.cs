@@ -55,7 +55,8 @@ class Launcher
         psi.RedirectStandardOutput = true;
         psi.RedirectStandardError = true;
 
-        // Add lib to PATH for iec61850.dll
+        // lib en el PATH: lo usaba iec61850.dll, quitada en la v4.14. Se deja porque no molesta
+        // y este exe no se recompila en cada versión (sale de la plantilla).
         string envPath = Environment.GetEnvironmentVariable("PATH") ?? "";
         psi.EnvironmentVariables["PATH"] = libDir + ";" + envPath;
 

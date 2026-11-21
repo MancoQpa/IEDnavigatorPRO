@@ -77,7 +77,7 @@ IED Navigator PRO es software libre bajo la Licencia Pública General GNU v3
        https://github.com/MancoQpa/IEDnavigatorPRO
 
 Los avisos y licencias de todos los componentes de terceros (iec61850bean,
-libiec61850, pcap4j, FlatLaf, JNA, SLF4J, etc.) están en THIRD-PARTY-NOTICES.txt
+pcap4j, FlatLaf, JNA, SLF4J, etc.) están en THIRD-PARTY-NOTICES.txt
 
 
 ENLACES ÚTILES

@@ -19,8 +19,8 @@ available in the desktop app.
 - **GUI**: Swing with FlatLaf 3.2 look-and-feel
 - **IEC 61850 Protocol**: iec61850bean 1.9.0 (com.beanit)
 - **Network Capture**: pcap4j 1.8.2 (requires Npcap on Windows)
-- **Native Access**: JNA 5.14.0, used by pcap4j to talk to Npcap. `libiec61850.dll` is loaded but
-  not used by the desktop app (see "Who does what" below)
+- **Native Access**: JNA 5.14.0, used by pcap4j to talk to Npcap (without it there is no GOOSE).
+  libiec61850 (`iec61850.dll`) was removed in v4.14: it was loaded and never used
 - **ASN.1**: asn1bean 1.13.0, jasn1 1.11.3
 - **Logging**: SLF4J 2.0.9 + slf4j-simple
 
@@ -44,11 +44,10 @@ src/main/java/com/iednavigator/
   SessionLog.java            # Per-session log file (see "Logs")
   Iec61850Dictionary.java    # Descriptions of LN classes, DOs, ServiceErrors, AddCauses
   ARQUITECTURA.md            # Architecture notes of 2026-06, kept as history (this file is current)
-  native_lib/                # JNA bindings to iec61850.dll: loaded, unused by the desktop app
   bridge/                    # Headless REST bridge (BridgeMain, api/)
 src/main/java/com/iedexplorer/  # OLD package, not compiled by compile.ps1. Do not edit.
 test/                        # Standalone test programs (see "Tests")
-lib/                         # Pre-packaged JARs and iec61850.dll
+lib/                         # Pre-packaged JARs
 installer/                   # resources/ is versioned; output/ is gitignored
 ```
 
@@ -76,7 +75,7 @@ Main class: `com.iednavigator.IEDNavigatorApp`
 
 ## Architecture Notes
 
-- **Package**: `com.iednavigator`, with sub-packages `native_lib` and `bridge`.
+- **Package**: `com.iednavigator`, with sub-packages `mando` and `bridge`.
 - **IEDNavigatorApp.java** was monolithic (~6600 lines) and has been split into panels and
   managers that receive a small `Context` interface from it. It went down to ~3700 lines and is
   back to ~5600 after the 2026-11 redesign (menus, context bar, view options).
@@ -135,11 +134,13 @@ Main class: `com.iednavigator.IEDNavigatorApp`
     CF, DC, SP, SV, SE, BL; `IEC61850Client.escribirTexto` rejects text that does not fit the
     type instead of writing the old value). `test/TestSustitucion`, `TestSustitucionCliente`.
   - GOOSE capture and publishing: the project's own code (BER encoding, retransmission) on
-    pcap4j/Npcap. `GoosePanel` creates a `NativeGooseSubscriber` and never starts it.
-  - Sampled Values: not in the desktop app (the SV tab is commented out in
-    `IEDNavigatorApp`). Only the REST bridge (`bridge/api/SvApi`) uses `NativeSVSubscriber`.
-  - libiec61850: loaded at startup, used only by that bridge route. Removing it is planned
-    after 2026-10-27; JNA stays, because pcap4j needs it.
+    pcap4j/Npcap.
+  - Sampled Values: not available (the SV tab is commented out in `IEDNavigatorApp`; the REST
+    bridge's `/sv` route went with libiec61850). If ever done, it will be pcap4j and own code.
+  - libiec61850: removed in v4.14 (`native_lib/`, `lib/iec61850.dll`, the bridge's `SvApi`, the
+    startup check and its texts). JNA stays, because pcap4j needs it. `build_installer.ps1`
+    replaces the template's `lib\` with the repo's, so the DLL does not come back from an old
+    package. The old `com/iedexplorer` package still has its own `native_lib` (not compiled).
 - **Dependencies bundled in `lib/`**: JARs are committed to the repo alongside Maven; build scripts reference both.
 
 ## Main window layout (redesign of 2026-11)
@@ -223,7 +224,7 @@ centered, so the monitor value/time cells and the host:port field add top margin
 
 ## Important Conventions
 
-- Windows-first development: batch/PowerShell scripts, `iec61850.dll`, Npcap dependency.
+- Windows-first development: batch/PowerShell scripts, Npcap dependency.
 - Comments, log messages and the user-facing texts are in Spanish; this file is in English.
 - Logging: see "Logs" below.
 - GUI uses color-coded tree nodes for state indication.
@@ -476,7 +477,6 @@ git restore --source=<commit-before> --worktree -- <path>
   the wiring are in `IEDNavigatorApp.java`.
 - **Add new protocol features**: Extend `IEC61850Client.java` or `IEC61850Server.java`.
 - **Modify GOOSE behavior**: Edit `GoosePublisher.java` / `GooseSubscriber.java`.
-- **Native library integration**: Work in `native_lib/` package, update JNA interfaces in `LibIec61850.java`.
 
 ## GOOSE-DataModel Bidirectional Sync Architecture
 
