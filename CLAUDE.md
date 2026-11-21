@@ -45,7 +45,6 @@ src/main/java/com/iednavigator/
   Iec61850Dictionary.java    # Descriptions of LN classes, DOs, ServiceErrors, AddCauses
   ARQUITECTURA.md            # Architecture notes of 2026-06, kept as history (this file is current)
   bridge/                    # Headless REST bridge (BridgeMain, api/)
-src/main/java/com/iedexplorer/  # OLD package, not compiled by compile.ps1. Do not edit.
 test/                        # Standalone test programs (see "Tests")
 lib/                         # Pre-packaged JARs
 installer/                   # resources/ is versioned; output/ is gitignored
@@ -140,7 +139,7 @@ Main class: `com.iednavigator.IEDNavigatorApp`
   - libiec61850: removed in v4.14 (`native_lib/`, `lib/iec61850.dll`, the bridge's `SvApi`, the
     startup check and its texts). JNA stays, because pcap4j needs it. `build_installer.ps1`
     replaces the template's `lib\` with the repo's, so the DLL does not come back from an old
-    package. The old `com/iedexplorer` package still has its own `native_lib` (not compiled).
+    package.
 - **Dependencies bundled in `lib/`**: JARs are committed to the repo alongside Maven; build scripts reference both.
 
 ## Main window layout (redesign of 2026-11)
@@ -516,7 +515,9 @@ The `loadedIedName` field stores the IED name from the SCL file, set during `par
   active group, marked with `sGroup`.
 - `IEC61850Client.recuperarDataSetsTolerante()` calls three private methods of
   `ClientAssociation` by reflection. When upgrading iec61850bean, check they still exist.
-- `classes\com\iedexplorer\` holds stale compiled classes of the old package (2026-06) and
-  ends up in the package; it is not built anymore.
+- Removed in v4.14 (2026-11-20), all still in git history: the old `com.iedexplorer` package
+  (renamed to `com.iednavigator` in 2026-06), `lib/com` + `lib/META-INF` (a byte-identical
+  unpacked copy of `iec61850bean-1.9.0.jar`, never on the classpath), and the 2026-06 v3.6
+  package (`IEDNavigator_v3.6/`, `build_v36.ps1`).
 - Open items, measurements and the history behind these notes are in `BITACORA.md`
   (not versioned: it contains IPs and site names).
