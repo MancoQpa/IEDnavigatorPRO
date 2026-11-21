@@ -2,6 +2,17 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.14.1
+-----
+- GOOSE publicado: cada dato sale con su tipo real, tomado del modelo. Hasta la v4.14.0
+  la posicion de un interruptor (posicion doble) salia como booleano, y un IED suscrito
+  que espera una posicion doble la rechazaba o la leia mal; tampoco se publicaba el paso
+  por intermedio. Ahora la posicion sale como bit-string de 2 bits y cada maniobra pasa
+  por intermedio con su propio stNum. Beh y Health salen como enteros y la hora (t) como
+  hora UTC, con la hora del ultimo cambio de estado.
+- En la tabla de mensajes GOOSE, una hora recibida se muestra como fecha y hora con
+  milisegundos.
+
 v4.14.0
 -----
 - Interfaz nueva: barra de contexto con el IED, el modo (Servidor | Cliente), el estado

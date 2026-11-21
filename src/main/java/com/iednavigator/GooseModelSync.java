@@ -1,6 +1,6 @@
 package com.iednavigator;
 
-import com.beanit.iec61850bean.BasicDataAttribute;
+import com.beanit.iec61850bean.*;
 import com.beanit.iec61850bean.Fc;
 import com.beanit.iec61850bean.ModelNode;
 import com.beanit.iec61850bean.ServerModel;
@@ -17,27 +17,68 @@ public final class GooseModelSync {
 
     private GooseModelSync() {}
 
-    /** Infiere el tipo de dato IEC 61850 a partir del nombre de miembro FCDA. */
+    /**
+     * Tipo GOOSE de un atributo del modelo, por su clase en iec61850bean: es el tipo real que
+     * define el SCL. null si no hay una codificacion GOOSE para el (el llamador cae en
+     * {@link #inferDataType}).
+     */
+    public static GoosePublisher.DataValue.Type tipoDeAtributo(BasicDataAttribute bda) {
+        if (bda instanceof BdaBoolean) return GoosePublisher.DataValue.Type.BOOLEAN;
+        if (bda instanceof BdaDoubleBitPos) return GoosePublisher.DataValue.Type.DBPOS;
+        if (bda instanceof BdaQuality) return GoosePublisher.DataValue.Type.BITSTRING;
+        if (bda instanceof BdaTimestamp) return GoosePublisher.DataValue.Type.UTC_TIME;
+        if (bda instanceof BdaFloat32 || bda instanceof BdaFloat64) return GoosePublisher.DataValue.Type.FLOAT;
+        if (bda instanceof BdaInt8 || bda instanceof BdaInt16 || bda instanceof BdaInt32 || bda instanceof BdaInt64)
+            return GoosePublisher.DataValue.Type.INTEGER;
+        if (bda instanceof BdaInt8U || bda instanceof BdaInt16U || bda instanceof BdaInt32U)
+            return GoosePublisher.DataValue.Type.UNSIGNED;
+        if (bda instanceof BdaVisibleString || bda instanceof BdaUnicodeString)
+            return GoosePublisher.DataValue.Type.VISIBLE_STRING;
+        return null;
+    }
+
+    /**
+     * Tipo GOOSE de un miembro de DataSet: el del atributo en el modelo si se encuentra; si no,
+     * el que se deduce del nombre.
+     */
+    public static GoosePublisher.DataValue.Type tipoDeMiembro(String member, ServerModel model, String iedName) {
+        if (model != null) {
+            String ref = SclReferenceUtils.buildModelRefFromFCDA(member, iedName);
+            Fc fc = SclReferenceUtils.extractFcFromMember(member);
+            ModelNode n = ref == null || fc == null ? null : model.findModelNode(ref, fc);
+            if (n instanceof BasicDataAttribute) {
+                GoosePublisher.DataValue.Type t = tipoDeAtributo((BasicDataAttribute) n);
+                if (t != null) return t;
+            }
+        }
+        return inferDataType(member);
+    }
+
+    /**
+     * Tipo deducido del nombre del miembro FCDA, cuando no hay modelo. El orden importa: la
+     * regla de stVal booleano iba antes que la de Pos y una posicion doble (Pos.stVal) salia
+     * como BOOLEAN (2026-11-21, visto en la trama de un interruptor virtual).
+     */
     public static GoosePublisher.DataValue.Type inferDataType(String memberName) {
         String lower = memberName.toLowerCase();
+        int corchete = lower.indexOf('[');
+        String ref = (corchete > 0 ? lower.substring(0, corchete) : lower).trim();
 
-        if (lower.contains(".q ") || lower.contains(".q[") || lower.endsWith(".q")) {
-            return GoosePublisher.DataValue.Type.BITSTRING;
+        if (ref.endsWith(".q")) return GoosePublisher.DataValue.Type.BITSTRING;
+        if (ref.endsWith(".t")) return GoosePublisher.DataValue.Type.UTC_TIME;
+        // Posiciones dobles (DPC/DPS): Pos, PosA/PosB/PosC
+        if (ref.matches(".*\\.pos[abc]?\\.(stval|ctlval)$")) return GoosePublisher.DataValue.Type.DBPOS;
+        // Enumerados y enteros de estado frecuentes (Loc y LocKey son booleanos)
+        if (ref.matches(".*\\.(beh|mod|health|phyhealth|eehealth|opcnt|cbopcap|swopcap|tappos)\\.stval$")) {
+            return GoosePublisher.DataValue.Type.INTEGER;
         }
-        if (lower.contains(".t ") || lower.contains(".t[") || lower.endsWith(".t")) {
-            return GoosePublisher.DataValue.Type.UNSIGNED;
-        }
-        if (lower.contains(".general") || lower.contains(".stval")
-                || lower.contains(".op ") || lower.contains(".op[")) {
+        if (ref.endsWith(".general") || ref.endsWith(".stval") || ref.matches(".*\\.(op|str)(\\..*)?$")) {
             return GoosePublisher.DataValue.Type.BOOLEAN;
         }
-        if (lower.contains("pos.") && (lower.contains(".stval") || lower.contains(".ctlval"))) {
-            return GoosePublisher.DataValue.Type.DBPOS;
-        }
-        if (lower.contains(".mag") || lower.contains(".instmag") || lower.contains(".cval")) {
+        if (ref.contains(".mag") || ref.contains(".instmag") || ref.contains(".cval")) {
             return GoosePublisher.DataValue.Type.FLOAT;
         }
-        if (lower.contains(".ctlval") || lower.contains(".setval") || lower.contains(".actval")) {
+        if (ref.endsWith(".ctlval") || ref.endsWith(".setval") || ref.endsWith(".actval")) {
             return GoosePublisher.DataValue.Type.INTEGER;
         }
         return GoosePublisher.DataValue.Type.BOOLEAN;
@@ -53,6 +94,7 @@ public final class GooseModelSync {
             case BITSTRING: return 0;
             case DBPOS: return 1;
             case VISIBLE_STRING: return "";
+            case UTC_TIME: return GoosePublisher.utcAhora();
             default: return false;
         }
     }
@@ -127,6 +169,8 @@ public final class GooseModelSync {
 
     /** Convierte un DataValue del publisher a string para el modelo de servidor. */
     public static String convertPublisherValueToString(GoosePublisher.DataValue dv) {
+        // La hora la maneja el publicador (la de su ultimo cambio): no se escribe en el modelo
+        if (dv.type == GoosePublisher.DataValue.Type.UTC_TIME) return null;
         if (dv.value == null) return "0";
 
         switch (dv.type) {
@@ -166,6 +210,7 @@ public final class GooseModelSync {
         if (modelRef == null) return null;
 
         String strValue = convertPublisherValueToString(pubValues.get(dataIndex));
+        if (strValue == null) return null;
         return server.setDataValue(modelRef, strValue) ? modelRef : null;
     }
 

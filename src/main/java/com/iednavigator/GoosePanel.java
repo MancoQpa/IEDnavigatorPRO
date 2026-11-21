@@ -292,30 +292,16 @@ class GoosePanel {
         });
     }
 
-    /** Infer IEC 61850 data type from FCDA member name (public so TREE POPUP can call it). */
+    /**
+     * Tipo GOOSE de un miembro de DataSet: el del atributo en el modelo cargado (Servidor) o leído
+     * (Cliente), y si no se encuentra, el que se deduce del nombre. Lo usa también el menú del
+     * árbol sobre un FCDA.
+     */
     GoosePublisher.DataValue.Type inferDataType(String memberName) {
-        String lower = memberName.toLowerCase();
-
-        if (lower.contains(".q ") || lower.contains(".q[") || lower.endsWith(".q")) {
-            return GoosePublisher.DataValue.Type.BITSTRING;
-        }
-        if (lower.contains(".t ") || lower.contains(".t[") || lower.endsWith(".t")) {
-            return GoosePublisher.DataValue.Type.UNSIGNED;
-        }
-        if (lower.contains(".general") || lower.contains(".stval") ||
-            lower.contains(".op ") || lower.contains(".op[")) {
-            return GoosePublisher.DataValue.Type.BOOLEAN;
-        }
-        if (lower.contains("pos.") && (lower.contains(".stval") || lower.contains(".ctlval"))) {
-            return GoosePublisher.DataValue.Type.DBPOS;
-        }
-        if (lower.contains(".mag") || lower.contains(".instmag") || lower.contains(".cval")) {
-            return GoosePublisher.DataValue.Type.FLOAT;
-        }
-        if (lower.contains(".ctlval") || lower.contains(".setval") || lower.contains(".actval")) {
-            return GoosePublisher.DataValue.Type.INTEGER;
-        }
-        return GoosePublisher.DataValue.Type.BOOLEAN;
+        ServerModel modelo = null;
+        if (ctx.isServerMode() && ctx.getServer() != null) modelo = ctx.getServer().getServerModel();
+        else if (!ctx.isServerMode() && ctx.getClient() != null && ctx.isConnected()) modelo = ctx.getClient().getServerModel();
+        return GooseModelSync.tipoDeMiembro(memberName, modelo, ctx.getLoadedIedName());
     }
 
     // ─── Panel creation ───────────────────────────────────────────────────────
@@ -662,7 +648,8 @@ class GoosePanel {
                             JMenuItem miTest = new JMenuItem("GOOD · TEST (0x0800)");
                             miTest.addActionListener(ev -> setPublisherDataValue(pubRow, idx, 0x0800));
                             memberMenu.add(miTest);
-                        } else {
+                        } else if (dv.type != GoosePublisher.DataValue.Type.UTC_TIME) {
+                            // La hora (t) no se edita: es la del ultimo cambio de estado
                             JMenuItem miCustom = new JMenuItem(I18n.t("ctx.customvalue"));
                             miCustom.addActionListener(ev -> {
                                 String val = JOptionPane.showInputDialog(null, I18n.t("dlg.newvalue", dv.name), String.valueOf(dv.value));
@@ -1326,6 +1313,7 @@ class GoosePanel {
 
         GoosePublisher.DataValue dv = pubValues.get(dataIndex);
         String strValue = convertPublisherValueToString(dv);
+        if (strValue == null) return;
 
         boolean success = server.setDataValue(modelRef, strValue);
         if (success) {
@@ -1336,6 +1324,8 @@ class GoosePanel {
     }
 
     String convertPublisherValueToString(GoosePublisher.DataValue dv) {
+        // La hora la maneja el publicador: no se escribe en el modelo
+        if (dv.type == GoosePublisher.DataValue.Type.UTC_TIME) return null;
         if (dv.value == null) return "0";
 
         switch (dv.type) {
@@ -1503,16 +1493,7 @@ class GoosePanel {
     }
 
     private Object getDefaultValueForType(GoosePublisher.DataValue.Type type) {
-        switch (type) {
-            case BOOLEAN: return false;
-            case INTEGER: return 0;
-            case UNSIGNED: return (long)(System.currentTimeMillis() / 1000);
-            case FLOAT: return 0.0f;
-            case BITSTRING: return 0;
-            case DBPOS: return 1;
-            case VISIBLE_STRING: return "";
-            default: return false;
-        }
+        return GooseModelSync.defaultValueForType(type);
     }
 
     SclDataSet findDataSetForGoCB(SclGoCB gcb) {
@@ -1741,6 +1722,9 @@ class GoosePanel {
                 String[] nombres = {"INTERMEDIATE", "OFF", "ON", "BAD"};
                 return nombres[v] + " (" + v + ")";
             }
+        }
+        if (valor instanceof byte[] && ((byte[]) valor).length == 8) {
+            return GooseSubscriber.textoUtc((byte[]) valor, 0);
         }
         if (valor instanceof java.util.List) {
             StringBuilder sb = new StringBuilder("{");

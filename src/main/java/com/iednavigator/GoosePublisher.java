@@ -78,7 +78,9 @@ public class GoosePublisher {
 
     public static class DataValue {
         public enum Type {
-            BOOLEAN, INTEGER, UNSIGNED, FLOAT, BITSTRING, VISIBLE_STRING, DBPOS
+            BOOLEAN, INTEGER, UNSIGNED, FLOAT, BITSTRING, VISIBLE_STRING, DBPOS,
+            /** Hora (TimeStamp, IEC 61850-8-1 utc-time): valor byte[8] o null = ahora. */
+            UTC_TIME
         }
 
         public Type type;
@@ -98,7 +100,7 @@ public class GoosePublisher {
         // Add some default values
         dataValues.add(new DataValue("Pos.stVal", DataValue.Type.DBPOS, 1)); // OFF
         dataValues.add(new DataValue("Pos.q", DataValue.Type.BITSTRING, 0));
-        dataValues.add(new DataValue("Pos.t", DataValue.Type.UNSIGNED, System.currentTimeMillis() / 1000));
+        dataValues.add(new DataValue("Pos.t", DataValue.Type.UTC_TIME, utcAhora()));
     }
 
     public void setLogListener(Consumer<String> listener) {
@@ -190,6 +192,8 @@ public class GoosePublisher {
         synchronized (counterLock) {
             stNum++;
             sqNum = 0;
+            // La hora (t) de un dato es la de su ultimo cambio, como en un IED
+            for (DataValue dv : dataValues) if (dv.type == DataValue.Type.UTC_TIME) dv.value = utcAhora();
             publishAndBump();  // publica sqNum=0 y deja sqNum=1
         }
         log(I18n.t("log.pub.statechange", stNum));
@@ -535,6 +539,12 @@ public class GoosePublisher {
                 case VISIBLE_STRING:
                     writeTagLengthValue(data, 0x8A, ((String) dv.value).getBytes());
                     break;
+                case UTC_TIME:
+                    // utc-time [17]: 4 bytes de segundos, 3 de fraccion y 1 de calidad de hora
+                    byte[] t = dv.value instanceof byte[] && ((byte[]) dv.value).length == 8
+                            ? (byte[]) dv.value : utcAhora();
+                    writeTagLengthValue(data, 0x91, t);
+                    break;
             }
         }
 
@@ -547,6 +557,21 @@ public class GoosePublisher {
      * Asi 0x0002 = invalid, 0x0003 = questionable, 0x0400 = substituted, 0x0800 = test,
      * 0x1000 = operatorBlocked. En la trama el bit 0 de la norma es el mas alto del primer byte.
      */
+    static byte[] utcAhora() {
+        return utc(System.currentTimeMillis());
+    }
+
+    /**
+     * Hora UTC de IEC 61850-8-1 (8 bytes): segundos desde 1970 (4), fraccion de segundo en 24 bits
+     * (3) y calidad de la hora (1): 0x0A = exactitud de 10 bits, reloj no sincronizado afuera.
+     */
+    static byte[] utc(long ms) {
+        long seg = ms / 1000;
+        long frac = ((ms % 1000) << 24) / 1000;
+        return new byte[]{(byte) (seg >> 24), (byte) (seg >> 16), (byte) (seg >> 8), (byte) seg,
+                (byte) (frac >> 16), (byte) (frac >> 8), (byte) frac, 0x0A};
+    }
+
     static byte[] codificarCalidad(int q) {
         byte[] b = new byte[]{0x03, 0, 0};
         for (int i = 0; i < 13; i++) {

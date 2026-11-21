@@ -64,6 +64,16 @@ public class SclReferenceUtils {
             }
             return q;
         }
+        // La hora la maneja el publicador (la de su ultimo cambio de estado): si se tomara la del
+        // modelo, cada maniobra publicaria un segundo cambio solo por unos ms de diferencia.
+        if (targetType == GoosePublisher.DataValue.Type.UTC_TIME) return null;
+        if (bda instanceof BdaDoubleBitPos && targetType == GoosePublisher.DataValue.Type.DBPOS) {
+            BdaDoubleBitPos.DoubleBitPos p = ((BdaDoubleBitPos) bda).getDoubleBitPos();
+            if (p == BdaDoubleBitPos.DoubleBitPos.ON) return 2;
+            if (p == BdaDoubleBitPos.DoubleBitPos.OFF) return 1;
+            if (p == BdaDoubleBitPos.DoubleBitPos.BAD_STATE) return 3;
+            return 0;
+        }
         String val = ValorBda.texto(bda);
         if (val == null) return null;
 
