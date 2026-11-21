@@ -8,7 +8,7 @@ import java.nio.file.Files;
 
 /**
  * Bloque de grupos de ajuste (LLN0$SP$SGCB) en el simulador. Hasta 2026-11-15 el parser ignoraba
- * &lt;SettingControl&gt; y el SGCB no existía por MMS (IEDScout: "IED has no Setting Group Control
+ * &lt;SettingControl&gt; y el SGCB no existía por MMS (la herramienta comercial: "IED has no Setting Group Control
  * Blocks"). Ahora se crea desde el SCL y las escrituras se validan como en un IED:
  *
  *   1. El cliente ve el SGCB con NumOfSG y ActSG del SCL.

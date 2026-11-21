@@ -1103,7 +1103,7 @@ public final class EstadoLocal {
      * Cuenta la maniobra en el OpCnt del aparato (XCBR o XSWI), como un IED real: solo si la
      * posicion cambia de verdad (un cierre sobre algo cerrado no cuenta) y solo en el LN del
      * aparato, no en los CSWI que lo comandan. Hasta 2026-11-15 el contador quedaba en 0
-     * (lo vio OMICRON IEDScout leyendo un reporte con los OpCnt de un CID real).
+     * (lo vio la herramienta comercial leyendo un reporte con los OpCnt de un CID real).
      */
     static void contarManiobra(ServerModel model, String doRef, boolean cerrar,
                                List<BasicDataAttribute> cambiados) {

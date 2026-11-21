@@ -5,7 +5,7 @@ import com.beanit.iec61850bean.internal.mms.asn1.Data;
 
 /**
  * Motivo de inclusión de los reportes (ReasonCode): el servidor lo manda con 6 bits, como el
- * simulador de OMICRON IEDScout; con 7 bits IEDScout cortaba la asociación al primer reporte
+ * simulador de la herramienta comercial; con 7 bits la herramienta cortaba la asociación al primer reporte
  * (2026-11-15). El cliente sigue aceptando 6 y 7 bits, porque hay IED que mandan 7.
  *
  * Uso: java -cp "classes;lib\*;test" com.beanit.iec61850bean.TestMotivoReporte
@@ -27,7 +27,7 @@ public class TestMotivoReporte {
         BdaReasonForInclusion gi = new BdaReasonForInclusion(ref);
         gi.setGeneralInterrogation(true);
         BerBitString b = codificar(gi);
-        chk("GI: 6 bits, 0x04 (como IEDScout: 84 02 02 04)", b.numBits == 6 && (b.value[0] & 0xFF) == 0x04);
+        chk("GI: 6 bits, 0x04 (como la herramienta comercial: 84 02 02 04)", b.numBits == 6 && (b.value[0] & 0xFF) == 0x04);
 
         BdaReasonForInclusion in = new BdaReasonForInclusion(ref);
         in.setIntegrity(true);

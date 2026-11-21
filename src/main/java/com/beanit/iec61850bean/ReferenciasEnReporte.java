@@ -18,7 +18,7 @@ import java.util.List;
  * reporte lo anunciaba sin traerlas y el cliente leía los valores corridos. ServerAssociation
  * llama a esto antes de mandar cada PDU; si es un reporte (lista "RPT") con data-reference y sin
  * las referencias, las inserta después del bit-string de inclusión, una por miembro incluido,
- * con el nombre MMS del miembro ("LD/LN$FC$DO$DA"), como el simulador de OMICRON IEDScout.
+ * con el nombre MMS del miembro ("LD/LN$FC$DO$DA"), como el simulador de la herramienta comercial.
  */
 final class ReferenciasEnReporte {
 

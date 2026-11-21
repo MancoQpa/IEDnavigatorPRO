@@ -20,7 +20,7 @@ import java.awt.dnd.*;
 import javax.swing.border.*;
 
 /**
- * IEC 61850 Explorer - Similar a OMICRON IEDScout
+ * IEC 61850 Explorer: cliente MMS y simulador de IED
  * Modos: SERVER (simular IED) y CLIENT (conectar a IED real)
  * Caracteristicas: Activity Monitor, Drag-and-Drop, SCL Loading
  */

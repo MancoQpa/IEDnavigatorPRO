@@ -4,7 +4,7 @@ import com.iednavigator.IEC61850Server;
 
 /**
  * Contador de maniobras (XCBR.OpCnt) del simulador. Hasta 2026-11-15 quedaba en 0 al operar
- * (lo vio OMICRON IEDScout leyendo un reporte con los OpCnt de un CID real). Ahora cuenta como
+ * (lo vio la herramienta comercial leyendo un reporte con los OpCnt de un CID real). Ahora cuenta como
  * un IED: una vez por maniobra que cambia la posición, solo en el LN del aparato.
  *
  *   1. Mando SBO por MMS sobre el CSWI que comanda el XCBR: cuenta 1.
