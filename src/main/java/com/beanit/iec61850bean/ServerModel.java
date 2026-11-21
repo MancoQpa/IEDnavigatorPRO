@@ -26,7 +26,7 @@
  *
  * Segundo cambio (2026-11-15), en getNodeFromVariableDef(): la lectura de todo un FC de un LN
  * ("LLN0$ST") devuelve una estructura con sus DO (NodoFcDeLn) en vez de tirar "invalid mms
- * item id". OMICRON IEDScout la usa al descubrir un IED (test/TestLecturaFcDeLn).
+ * item id". La herramienta comercial la usa al descubrir un IED (test/TestLecturaFcDeLn).
  *
  * La clase se resuelve antes que la del jar porque el classpath de ejecución es
  * "classes;lib\*.jar" y maven-assembly-plugin da precedencia a las clases del proyecto.
@@ -339,8 +339,8 @@ public final class ServerModel extends ModelNode {
     int index2 = mmsItemId.indexOf('$', index1 + 1);
 
     if (index2 == -1) {
-      // PARCHE IEDNavigator (2026-11-15): "LN$FC" es la lectura de todo un FC del LN (IEDScout
-      // lo hace al descubrir). La biblioteca tiraba "invalid mms item id" y el pedido entero
+      // PARCHE IEDNavigator (2026-11-15): "LN$FC" es la lectura de todo un FC del LN (la
+      // herramienta comercial lo hace al descubrir). La biblioteca tiraba "invalid mms item id" y el pedido entero
       // fallaba; ahora se devuelve una estructura con los DO de esa FC (NodoFcDeLn), la misma
       // que describe GetVariableAccessAttributes. Sin DO en esa FC: object-non-existent.
       Fc fcLn = Fc.fromString(mmsItemId.substring(index1 + 1));

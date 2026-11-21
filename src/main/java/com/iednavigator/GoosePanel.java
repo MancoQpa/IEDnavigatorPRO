@@ -94,7 +94,7 @@ class GoosePanel {
     private JCheckBox cbSimulado;
 
     /**
-     * Filtro de retransmisiones, como el boton Retrans. de IEDScout: se capturan siempre
+     * Filtro de retransmisiones, como el boton Retrans. de la herramienta comercial: se capturan siempre
      * todos los mensajes y el filtro solo cambia lo que se ve. Con el filtro, de cada GoCB
      * queda el primer mensaje recibido y cada cambio de estado (stNum nuevo); sin el, todo,
      * con las retransmisiones marcadas. Antes las retransmisiones se descartaban al llegar y
@@ -504,7 +504,7 @@ class GoosePanel {
             public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                // gocbRef de una retransmisión: "(retransmitida)", como el "(Retransmitted)" de IEDScout
+                // gocbRef de una retransmisión: "(retransmitida)", como el "(Retransmitted)" de la herramienta comercial
                 if (table.convertColumnIndexToModel(column) == 6) {
                     int m = table.convertRowIndexToModel(row);
                     if (Boolean.TRUE.equals(gooseDataTableModel.getValueAt(m, COL_RETRANS))) {

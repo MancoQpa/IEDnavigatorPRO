@@ -352,13 +352,13 @@ because `classes` comes first in the classpath). Each file says why and what cha
   library cannot report it (`setValues` needs a mirror copy); the same happens in the simulator.
 - `BdaReasonForInclusion.java` (since 2026-11-15): original v1.9.0 source rebuilt from the jar,
   one change. A report's ReasonCode is **sent** with 6 bits (`84 02 02 04` for GI) instead of
-  7; the 7th bit (application-trigger) is sent only when set. With 7 bits OMICRON IEDScout
+  7; the 7th bit (application-trigger) is sent only when set. With 7 bits the commercial tool
   dropped the association 1 ms after the first report (GI or integrity); its own simulator
   sends 6. The class size stays 7 so the client still **accepts** 6 and 7 bits
   (`setValueFromMmsDataObj` rejects a longer bit-string). `test/TestMotivoReporte`.
 
 - Own classes in the same package (not shadows), 2026-11-15: `NodoFcDeLn` (reading a whole
-  FC of an LN, `LLN0$ST`, which IEDScout does on discovery; hooked in `ServerModel`,
+  FC of an LN, `LLN0$ST`, which the commercial tool does on discovery; hooked in `ServerModel`,
   `test/TestLecturaFcDeLn`) and `ReferenciasEnReporte` (inserts the data references when a
   report's OptFlds asks for data-reference; the library's Urcb announced them without sending
   them; hooked in `ServerAssociation.sendAnMmsPdu`, `test/TestReferenciasReporte`).
@@ -372,7 +372,7 @@ because `classes` comes first in the classpath). Each file says why and what cha
   dropped), 8-byte EntryID, resync from the last sent entry or the EntryID the client writes,
   PurgeBuf, GI, IntgPd, BufTm. Engines live in `ServerModel.reportadoresBrcb`. The same commit
   fixed the URCB OptFlds write, which checked the current value instead of the written one and
-  rejected every write once the SCL set dataRef/configRef. `test/TestBrcb`; checked with IEDScout
+  rejected every write once the SCL set dataRef/configRef. `test/TestBrcb`; checked with the commercial tool
   (GI, dchg and resync after reconnect). SqNum stays INT8U as the library models it (8-1 says
   INT16U for a BRCB).
   Client side (2026-11-15): `IEC61850Client` remembers the last EntryID received per BRCB

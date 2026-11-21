@@ -362,7 +362,7 @@ public class SclParser {
         dataObjects.addAll(createReportControlBlocks(childNode, ref));
       } else if ("SettingControl".equals(childNode.getNodeName())) {
         // PARCHE IEDNavigator (2026-11-15): la biblioteca ignoraba SettingControl y el SGCB
-        // no existia por MMS (IEDScout: "IED has no Setting Group Control Blocks").
+        // no existia por MMS (la herramienta comercial: "IED has no Setting Group Control Blocks").
         boolean yaEsta = false;
         for (FcDataObject d : dataObjects) yaEsta |= d.getFc() == Fc.SP && "SGCB".equals(d.getName());
         if (!yaEsta) dataObjects.add(crearSgcb(childNode, ref));
@@ -639,7 +639,7 @@ public class SclParser {
               }
               // PARCHE IEDNavigator (2026-11-15): configRef se respeta. El Urcb de la biblioteca
               // sí arma conf-rev en el reporte; el parser lo descartaba y el RCB quedaba sin el
-              // campo que pide el CID (el simulador de OMICRON IEDScout sí lo manda).
+              // campo que pide el CID (el simulador de la herramienta comercial sí lo manda).
               else if (nodeName.equals("configRef")) {
                 optFields.setConfigRevision(node.getNodeValue().equalsIgnoreCase("true"));
               }

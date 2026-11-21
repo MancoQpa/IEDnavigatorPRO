@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Lectura de todo un FC de un LN ("LLN0$ST"), como la hace OMICRON IEDScout al descubrir un IED.
+ * Lectura de todo un FC de un LN ("LLN0$ST"), como la hace la herramienta comercial al descubrir un IED.
  * Antes ServerModel.getNodeFromVariableDef tiraba "invalid mms item id" (unos 1.700 errores por
  * descubrimiento contra un CID real); ahora devuelve una estructura con los DO de esa FC, en el
  * orden de LogicalNode.getChildren(fc), que es el mismo que usa el tipo (GetVariableAccessAttributes).

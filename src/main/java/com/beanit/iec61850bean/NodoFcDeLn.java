@@ -12,7 +12,7 @@ import java.util.List;
  * <p>Clase propia (no sombrea nada de iec61850bean). La biblioteca contesta el tipo de
  * {@code LN$FC} (GetVariableAccessAttributes, con {@code LogicalNode.getChildren(fc)}) pero no su
  * valor: {@code ServerModel.getNodeFromVariableDef} tiraba "invalid mms item id" y el pedido
- * entero fallaba. OMICRON IEDScout lee así cada FC de cada LN al descubrir un IED: contra un
+ * entero fallaba. La herramienta comercial lee así cada FC de cada LN al descubrir un IED: contra un
  * CID real eran unos 1.700 errores por descubrimiento, y el cliente terminaba leyendo de a un
  * atributo (2026-11-15). Con esta clase la lectura devuelve los mismos DO que describe el tipo.
  *

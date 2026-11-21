@@ -10,10 +10,10 @@ import com.beanit.iec61850bean.internal.mms.asn1.Data;
  * iec61850bean-1.9.0.</b> Es la fuente original reconstruida desde el jar, con un cambio: al
  * <i>enviar</i> un reporte, el motivo va con 6 bits en vez de 7.
  *
- * <p>La biblioteca codificaba siempre 7 bits (relleno 1: {@code 84 02 01 04} para GI). OMICRON
- * IEDScout 5.10, conectado como cliente al simulador, cortaba la asociación en cuanto recibía el
+ * <p>La biblioteca codificaba siempre 7 bits (relleno 1: {@code 84 02 01 04} para GI). La
+ * herramienta comercial (versión 5.10), conectada como cliente al simulador, cortaba la asociación en cuanto recibía el
  * primer reporte (GI o integridad), 1 ms después. Su propio simulador, con el mismo CID, manda
- * 6 bits ({@code 84 02 02 04}); con un proxy que cambió solo ese largo, IEDScout aceptó el
+ * 6 bits ({@code 84 02 02 04}); con un proxy que cambió solo ese largo, la herramienta comercial aceptó el
  * reporte (2026-11-15). Los 6 bits son reserved, data-change, quality-change, data-update,
  * integrity y general-interrogation; el séptimo, application-trigger (Ed2), solo se manda
  * cuando está encendido, que el servidor no hace.
