@@ -2,6 +2,53 @@
 =====================================================
 Para instrucciones de instalacion y uso, ver README.txt
 
+v4.14.0
+-----
+- Interfaz nueva: barra de contexto con el IED, el modo (Servidor | Cliente), el estado
+  de la conexion y el boton principal (F5); menus por tarea; cinco pestanas (Monitor,
+  Reports, GOOSE, Ajustes, Datasets); registro desplegable con aviso de advertencias;
+  densidad compacta. Archivo > Nueva ventana abre otra instancia.
+- Arbol del modelo: simbolos y colores de la leyenda (rojo cerrado/energizado, verde
+  abierto/desenergizado), CDC en cada objeto de dato, valores legibles y el mismo texto
+  en Servidor y Cliente. El panel Propiedades, bajo el arbol, muestra el nodo elegido
+  en los terminos de la norma; reemplaza al Explorador del Data Model.
+- Monitor:
+  - Vista de paneles: una tarjeta por senal segun su tipo (interruptor, LED, numero,
+    etiqueta). Tensiones y corrientes trifasicas como diagrama fasorial; si el equipo
+    publica solo magnitudes, los angulos se calculan (Va = 0, secuencia ABC, desfase
+    de cada fase a partir de W y VAr o del factor de potencia) y se avisa. La tension
+    entre fases se dibuja como triangulo. Cada valor lleva su unidad.
+  - Barra de sondeo (pausar, intervalo) en modo Cliente; la barra superior se acomoda
+    a una ventana angosta sin encimarse.
+  - Los armonicos expuestos como arreglo ya no cuelgan la vista.
+- Interruptor virtual (modo Servidor, Herramientas): ventana compacta con estado de
+  comunicacion, simbolo, LOCAL/REMOTO, ABRIR/CERRAR y contactos 52a/52b; el resto en
+  ventanas propias: panel del instructor (fallas de apertura o cierre, resorte
+  descargado, SF6, estados forzados, tiempos de maniobra), registro de eventos, datos
+  de conexion y suscripcion/publicacion GOOSE configurables a mano.
+- Mando en modo Servidor con el mismo motor que el IEDsimulatorPRO: ctlModel 0 a 4,
+  terminacion del comando, LastApplError con AddCause, modo test del IED (Beh heredado
+  de LLN0.Mod), interruptor por polos, y una orden a la posicion actual rechazada con
+  AddCause 5 (position-reached).
+- Sustitucion de valores (FC=SV): "Sustituir valor..." y "Escribir valor..." desde el
+  arbol en modo Cliente; el servidor publica el valor sustituido con su calidad.
+- Reports: reportes con buffer (BRCB) en el servidor; el cliente retoma desde la ultima
+  EntryID despues de una reconexion, y la tabla muestra la hora de entrada y la
+  EntryID. Los RCB muestran sus valores al cargarse.
+- Servidor: grupos de ajuste (SGCB) desde el SCL, lectura de un FC entero de un LN,
+  referencias de los datos en los reportes y motivo de inclusion con 6 bits.
+- Abrir un SCL en modo Cliente ya no falla en silencio: avisa y ofrece pasar a
+  Servidor.
+- Conexion: lectura de mantenimiento cada 20 s sin trafico, para equipos que cortan
+  la asociacion por inactividad.
+- Diccionario IEC 61850: todos los CDC de 7-3, las 21 FC de 7-2/8-1 y los objetos y
+  atributos de medida que faltaban (armonicos, estadistica, parpadeo), con la
+  descripcion en espanol, ingles, portugues y chino.
+- GOOSE: calidad con sus 13 bits, filtro de retransmisiones y la maniobra pasa por
+  intermedio con su propio stNum.
+- Se quito la biblioteca nativa libiec61850 (iec61850.dll): se cargaba y no la usaba
+  ninguna funcion de la aplicacion. GOOSE sigue con pcap4j y Npcap.
+
 v4.13.11
 -----
 - Barra de estado: ademas del fabricante y el tipo, muestra el modelo del equipo
