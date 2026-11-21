@@ -40,7 +40,7 @@ public class TestServidorMando {
         maniobrar(cli, oper, "true", "on");
         maniobrar(cli, oper, "false", "off");
 
-        // Abrir lo que ya está abierto: se rechaza con AddCause 5, como IEDScout y la herramienta de referencia del curso
+        // Abrir lo que ya está abierto: se rechaza con AddCause 5 (position-reached, IEC 61850-7-2)
         IEC61850Client.ControlResult rep = cli.selectControl(oper, "false", false, "TestServidorMando", false, false, 10000);
         ver(!rep.success, "abrir estando abierto: el SELECT se rechaza");
         ver(rep.addCause == 5, "AddCause 5 (position-reached), llegó " + rep.addCause);

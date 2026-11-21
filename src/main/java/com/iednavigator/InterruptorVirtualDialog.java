@@ -25,7 +25,7 @@ import java.util.prefs.Preferences;
 
 /**
  * Interruptor virtual: un aparato de maniobra del modelo servido, manejado como a pie de equipo,
- * con el aspecto y el comportamiento de la herramienta de referencia del curso.
+ * con el aspecto y el comportamiento de un panel de prueba de interruptor.
  *
  * La ventana principal es angosta (360 px) y tiene solo lo de a pie de equipo: estado de
  * comunicación (MMS, GOOSE Pub, GOOSE Sub), símbolo y estado, selector LOCAL/REMOTO, ABRIR y

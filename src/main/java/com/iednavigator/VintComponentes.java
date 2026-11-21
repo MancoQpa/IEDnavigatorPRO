@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Piezas gráficas del interruptor virtual, con el aspecto de la herramienta de referencia del
- * curso: LED, símbolo del interruptor, interruptor deslizante y botones de mando de color.
+ * Piezas gráficas del interruptor virtual: LED, símbolo del interruptor, interruptor deslizante y
+ * botones de mando de color.
  * Colores: rojo cerrado/energizado, verde abierto/desenergizado.
  */
 final class VintComponentes {

@@ -7,8 +7,8 @@ import java.util.Map;
 
 /**
  * Suscripción GOOSE del interruptor virtual: bobina de disparo (abrir) y bobina de cierre, cada
- * una cableada a un dato booleano de un GoCB de otro IED. Se configura a mano, como en la
- * herramienta de referencia del curso: APPID, goCbRef, índice del dato y, si se quiere, la MAC de
+ * una cableada a un dato booleano de un GoCB de otro IED. Se configura a mano: APPID, goCbRef,
+ * índice del dato y, si se quiere, la MAC de
  * origen. No hace falta haber visto tramas antes.
  *
  * Cada señal tiene un estado (sin configurar, sin datos, recibiendo, perdida por TAL vencido,

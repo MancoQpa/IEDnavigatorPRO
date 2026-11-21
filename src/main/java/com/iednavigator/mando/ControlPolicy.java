@@ -240,8 +240,8 @@ public final class ControlPolicy {
 
         // --- 4c. Posicion ya alcanzada (AddCause 5, position-reached) ---
         //
-        // Cerrar algo cerrado o abrir algo abierto se rechaza, en el Select y en el Oper, como lo
-        // hacen IEDScout y la herramienta de referencia del curso. Antes se aceptaba y
+        // Cerrar algo cerrado o abrir algo abierto se rechaza, en el Select y en el Oper, con el
+        // AddCause que IEC 61850-7-2 define para ese caso. Antes se aceptaba y
         // el aparato quedaba quieto: ensenaba un comportamiento distinto del de un IED (propuesta
         // 23, 2026-11-19). Solo para posiciones dobles (DPC): una salida simple o el Mod pueden
         // recibir el mismo valor sin que sea un error.
