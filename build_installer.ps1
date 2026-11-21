@@ -138,6 +138,9 @@ Copy-Item (Join-Path $ROOT "THIRD-PARTY-NOTICES.txt") -Destination $DEST -Force
 
 Step "Copiando binarios recien compilados"
 Copy-Item (Join-Path $ROOT "classes") -Destination $DEST -Recurse -Force
+# lib\ entera desde el repo: copiar encima de la de la plantilla dejaba archivos que el repo ya no
+# tiene (iec61850.dll siguio viajando en los paquetes despues de quitarla en la v4.14)
+Remove-Item (Join-Path $DEST "lib") -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $ROOT "lib")     -Destination $DEST -Recurse -Force
 
 # La version que muestra la app ("Acerca de", titulo, registro de sesion) sale de aca, del

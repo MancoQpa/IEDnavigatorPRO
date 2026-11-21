@@ -1,7 +1,6 @@
 package com.iednavigator;
 
 import com.beanit.iec61850bean.*;
-import com.iednavigator.native_lib.*;
 
 import javax.swing.*;
 import javax.swing.table.*;
@@ -161,7 +160,6 @@ public class IEDNavigatorApp extends JFrame {
     // Polling management (extracted to PollingManager.java - Phase 8 refactor)
     private PollingManager pollingManager;
 
-    private boolean nativeLibAvailable = false;
 
 
 
@@ -572,8 +570,6 @@ public class IEDNavigatorApp extends JFrame {
         finFila.add(btnRegistro, gf);
         rightTabbedPane.putClientProperty("JTabbedPane.trailingComponent", finFila);
 
-        // Check for native library availability
-        checkNativeLibrary();
 
         // SplitPane principal (izquierda: controles+log, centro: tree, derecha: tabs)
         // Establecer tamaños minimos para evitar que se colapsen
@@ -1945,8 +1941,7 @@ public class IEDNavigatorApp extends JFrame {
             "<p style='color: #B71C1C; font-size: 10px;'>" +
             "<b>" + I18n.t("about.edu.title") + "</b> " + I18n.t("about.edu.body") + "</p>" +
             "<p style='color: #888; font-size: 10px;'>" +
-            // GOOSE es código propio sobre pcap4j/Npcap y Sampled Values no está en la app de
-            // escritorio: libiec61850 solo la usa el bridge REST (ver CLAUDE.md, "Who does what").
+            // GOOSE es código propio sobre pcap4j/Npcap; Sampled Values no está en la app.
             I18n.t("about.libs") + " iec61850bean (MMS), pcap4j + Npcap (GOOSE), JNA<br>" +
             "&copy; 2024-" + java.time.Year.now().getValue() + " - " + I18n.t("about.rights") + "</p>" +
             "</body></html>";
@@ -2922,31 +2917,6 @@ public class IEDNavigatorApp extends JFrame {
         sclLnClassToLnType.clear(); sclLnClassToLnType.putAll(r.lnClassToLnType);
     }
 
-    private void checkNativeLibrary() {
-        try {
-            String libPath = System.getProperty("jna.library.path");
-            log(I18n.t("log.app.jnapath", (libPath != null ? libPath : I18n.t("log.app.jnapath.notset"))));
-            java.io.File dllFile = new java.io.File("lib/iec61850.dll");
-            if (dllFile.exists()) {
-                log(I18n.t("log.app.dllfound", dllFile.getAbsolutePath(), dllFile.length()));
-            } else {
-                log(I18n.t("log.app.dllnotfound"));
-            }
-            nativeLibAvailable = NativeSVSubscriber.isNativeLibraryAvailable();
-            if (nativeLibAvailable) {
-                log(I18n.t("log.app.nativeloaded"));
-            } else {
-                log(I18n.t("log.app.nativefailed"));
-                log(I18n.t("log.app.svnote"));
-            }
-        } catch (UnsatisfiedLinkError e) {
-            nativeLibAvailable = false;
-            log(I18n.t("log.app.nativeloaderror", e.getMessage()));
-        } catch (Exception e) {
-            nativeLibAvailable = false;
-            log(I18n.t("log.app.nativecheckerror", e.getMessage()));
-        }
-    }
 
 
     // --- SECTION: MONITOR OPERATIONS (F12: delegado a MonitorManager.java) ---

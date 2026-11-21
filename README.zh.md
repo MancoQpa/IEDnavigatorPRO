@@ -139,9 +139,8 @@ src/main/java/com/iednavigator/
   SclCompare.java             # SCL 文件比较
   GooseMapAnalyzer.java       # GOOSE 订阅关系图
   Iec61850Dictionary.java     # IEC 61850 词典
-  native_lib/                 # JNA 绑定 iec61850.dll（桌面应用未使用）
   [+ 面板及辅助类]
-lib/                          # Java 依赖库 + iec61850.dll
+lib/                          # Java 依赖库
 test/test_ied.cid             # 测试用 CID 文件
 ```
 
@@ -150,7 +149,6 @@ test/test_ied.cid             # 测试用 CID 文件
 | 库                          | 版本    | 许可证                  | 是否内置 |
 | ---------------------------- | ------- | ----------------------- | -------- |
 | iec61850bean                 | 1.9.0   | Apache 2.0              | 是       |
-| libiec61850 (iec61850.dll)   | —       | GPL v3                  | 是       |
 | asn1bean                     | 1.13.0  | Apache 2.0              | 是       |
 | pcap4j                       | 1.8.2   | MIT                     | 是       |
 | FlatLaf                      | 3.2     | Apache 2.0              | 是       |
@@ -167,7 +165,7 @@ test/test_ied.cid             # 测试用 CID 文件
 
 ### 许可证
 
-本项目基于 **GNU 通用公共许可证 v3（GPL v3）** 分发 —— 详见 [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE)。该许可要求源于原生库 `libiec61850`（`iec61850.dll`，**GPL v3**），该库随软件包一同提供；其余依赖均为宽松许可证（Apache 2.0、MIT、LGPL/BSD）。您可以使用、修改和再分发本软件，前提是保持相同的许可证、包含源代码并保留版权声明。
+本项目基于 **GNU 通用公共许可证 v3（GPL v3）** 分发 —— 详见 [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE)。所含依赖均为宽松许可证（Apache 2.0、MIT、LGPL/BSD）。您可以使用、修改和再分发本软件，前提是保持相同的许可证、包含源代码并保留版权声明。
 
 Npcap **不** 随本项目一同分发（其许可证不允许此操作）；本项目仅提供指向官方下载网站的链接，这不构成再分发行为。
 

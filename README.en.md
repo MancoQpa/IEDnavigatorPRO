@@ -141,9 +141,8 @@ src/main/java/com/iednavigator/
   SclCompare.java             # SCL file comparison
   GooseMapAnalyzer.java       # GOOSE subscription map
   Iec61850Dictionary.java     # IEC 61850 dictionary
-  native_lib/                 # JNA bindings to iec61850.dll (unused by the desktop app)
   [+ panels and helper classes]
-lib/                          # Java dependencies + iec61850.dll
+lib/                          # Java dependencies
 test/test_ied.cid             # Test CID
 ```
 
@@ -152,7 +151,6 @@ test/test_ied.cid             # Test CID
 | Library                     | Version | License                | Bundled |
 | ---------------------------- | ------- | ----------------------- | ------- |
 | iec61850bean                 | 1.9.0   | Apache 2.0              | Yes     |
-| libiec61850 (iec61850.dll)   | —       | GPL v3                  | Yes     |
 | asn1bean                     | 1.13.0  | Apache 2.0              | Yes     |
 | pcap4j                       | 1.8.2   | MIT                     | Yes     |
 | FlatLaf                      | 3.2     | Apache 2.0              | Yes     |
@@ -169,7 +167,7 @@ The application does not collect or send any data: no telemetry, no user account
 
 ### License
 
-Distributed under the **GNU General Public License v3 (GPL v3)** — see [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE). This requirement stems from the native `libiec61850` library (`iec61850.dll`, **GPL v3**), included in the package; the remaining dependencies are permissive (Apache 2.0, MIT, LGPL/BSD). You may use, modify, and redistribute the software as long as you keep the same license, include the source code, and preserve the copyright notices.
+Distributed under the **GNU General Public License v3 (GPL v3)** — see [LICENSE](https://github.com/MancoQpa/IEDnavigatorPRO/blob/main/LICENSE). The bundled dependencies are permissive (Apache 2.0, MIT, LGPL/BSD). You may use, modify, and redistribute the software as long as you keep the same license, include the source code, and preserve the copyright notices.
 
 Npcap is **not** redistributed with this project (its license does not permit it); a link is provided to the official download site, which does not constitute redistribution.
 

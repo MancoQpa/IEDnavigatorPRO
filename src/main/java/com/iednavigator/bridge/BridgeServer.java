@@ -5,7 +5,6 @@ import com.iednavigator.bridge.api.GooseApi;
 import com.iednavigator.bridge.api.ServerApi;
 import com.iednavigator.bridge.api.SclToolsApi;
 import com.iednavigator.bridge.api.ServicesApi;
-import com.iednavigator.bridge.api.SvApi;
 import com.iednavigator.bridge.api.SystemApi;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
@@ -36,7 +35,6 @@ public final class BridgeServer {
     private Javalin app;
     private ScheduledExecutorService watchdog;
     private GooseApi gooseApi;
-    private SvApi svApi;
 
     public BridgeServer(String token, int watchdogSeconds) {
         this.token = token;
@@ -50,7 +48,6 @@ public final class BridgeServer {
         ServicesApi servicesApi = new ServicesApi(sessions, eventBus);
         ServerApi serverApi = new ServerApi(sessions, eventBus);
         gooseApi = new GooseApi(sessions, eventBus);
-        svApi = new SvApi(eventBus);
         SclToolsApi sclToolsApi = new SclToolsApi();
         serverApi.setModelChangedHook(gooseApi::propagateFromModel);
 
@@ -122,9 +119,6 @@ public final class BridgeServer {
         app.get("/api/v1/goose/status", gooseApi::status);
         app.post("/api/v1/goose/udp/start", gooseApi::udpStart);
         app.post("/api/v1/goose/udp/stop", gooseApi::udpStop);
-        app.post("/api/v1/sv/subscribe", svApi::subscribe);
-        app.post("/api/v1/sv/unsubscribe", svApi::unsubscribe);
-        app.get("/api/v1/sv/status", svApi::status);
 
         // ── Utilidades SCL (Fase 5) ──
         app.post("/api/v1/scl/compare", sclToolsApi::compare);
@@ -216,7 +210,6 @@ public final class BridgeServer {
             }
             try {
                 if (gooseApi != null) gooseApi.shutdown();
-                if (svApi != null) svApi.shutdown();
                 sessions.shutdown();
                 eventBus.shutdown();
                 if (app != null) app.stop();

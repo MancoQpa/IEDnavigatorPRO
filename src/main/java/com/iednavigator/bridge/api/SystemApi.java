@@ -4,7 +4,6 @@ import io.javalin.http.Context;
 import org.pcap4j.core.PcapNetworkInterface;
 import org.pcap4j.core.Pcaps;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,12 +44,6 @@ public final class SystemApi {
         }
         info.put("npcapAvailable", npcap);
         info.put("interfaces", interfaces);
-
-        // Capacidad libiec61850.dll (JNA)
-        String dllPath = System.getProperty("jna.library.path", "lib");
-        boolean dll = new File(dllPath, "iec61850.dll").exists()
-                || new File("lib", "iec61850.dll").exists();
-        info.put("nativeDllAvailable", dll);
 
         ctx.json(info);
     }

@@ -1,7 +1,6 @@
 package com.iednavigator;
 
 import com.beanit.iec61850bean.*;
-import com.iednavigator.native_lib.*;
 import org.pcap4j.core.*;
 
 import javax.swing.*;
@@ -87,7 +86,6 @@ class GoosePanel {
     private JCheckBox cbIntermedio;
     private JSpinner spTransito;
 
-    private NativeGooseSubscriber nativeGooseSubscriber;
 
     private volatile boolean internalLoopbackEnabled = false;
     private volatile boolean udpBridgeEnabled = false;
@@ -255,7 +253,6 @@ class GoosePanel {
     /** true si llegan tramas: captura de Capa 2, loopback interno o GOOSE sobre UDP. */
     boolean capturando() {
         return (gooseSubscriber != null && gooseSubscriber.isRunning())
-            || (nativeGooseSubscriber != null && nativeGooseSubscriber.isRunning())
             || internalLoopbackEnabled
             || (gooseUdpBridge != null && gooseUdpBridge.isReceiving());
     }
@@ -327,19 +324,7 @@ class GoosePanel {
         JPanel panel = new JPanel(new BorderLayout(3, 3));
         panel.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
 
-        // Initialize Native GOOSE subscriber (libiec61850) - preferred
-        // Si iec61850.dll no carga (Error, no Exception) la app se quedaba sin ventana:
-        // se degrada a null y el resto del panel sigue funcionando con pcap4j/UDP.
-        try {
-            nativeGooseSubscriber = new NativeGooseSubscriber();
-            nativeGooseSubscriber.setLogListener(msg -> logGoose("[NATIVE] " + msg));
-            nativeGooseSubscriber.setMessageListener(msg -> handleNativeGooseMessage(msg));
-        } catch (Throwable t) {
-            nativeGooseSubscriber = null;
-            ctx.log("libiec61850 (iec61850.dll) no pudo cargar: " + t.getMessage());
-        }
-
-        // Initialize pcap4j GOOSE subscriber as fallback
+        // Captura GOOSE de Capa 2: código propio sobre pcap4j/Npcap
         gooseSubscriber = new GooseSubscriber();
         gooseSubscriber.setLogListener(msg -> logGoose("[PCAP] " + msg));
         gooseSubscriber.setMessageListener(msg -> handleGooseMessage(msg));
@@ -954,13 +939,11 @@ class GoosePanel {
     // ─── Capture toggle ────────────────────────────────────────────────────────
 
     private void toggleGooseCapture() {
-        boolean nativeRunning = nativeGooseSubscriber != null && nativeGooseSubscriber.isRunning();
         boolean pcapRunning = gooseSubscriber != null && gooseSubscriber.isRunning();
         boolean loopbackRunning = internalLoopbackEnabled;
         boolean udpRunning = gooseUdpBridge != null && gooseUdpBridge.isReceiving();
 
-        if (nativeRunning || pcapRunning || loopbackRunning || udpRunning) {
-            if (nativeRunning) nativeGooseSubscriber.stop();
+        if (pcapRunning || loopbackRunning || udpRunning) {
             if (pcapRunning) gooseSubscriber.stop();
             if (udpRunning) gooseUdpBridge.stopReceiving();
             internalLoopbackEnabled = false;
@@ -1800,30 +1783,6 @@ class GoosePanel {
         });
     }
 
-    private void handleNativeGooseMessage(NativeGooseSubscriber.NativeGooseMessage msg) {
-        String key = msg.srcMac + "|" + msg.appId + "|" + (msg.goCbRef != null ? msg.goCbRef : "");
-        boolean retrans = esRetransmision(key, msg.stNum);
-
-        SwingUtilities.invokeLater(() -> {
-            StringBuilder dataStr = new StringBuilder();
-            for (NativeGooseSubscriber.DataValue dv : msg.dataValues) {
-                if (dataStr.length() > 0) dataStr.append(", ");
-                dataStr.append(dv.value);
-            }
-
-            agregarMensaje(new Object[]{
-                msg.timestamp,
-                msg.srcMac != null ? msg.srcMac : "",
-                String.format("%04X", msg.appId),
-                msg.stNum,
-                msg.sqNum,
-                msg.test ? "sim" : "",
-                msg.goCbRef != null ? msg.goCbRef : (msg.goId != null ? msg.goId : ""),
-                dataStr.toString(),
-                retrans
-            });
-        });
-    }
 
     // ─── GoCB refresh ──────────────────────────────────────────────────────────
 

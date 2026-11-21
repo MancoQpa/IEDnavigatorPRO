@@ -37,7 +37,7 @@ New-Item -ItemType Directory -Path $NEWDIR | Out-Null
 $jars = Get-ChildItem -Path $LIBDIR -Filter '*.jar' | ForEach-Object { $_.FullName }
 $CP = $jars -join ';'
 
-# Collect .java files from com.iednavigator only (com.iedexplorer is the old renamed package)
+# Collect .java files from com.iednavigator (the old com.iedexplorer package was removed in v4.14)
 # Se excluye bridge\: era para el frontend Tauri (descartado); requiere Javalin/Jackson que no estan en lib\
 $sources = Get-ChildItem -Path "$SRCDIR\com\iednavigator" -Recurse -Filter '*.java' |
     Where-Object { $_.FullName -notmatch '\\bridge\\' } | ForEach-Object { $_.FullName }

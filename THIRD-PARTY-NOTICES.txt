@@ -2,10 +2,10 @@ IEDNavigator PRO — Avisos de componentes de terceros
 =====================================================
 
 IEDNavigator PRO se distribuye bajo la Licencia Pública General GNU versión 3
-(GPLv3, ver archivo LICENSE), condición derivada de la biblioteca nativa
-libiec61850 (iec61850.dll), licenciada bajo GPLv3, que se incluye para las
-funciones GOOSE/SV nativas. Las demás dependencias son permisivas (Apache 2.0,
-MIT, LGPL/BSD). El código fuente completo está disponible en:
+(GPLv3, ver archivo LICENSE). Las dependencias incluidas son permisivas (Apache
+2.0, MIT, LGPL/BSD). Hasta la v4.13 el paquete incluía además la biblioteca
+nativa libiec61850 (iec61850.dll, GPLv3); desde la v4.14 ya no se incluye.
+El código fuente completo está disponible en:
 
     https://github.com/MancoQpa/IEDnavigatorPRO
 
@@ -15,30 +15,25 @@ Componentes de terceros incluidos y sus licencias:
    Licencia: Apache License 2.0 (declarada en el POM de Maven Central).
    https://www.beanit.com/
 
-2. libiec61850 (archivo nativo iec61850.dll) — GOOSE/SV nativo
-   Autor: MZ Automation GmbH (Michael Zillgith).
-   Licencia: GNU GPL v3.0 (con opción de licencia comercial).
-   https://libiec61850.com/
-
-3. asn1bean 1.13.0 (com.beanit) — codificación ASN.1/BER
+2. asn1bean 1.13.0 (com.beanit) — codificación ASN.1/BER
    Licencia: Apache License 2.0.
 
-4. pcap4j 1.8.2 (org.pcap4j) — acceso a tramas Ethernet Capa 2
+3. pcap4j 1.8.2 (org.pcap4j) — acceso a tramas Ethernet Capa 2
    Licencia: MIT.
 
-5. FlatLaf 3.2 (com.formdev) — aspecto de la interfaz Swing
+4. FlatLaf 3.2 (com.formdev) — aspecto de la interfaz Swing
    Licencia: Apache License 2.0.
 
-6. Java Native Access (JNA) 5.14.0 (net.java.dev.jna)
+5. Java Native Access (JNA) 5.14.0 (net.java.dev.jna)
    Licencia: Apache License 2.0 OR LGPL 2.1 (a elección del usuario).
 
-7. SLF4J 2.0.9 (org.slf4j) — registro (logging)
+6. SLF4J 2.0.9 (org.slf4j) — registro (logging)
    Licencia: MIT.
 
-8. ANTLR 2.7.7 — utilitario transitivo
+7. ANTLR 2.7.7 — utilitario transitivo
    Licencia: ANTLR 2 License (tipo BSD/dominio público).
 
-9. Runtime Java embebido (OpenJDK / Eclipse Temurin, generado con jlink)
+8. Runtime Java embebido (OpenJDK / Eclipse Temurin, generado con jlink)
    Licencia: GNU GPL v2.0 con Classpath Exception (redistribución permitida).
 
 COMPONENTE NO DISTRIBUIDO (se instala por separado):
